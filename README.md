@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="images/PuXle.png" alt="logo" width="200"></img>
+  <img src="images/PuXle.png" alt="logo" width="500"></img>
 </div>
 
 # PuXle
