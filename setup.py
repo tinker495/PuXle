@@ -1,3 +1,10 @@
+"""
+PuXle: Parallelized Puzzles with JAX
+
+This setup.py is maintained for backward compatibility.
+The main configuration is now in pyproject.toml.
+"""
+
 import setuptools
 
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -33,3 +40,6 @@ setuptools.setup(
     ],
     python_requires=">=3.8",
 )
+
+if __name__ == "__main__":
+    setuptools.setup()

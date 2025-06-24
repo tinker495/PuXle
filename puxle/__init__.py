@@ -1,14 +1,16 @@
-from puzzle.dotknot import DotKnot
-from puzzle.hanoi import TowerOfHanoi
-from puzzle.lightsout import LightsOut, LightsOutHard
-from puzzle.maze import Maze
-from puzzle.pancake import PancakeSorting
-from puzzle.puzzle_base import Puzzle
-from puzzle.rubikscube import RubiksCube, RubiksCubeDS, RubiksCubeHard, RubiksCubeRandom
-from puzzle.slidepuzzle import SlidePuzzle, SlidePuzzleHard, SlidePuzzleRandom
-from puzzle.sokoban import Sokoban, SokobanDS, SokobanHard
-from puzzle.topspin import TopSpin
-from puzzle.tsp import TSP
+from puxle.dotknot import DotKnot
+from puxle.hanoi import TowerOfHanoi
+from puxle.lightsout import LightsOut, LightsOutHard
+from puxle.maze import Maze
+from puxle.pancake import PancakeSorting
+from puxle.puzzle_base import Puzzle
+from puxle.rubikscube import RubiksCube, RubiksCubeDS, RubiksCubeHard, RubiksCubeRandom
+from puxle.slidepuzzle import SlidePuzzle, SlidePuzzleHard, SlidePuzzleRandom
+from puxle.sokoban import Sokoban, SokobanDS, SokobanHard
+from puxle.topspin import TopSpin
+from puxle.tsp import TSP
+
+__version__ = "0.1.0"
 
 __all__ = [
     "DotKnot",

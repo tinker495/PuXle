@@ -3,10 +3,10 @@ import jax
 import jax.numpy as jnp
 from termcolor import colored
 
-from puzzle.annotate import IMG_SIZE
-from puzzle.puzzle_base import Puzzle
-from puzzle.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puzzle.util import from_uint8, to_uint8
+from puxle.annotate import IMG_SIZE
+from puxle.puzzle_base import Puzzle
+from puxle.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.util import from_uint8, to_uint8
 
 TYPE = jnp.uint16
 
