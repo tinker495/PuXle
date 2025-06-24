@@ -8,7 +8,7 @@ from tabulate import tabulate
 from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puxle.utils.util import coloring_str
+from puxle.utils.util import coloring_str, to_uint8, from_uint8
 
 TYPE = jnp.uint8
 LINE_THICKNESS = 3
@@ -48,7 +48,7 @@ class RubiksCube(Puzzle):
     def define_state_class(self) -> PuzzleState:
         str_parser = self.get_string_parser()
         raw = jnp.full((6, self.size * self.size), -1, dtype=TYPE)
-        packed = self.pack_faces(raw)
+        packed = to_uint8(raw, 4)
 
         @state_dataclass
         class State:
@@ -70,7 +70,7 @@ class RubiksCube(Puzzle):
     def get_string_parser(self):
         def parser(state: "RubiksCube.State", **kwargs):
             # Unpack the state faces before printing
-            unpacked_faces = self.unpack_faces(state.faces)
+            unpacked_faces = from_uint8(state.faces, (6, self.size * self.size), 4)
 
             # Helper function to get face string
             def get_empty_face_string():
@@ -119,26 +119,6 @@ class RubiksCube(Puzzle):
 
         return parser
 
-    def pack_faces(self, faces: jnp.ndarray) -> jnp.ndarray:
-        """
-        Pack a board array of shape (6, size * size) with cell values in 0~5 into a compact representation.
-        Each color is packed into 4 bits, so two cells are stored in each uint8.
-        """
-        reshaped = jnp.reshape(faces, (-1, 2))  # Group every two cells together
-        shifts = jnp.array([0, 4], dtype=faces.dtype)
-        packed = jnp.sum(reshaped * (2**shifts), axis=1).astype(jnp.uint8)
-        return packed
-
-    def unpack_faces(self, packed: jnp.ndarray) -> jnp.ndarray:
-        """
-        Unpack a compact board representation back to a board of shape (6, size * size)
-        with cell values in {0, 1, 2, 3, 4, 5}. Each uint8 contains two color values stored in 4 bits.
-        """
-        shifts = jnp.array([0, 4], dtype=jnp.uint8)
-        cells = jnp.stack([(packed >> shift) & 0xF for shift in shifts], axis=1)
-        faces = jnp.reshape(cells, (6, self.size * self.size))
-        return faces
-
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "RubiksCube.State":
@@ -148,7 +128,7 @@ class RubiksCube(Puzzle):
         raw_faces = jnp.repeat(jnp.arange(6)[:, None], self.size * self.size, axis=1).astype(
             TYPE
         )  # 6 faces, 3x3 each
-        packed_faces = self.pack_faces(raw_faces)
+        packed_faces = to_uint8(raw_faces, 4)
         return self.State(faces=packed_faces)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
@@ -173,14 +153,14 @@ class RubiksCube(Puzzle):
         clockwise_grid = clockwise_grid.reshape(-1)
 
         # Unpack the state faces before processing
-        unpacked_faces = self.unpack_faces(state.faces)
+        unpacked_faces = from_uint8(state.faces, (6, self.size * self.size), 4)
         shaped_faces = unpacked_faces.reshape((6, self.size, self.size))
 
         new_faces, costs = jax.vmap(map_fn, in_axes=(None, 0, 0, 0))(
             shaped_faces, axis_grid, index_grid, clockwise_grid
         )
         neighbour_unpacked = new_faces.reshape((-1, 6, self.size * self.size))
-        neighbour_packed = jax.vmap(lambda faces: self.pack_faces(faces))(neighbour_unpacked)
+        neighbour_packed = jax.vmap(lambda faces: to_uint8(faces, 4))(neighbour_unpacked)
         return self.State(faces=neighbour_packed), costs
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State") -> bool:
@@ -327,7 +307,7 @@ class RubiksCube(Puzzle):
                 return int(u * scale + offset_x), int(v * scale + offset_y)
 
             # Obtain the color data for each face and reshape them into grids
-            board = self.unpack_faces(state.faces)
+            board = from_uint8(state.faces, (6, self.size * self.size), 4)
             board = np.array(board)
             face_colors = {}
             face_colors[UP] = np.array(board[UP].reshape((self.size, self.size)))

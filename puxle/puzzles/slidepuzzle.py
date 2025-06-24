@@ -2,6 +2,7 @@ import chex
 import jax
 import jax.numpy as jnp
 
+from puxle.utils.util import to_uint8, from_uint8
 from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
@@ -15,13 +16,33 @@ class SlidePuzzle(Puzzle):
 
     def define_state_class(self) -> PuzzleState:
         str_parser = self.get_string_parser()
+        size = self.size
+        max_value = self.size**2 - 1
+        need_pack = max_value <= 16
+
+        if need_pack:
+            shape = to_uint8(jnp.zeros((size**2,), dtype=TYPE), 4).shape
+        else:
+            shape = (size**2,)
 
         @state_dataclass
         class State:
-            board: FieldDescriptor[TYPE, (self.size**2,)]
+            board: FieldDescriptor[TYPE, shape]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
+            
+            def packing(self) -> "SlidePuzzle.State":
+                if need_pack:
+                    return State(board=to_uint8(self.board, 4)) 
+                else:
+                    return State(board=self.board)
+                          
+            def unpacking(self) -> "SlidePuzzle.State":
+                if need_pack:
+                    return State(board=from_uint8(self.board, (size**2,), 4))
+                else:
+                    return State(board=self.board)
 
         return State
 
@@ -40,7 +61,7 @@ class SlidePuzzle(Puzzle):
             return str(x)
 
         def parser(state: "SlidePuzzle.State", **kwargs):
-            return form.format(*map(to_char, state.board))
+            return form.format(*map(to_char, state.unpacking().board))
 
         return parser
 
@@ -51,7 +72,7 @@ class SlidePuzzle(Puzzle):
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         return self.SolveConfig(
-            TargetState=self.State(board=jnp.array([*range(1, self.size**2), 0], dtype=TYPE))
+            TargetState=self.State(board=jnp.array([*range(1, self.size**2), 0], dtype=TYPE)).packing()
         )
 
     def get_neighbours(
@@ -61,6 +82,7 @@ class SlidePuzzle(Puzzle):
         This function should return a neighbours, and the cost of the move.
         if impossible to move in a direction cost should be inf and State should be same as input state.
         """
+        state = state.unpacking()
         x, y = self._getBlankPosition(state)
         pos = jnp.asarray((x, y))
         next_pos = pos + jnp.array([[0, 1], [0, -1], [1, 0], [-1, 0]])
@@ -86,10 +108,10 @@ class SlidePuzzle(Puzzle):
                 lambda _: (board, jnp.inf),
                 None,
             )
-            return next_board, cost
+            return self.State(board=next_board).packing(), cost
 
         next_boards, costs = jax.vmap(map_fn, in_axes=(0, None))(next_pos, filled)
-        return self.State(board=next_boards), costs
+        return next_boards, costs
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State") -> bool:
         return state == solve_config.TargetState
@@ -140,7 +162,7 @@ class SlidePuzzle(Puzzle):
         def get_random_state(key):
             return self.State(
                 board=jax.random.permutation(key, jnp.arange(0, self.size**2, dtype=TYPE))
-            )
+            ).packing()
 
         def not_solverable(x):
             state = x[0]
@@ -159,6 +181,7 @@ class SlidePuzzle(Puzzle):
 
     def _solvable(self, state: "SlidePuzzle.State"):
         """Check if the state is solvable"""
+        state = state.unpacking()
         N = self.size
         inv_count = self._getInvCount(state)
         return jax.lax.cond(
@@ -200,6 +223,7 @@ class SlidePuzzle(Puzzle):
         import numpy as np
 
         def img_func(state: "SlidePuzzle.State", **kwargs):
+            state = state.unpacking()
             imgsize = IMG_SIZE[0]
             img = np.zeros(IMG_SIZE + (3,), np.uint8)
             img[:] = (144, 96, 8)  # R144,G96,B8
@@ -244,11 +268,11 @@ class SlidePuzzleHard(SlidePuzzle):
         if size == 3:
             self.hardest_state = self.State(
                 board=jnp.array([3, 1, 2, 0, 4, 5, 6, 7, 8], dtype=TYPE)
-            )
+            ).packing()
         elif size == 4:
             self.hardest_state = self.State(
                 board=jnp.array([0, 12, 9, 13, 15, 11, 10, 14, 3, 7, 2, 5, 4, 8, 6, 1], dtype=TYPE)
-            )
+            ).packing()
 
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None

@@ -10,6 +10,8 @@ from puxle.utils.util import (
     coloring_str,
     from_uint8,
     to_uint8,
+    pack_variable_bits,
+    unpack_variable_bits,
 )
 
 __all__ = [
@@ -18,4 +20,6 @@ __all__ = [
     "coloring_str",
     "from_uint8", 
     "to_uint8",
+    "pack_variable_bits",
+    "unpack_variable_bits",
 ]

@@ -8,6 +8,7 @@ from termcolor import colored
 from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.utils.util import to_uint8, from_uint8
 
 TYPE = jnp.uint8
 
@@ -29,7 +30,7 @@ class Sokoban(Puzzle):
         """Defines the state class for Sokoban using xtructure."""
         str_parser = self.get_string_parser()
         board = jnp.ones(self.size * self.size, dtype=TYPE)
-        packed_board = self.pack_board(board)
+        packed_board = to_uint8(board, 2)
 
         @state_dataclass
         class State:
@@ -54,31 +55,11 @@ class Sokoban(Puzzle):
         self.target_puzzles = jnp.load("puxle/data/sokoban/target.npy")
         self.num_puzzles = self.init_puzzles.shape[0]
 
-    def pack_board(self, board: jnp.ndarray) -> jnp.ndarray:
-        """
-        Pack a board array of shape (100,) with cell values in {0, 1, 2, 3}
-        into a compact representation using 25 uint8 values.
-        """
-        reshaped = jnp.reshape(board, (-1, 4))  # shape: (25, 4)
-        shifts = jnp.array([0, 2, 4, 6], dtype=board.dtype)
-        packed = jnp.sum(reshaped * (2**shifts), axis=1).astype(jnp.uint8)
-        return packed
-
-    def unpack_board(self, packed: jnp.ndarray) -> jnp.ndarray:
-        """
-        Unpack a compact board representation (25,)-shaped array back
-        to a board of shape (100,) with cell values in {0, 1, 2, 3}.
-        """
-        shifts = jnp.array([0, 2, 4, 6], dtype=jnp.uint8)
-        cells = jnp.stack([(packed >> shift) & 3 for shift in shifts], axis=1)
-        board = jnp.reshape(cells, (-1,))
-        return board
-
     def get_default_gen(self) -> callable:
         def gen():
             # Create a default flat board and pack it.
             board = jnp.ones(self.size**2, dtype=TYPE)
-            packed_board = self.pack_board(board)
+            packed_board = to_uint8(board, 2)
             return self.State(board=packed_board)
 
         return gen
@@ -106,8 +87,8 @@ class Sokoban(Puzzle):
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State") -> bool:
         # Unpack boards for comparison.
-        board = self.unpack_board(state.board)
-        t_board = self.unpack_board(solve_config.TargetState.board)
+        board = from_uint8(state.board, (self.size * self.size), 2)
+        t_board = from_uint8(solve_config.TargetState.board, (self.size * self.size), 2)
         # Remove the player from the current board.
         rm_player = jnp.where(board == Object.PLAYER.value, Object.EMPTY.value, board)
         return jnp.all(rm_player == t_board)
@@ -158,9 +139,9 @@ class Sokoban(Puzzle):
 
         def parser(state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs):
             # Unpack the board before visualization.
-            board = self.unpack_board(state.board)
+            board = from_uint8(state.board, (self.size * self.size), 2)
             if solve_config is not None:
-                goal = self.unpack_board(solve_config.TargetState.board)
+                goal = from_uint8(solve_config.TargetState.board, (self.size * self.size), 2)
                 for i in range(self.size):
                     for j in range(self.size):
                         if goal[i * self.size + j] == Object.BOX.value:
@@ -188,7 +169,7 @@ class Sokoban(Puzzle):
         If a move isn't possible, it returns the original state with an infinite cost.
         """
         # Unpack the board so that we work on a flat representation.
-        board = self.unpack_board(state.board)
+        board = from_uint8(state.board, (self.size * self.size), 2)
         x, y = self._getPlayerPosition(state)
         current_pos = jnp.array([x, y])
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
@@ -223,7 +204,7 @@ class Sokoban(Puzzle):
                     )
                     new_board = new_board.at[flat_idx(new_x, new_y)].set(Object.PLAYER.value)
                     # Pack the updated board.
-                    return self.State(board=self.pack_board(new_board)), 1.0
+                    return self.State(board=to_uint8(new_board, 2)), 1.0
 
                 # Case when target cell contains a box: attempt to push it.
                 def push_box(_):
@@ -240,7 +221,7 @@ class Sokoban(Puzzle):
                         )
                         new_board = new_board.at[flat_idx(new_x, new_y)].set(Object.PLAYER.value)
                         new_board = new_board.at[flat_idx(push_x, push_y)].set(Object.BOX.value)
-                        return self.State(board=self.pack_board(new_board)), 1.0
+                        return self.State(board=to_uint8(new_board, 2)), 1.0
 
                     return jax.lax.cond(valid_push, do_push, invalid_case, operand=None)
 
@@ -269,7 +250,7 @@ class Sokoban(Puzzle):
         return top_border + middle + bottom_border
 
     def _getPlayerPosition(self, state: "Sokoban.State"):
-        board = self.unpack_board(state.board)
+        board = from_uint8(state.board, (self.size * self.size), 2)
         flat_index = jnp.argmax(board == Object.PLAYER.value)
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
@@ -348,9 +329,9 @@ class Sokoban(Puzzle):
         def img_func(state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs):
             img = np.zeros(IMG_SIZE + (3,), np.uint8)
 
-            board = np.array(self.unpack_board(state.board))
+            board = np.array(from_uint8(state.board, (self.size * self.size), 2))
             if solve_config is not None:
-                goal = np.array(self.unpack_board(solve_config.TargetState.board))
+                goal = np.array(from_uint8(solve_config.TargetState.board, (self.size * self.size), 2))
             else:
                 goal = None
             for i in range(self.size):
@@ -394,7 +375,7 @@ class Sokoban(Puzzle):
         """
         Place the agent randomly on the board.
         """
-        board = self.unpack_board(board)
+        board = from_uint8(board, (self.size * self.size), 2)
         box_xs, box_ys = self._get_box_positions(board)
         box_positions = jnp.expand_dims(jnp.stack([box_xs, box_ys], axis=1), 0)  # shape: (1, 4, 2)
         _near = jnp.expand_dims(
@@ -417,7 +398,7 @@ class Sokoban(Puzzle):
         new_board = board.at[near_positions[idx, 0] * self.size + near_positions[idx, 1]].set(
             Object.PLAYER.value
         )
-        packed_board = self.pack_board(new_board)
+        packed_board = to_uint8(new_board, 2)
         return packed_board
 
     def solve_config_to_state_transform(
@@ -435,9 +416,9 @@ class Sokoban(Puzzle):
         """
         This function shoulde transformt the state to the solve config.
         """
-        board = self.unpack_board(state.board)
+        board = from_uint8(state.board, (self.size * self.size), 2)
         rm_player = jnp.where(board == Object.PLAYER.value, Object.EMPTY.value, board)
-        solve_config.TargetState = self.State(board=self.pack_board(rm_player))
+        solve_config.TargetState = self.State(board=to_uint8(rm_player, 2))
         return solve_config
 
     def get_inverse_neighbours(
@@ -450,7 +431,7 @@ class Sokoban(Puzzle):
         If an inverse move is not possible, it returns the original state with an infinite cost.
         """
 
-        board = self.unpack_board(state.board)
+        board = from_uint8(state.board, (self.size * self.size), 2)
         x, y = self._getPlayerPosition(state)
         current_pos = jnp.array([x, y])
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
@@ -497,7 +478,7 @@ class Sokoban(Puzzle):
                 new_board = new_board.at[flat_idx(prev_pos[0], prev_pos[1])].set(
                     Object.PLAYER.value
                 )
-                return self.State(board=self.pack_board(new_board)), 1.0
+                return self.State(board=to_uint8(new_board, 2)), 1.0
 
             # Inverse simple move: simply move the player back if no box is involved.
             def do_simple(_):
@@ -508,7 +489,7 @@ class Sokoban(Puzzle):
                 new_board = new_board.at[flat_idx(prev_pos[0], prev_pos[1])].set(
                     Object.PLAYER.value
                 )
-                return self.State(board=self.pack_board(new_board)), 1.0
+                return self.State(board=to_uint8(new_board, 2)), 1.0
 
             def branch_fn(_):
                 # Only allow a move if the previous cell is empty.
