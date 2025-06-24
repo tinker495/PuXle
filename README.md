@@ -4,10 +4,7 @@
 
 # PuXle: Parallelized Puzzles with JAX
 
-[![PyPI version](https://badge.fury.io/py/puxle.svg)](https://badge.fury.io/py/puxle)
-[![Python Version](https://img.shields.io/pypi/pyversions/puxle.svg)](https://pypi.org/project/puxle/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/tinker495/puxle/workflows/tests/badge.svg)](https://github.com/tinker495/puxle/actions)
 
 **PuXle** is a high-performance library for parallelized puzzle environments built on JAX. It provides a collection of classic puzzles optimized for AI research, reinforcement learning, and search algorithms.
 
@@ -25,18 +22,7 @@
 ### Basic Installation
 ```bash
 pip install puxle
-```
-
-### With CUDA Support (Recommended for GPU acceleration)
-```bash
-pip install "puxle[cuda]"
-```
-
-### Development Installation
-```bash
-git clone https://github.com/tinker495/puxle.git
-cd puxle
-pip install -e ".[dev]"
+pip install git+https://github.com/tinker495/PuXle.git # recommended
 ```
 
 ## 🎯 Quick Start
