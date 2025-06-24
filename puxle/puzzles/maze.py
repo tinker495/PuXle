@@ -80,8 +80,10 @@ class Maze(Puzzle):
                 case _:
                     raise ValueError(f"Invalid value: {x}")
 
-        def parser(state: "Maze.State", solve_config: "Maze.SolveConfig", **kwargs):
-            assert solve_config is not None, "This puzzle requires a solve_config"
+        def parser(state: "Maze.State", solve_config: "Maze.SolveConfig" = None, **kwargs):
+            if solve_config is None:
+                # Fallback representation when no solve_config is provided
+                return f"Maze State: Player at position {state.pos}"
 
             # 1. Unpack the maze to boolean (True=wall, False=path)
             bool_maze_flat = solve_config.unpacking().Maze

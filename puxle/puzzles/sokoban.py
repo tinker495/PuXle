@@ -91,10 +91,16 @@ class Sokoban(Puzzle):
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "Sokoban.State":
         # Initialize the board with the player, boxes, and walls from level1 and pack it.
+        if data is None:
+            # When no data is provided, generate data using get_data method
+            data = self.get_data(key)
         _, init_data = data
         return self.State(board=init_data)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+        if data is None:
+            # When no data is provided, generate data using get_data method
+            data = self.get_data(key)
         target_data, _ = data
         return self.SolveConfig(TargetState=self.State(board=target_data))
 
@@ -531,6 +537,9 @@ class SokobanHard(Sokoban):
 
 class SokobanDS(Sokoban):
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+        if data is None:
+            # When no data is provided, generate data using get_data method
+            data = self.get_data(key)
         target_board, _ = data
         packed_board = self._place_agent_randomly(target_board, key)
         return self.SolveConfig(TargetState=self.State(board=packed_board))

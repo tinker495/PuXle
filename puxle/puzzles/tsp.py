@@ -61,7 +61,7 @@ class TSP(Puzzle):
 
     def get_solve_config_string_parser(self) -> callable:
         def parser(solve_config: "TSP.SolveConfig", **kwargs):
-            return print(solve_config.points)
+            return f"TSP SolveConfig: {self.size} points, start at {solve_config.start}"
 
         return parser
 
