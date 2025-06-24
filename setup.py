@@ -25,6 +25,8 @@ setuptools.setup(
         "chex>=0.1.0",
         "tabulate>=0.9.0",
         "termcolor>=1.1.0",
+        "opencv-python>=4.10.0",
+        "tqdm>=4.67.1",
         "xtructure @ git+https://github.com/tinker495/xtructure.git",
     ],
     extras_require={

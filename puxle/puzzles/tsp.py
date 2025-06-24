@@ -2,7 +2,6 @@ import chex
 import jax
 import jax.numpy as jnp
 
-from JAxtar.annotate import ACTION_DTYPE  # ensure consistency with search utilities
 from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
