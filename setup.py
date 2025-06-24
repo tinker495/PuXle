@@ -42,6 +42,3 @@ setuptools.setup(
     ],
     python_requires=">=3.8",
 )
-
-if __name__ == "__main__":
-    setuptools.setup()

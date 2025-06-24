@@ -50,10 +50,8 @@ class Sokoban(Puzzle):
         return False
 
     def data_init(self):
-        self.init_puzzles = jnp.load("puzzle/data/sokoban/init.npy")  # bring boxoban dataset here
-        self.target_puzzles = jnp.load(
-            "puzzle/data/sokoban/target.npy"
-        )  # bring boxoban dataset here
+        self.init_puzzles = jnp.load("puxle/data/sokoban/init.npy")
+        self.target_puzzles = jnp.load("puxle/data/sokoban/target.npy")
         self.num_puzzles = self.init_puzzles.shape[0]
 
     def pack_board(self, board: jnp.ndarray) -> jnp.ndarray:
@@ -281,7 +279,7 @@ class Sokoban(Puzzle):
         cell_w = IMG_SIZE[0] // self.size
         cell_h = IMG_SIZE[1] // self.size
 
-        image_dir = os.path.join("puzzle", "data", "sokoban", "imgs")
+        image_dir = os.path.join("puxle", "data", "sokoban", "imgs")
         assets = {
             0: cv2.resize(
                 cv2.cvtColor(
@@ -526,8 +524,8 @@ class Sokoban(Puzzle):
 
 class SokobanHard(Sokoban):
     def data_init(self):
-        self.init_puzzles = jnp.load("puzzle/data/sokoban/init_hard.npy")
-        self.target_puzzles = jnp.load("puzzle/data/sokoban/target_hard.npy")
+        self.init_puzzles = jnp.load("puxle/data/sokoban/init_hard.npy")
+        self.target_puzzles = jnp.load("puxle/data/sokoban/target_hard.npy")
         self.num_puzzles = self.init_puzzles.shape[0]
 
 
