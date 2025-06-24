@@ -20,6 +20,11 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/tinker495/puxle",
     packages=setuptools.find_packages(),
+    package_data={
+        "puxle.data.sokoban": ["*.npy"],
+        "puxle.data.sokoban.imgs": ["*.png"],
+    },
+    include_package_data=True,
     install_requires=[
         "jax[cuda]>=0.4.0",
         "chex>=0.1.0",

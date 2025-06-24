@@ -1,4 +1,10 @@
 from enum import Enum
+import os
+try:
+    from importlib.resources import files
+except ImportError:
+    # Python < 3.9 fallback
+    from importlib_resources import files
 
 import chex
 import jax
@@ -52,8 +58,19 @@ class Sokoban(Puzzle):
         return False
 
     def data_init(self):
-        self.init_puzzles = jnp.load("puxle/data/sokoban/init.npy")
-        self.target_puzzles = jnp.load("puxle/data/sokoban/target.npy")
+        try:
+            # Try to load as package resources first (for installed packages)
+            data_pkg = files("puxle.data.sokoban")
+            self.init_puzzles = jnp.load(data_pkg / "init.npy")
+            self.target_puzzles = jnp.load(data_pkg / "target.npy")
+        except (FileNotFoundError, ModuleNotFoundError):
+            # Fallback to relative paths (for development/source directory)
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            data_dir = os.path.join(current_dir, "..", "data", "sokoban")
+            
+            self.init_puzzles = jnp.load(os.path.join(data_dir, "init.npy"))
+            self.target_puzzles = jnp.load(os.path.join(data_dir, "target.npy"))
+        
         self.num_puzzles = self.init_puzzles.shape[0]
 
     def get_default_gen(self) -> callable:
@@ -259,15 +276,21 @@ class Sokoban(Puzzle):
         """
         This function is a decorator that adds an img_parser to the class.
         """
-        import os
-
         import cv2
         import numpy as np
 
         cell_w = IMG_SIZE[0] // self.size
         cell_h = IMG_SIZE[1] // self.size
 
-        image_dir = os.path.join("puxle", "data", "sokoban", "imgs")
+        try:
+            # Try to load as package resources first (for installed packages)
+            imgs_pkg = files("puxle.data.sokoban.imgs")
+            image_dir = imgs_pkg
+        except (FileNotFoundError, ModuleNotFoundError):
+            # Fallback to relative paths (for development/source directory)
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            image_dir = os.path.join(current_dir, "..", "data", "sokoban", "imgs")
+
         assets = {
             0: cv2.resize(
                 cv2.cvtColor(
@@ -512,8 +535,19 @@ class Sokoban(Puzzle):
 
 class SokobanHard(Sokoban):
     def data_init(self):
-        self.init_puzzles = jnp.load("puxle/data/sokoban/init_hard.npy")
-        self.target_puzzles = jnp.load("puxle/data/sokoban/target_hard.npy")
+        try:
+            # Try to load as package resources first (for installed packages)
+            data_pkg = files("puxle.data.sokoban")
+            self.init_puzzles = jnp.load(data_pkg / "init_hard.npy")
+            self.target_puzzles = jnp.load(data_pkg / "target_hard.npy")
+        except (FileNotFoundError, ModuleNotFoundError):
+            # Fallback to relative paths (for development/source directory)
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            data_dir = os.path.join(current_dir, "..", "data", "sokoban")
+            
+            self.init_puzzles = jnp.load(os.path.join(data_dir, "init_hard.npy"))
+            self.target_puzzles = jnp.load(os.path.join(data_dir, "target_hard.npy"))
+        
         self.num_puzzles = self.init_puzzles.shape[0]
 
 
