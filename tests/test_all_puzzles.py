@@ -2,57 +2,45 @@ import pytest
 import jax
 import jax.numpy as jnp
 import numpy as np
-from typing import Type, List, Tuple
+import inspect
+from typing import Type, List
 
-# Import all puzzle classes
-from puxle.puzzles import (
-    DotKnot, TowerOfHanoi, LightsOut, LightsOutHard, Maze, PancakeSorting,
-    RubiksCube, RubiksCubeDS, RubiksCubeHard, RubiksCubeRandom,
-    SlidePuzzle, SlidePuzzleHard, SlidePuzzleRandom,
-    Sokoban, SokobanDS, SokobanHard, TSP, TopSpin
-)
 from puxle.core.puzzle_base import Puzzle
 
+
+def discover_puzzle_classes() -> List[Type[Puzzle]]:
+    """
+    Dynamically discover all puzzle classes from puxle.puzzles module.
+    Returns a list of puzzle classes that inherit from Puzzle.
+    """
+    import puxle.puzzles as puzzles_module
+    
+    puzzle_classes = []
+    
+    # Get all attributes from the puzzles module
+    for attr_name in dir(puzzles_module):
+        attr = getattr(puzzles_module, attr_name)
+        
+        # Check if it's a class and inherits from Puzzle
+        if (inspect.isclass(attr) and 
+            issubclass(attr, Puzzle) and 
+            attr != Puzzle):  # Exclude the base Puzzle class itself
+            puzzle_classes.append(attr)
+    
+    return puzzle_classes
 
 class TestPuzzleValidation:
     """Comprehensive test suite for all puzzles in puxle.puzzles module"""
     
     @pytest.fixture(scope="class")
     def puzzle_configs(self):
-        """Configuration for all puzzles with their initialization parameters"""
-        return [
-            # Simple puzzles with size parameter
-            (TowerOfHanoi, {"size": 3}),
-            (TowerOfHanoi, {"size": 4}),
-            (SlidePuzzle, {"size": 3}),
-            (SlidePuzzle, {"size": 4}),
-            (SlidePuzzleHard, {"size": 3}),
-            (SlidePuzzleHard, {"size": 4}),
-            (SlidePuzzleRandom, {"size": 3}),
-            (LightsOut, {"size": 3}),
-            (LightsOut, {"size": 4}),
-            (LightsOutHard, {"size": 3}),
-            (PancakeSorting, {"size": 4}),
-            (PancakeSorting, {"size": 5}),
-            (TopSpin, {"size": 4}),
-            (TopSpin, {"size": 5}),
-            
-            # Puzzles with specific parameters
-            (DotKnot, {"size": 10}),
-            (Maze, {"size": 23}),
-            (TSP, {"size": 10}),
-            
-            # RubiksCube variants
-            (RubiksCube, {}),
-            (RubiksCubeDS, {}),
-            (RubiksCubeHard, {}),
-            (RubiksCubeRandom, {}),
-            
-            # Sokoban variants (these may need data files)
-            (Sokoban, {}),
-            (SokobanDS, {}),
-            (SokobanHard, {}),
-        ]
+        """Dynamically generate configuration for all discovered puzzles"""
+        puzzle_classes = discover_puzzle_classes()
+        print(f"\nDiscovered {len(puzzle_classes)} puzzle classes:")
+        for cls in puzzle_classes:
+            print(f"  - {cls.__name__}")
+        
+        return puzzle_classes
     
     @pytest.fixture
     def rng_key(self):
@@ -61,23 +49,23 @@ class TestPuzzleValidation:
     
     def test_puzzle_instantiation(self, puzzle_configs):
         """Test that all puzzles can be instantiated correctly"""
-        for puzzle_class, params in puzzle_configs:
+        for puzzle_class in puzzle_configs:
             try:
-                puzzle = puzzle_class(**params)
+                puzzle = puzzle_class()
                 assert isinstance(puzzle, Puzzle), f"{puzzle_class.__name__} should inherit from Puzzle"
                 assert hasattr(puzzle, 'State'), f"{puzzle_class.__name__} should define State class"
                 assert hasattr(puzzle, 'SolveConfig'), f"{puzzle_class.__name__} should define SolveConfig class"
                 assert puzzle.action_size is not None, f"{puzzle_class.__name__} should have action_size defined"
                 assert puzzle.action_size > 0, f"{puzzle_class.__name__} should have positive action_size"
-                print(f"✓ {puzzle_class.__name__}({params}) instantiated successfully")
+                print(f"✓ {puzzle_class.__name__} instantiated successfully")
             except Exception as e:
-                pytest.fail(f"Failed to instantiate {puzzle_class.__name__}({params}): {e}")
+                pytest.fail(f"Failed to instantiate {puzzle_class.__name__}: {e}")
     
     def test_state_generation(self, puzzle_configs, rng_key):
         """Test that puzzles can generate initial states and solve configurations"""
-        for puzzle_class, params in puzzle_configs:
+        for puzzle_class in puzzle_configs:
             try:
-                puzzle = puzzle_class(**params)
+                puzzle = puzzle_class()
                 
                 # Test solve config generation
                 solve_config = puzzle.get_solve_config(key=rng_key)
@@ -97,13 +85,13 @@ class TestPuzzleValidation:
                 print(f"✓ {puzzle_class.__name__} state generation works")
                 
             except Exception as e:
-                pytest.fail(f"State generation failed for {puzzle_class.__name__}({params}): {e}")
+                pytest.fail(f"State generation failed for {puzzle_class.__name__}: {e}")
     
     def test_neighbor_generation(self, puzzle_configs, rng_key):
         """Test that puzzles can generate valid neighbors"""
-        for puzzle_class, params in puzzle_configs:
+        for puzzle_class in puzzle_configs:
             try:
-                puzzle = puzzle_class(**params)
+                puzzle = puzzle_class()
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
                 
@@ -132,13 +120,13 @@ class TestPuzzleValidation:
                 print(f"✓ {puzzle_class.__name__} neighbor generation works")
                 
             except Exception as e:
-                pytest.fail(f"Neighbor generation failed for {puzzle_class.__name__}({params}): {e}")
+                pytest.fail(f"Neighbor generation failed for {puzzle_class.__name__}: {e}")
     
     def test_solution_checking(self, puzzle_configs, rng_key):
         """Test solution checking functionality"""
-        for puzzle_class, params in puzzle_configs:
+        for puzzle_class in puzzle_configs:
             try:
-                puzzle = puzzle_class(**params)
+                puzzle = puzzle_class()
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
                 
@@ -154,13 +142,13 @@ class TestPuzzleValidation:
                 print(f"✓ {puzzle_class.__name__} solution checking works")
                 
             except Exception as e:
-                pytest.fail(f"Solution checking failed for {puzzle_class.__name__}({params}): {e}")
+                pytest.fail(f"Solution checking failed for {puzzle_class.__name__}: {e}")
     
     def test_action_strings(self, puzzle_configs):
         """Test action string conversion"""
-        for puzzle_class, params in puzzle_configs:
+        for puzzle_class in puzzle_configs:
             try:
-                puzzle = puzzle_class(**params)
+                puzzle = puzzle_class()
                 
                 # Test action_to_string for all valid actions
                 for action in range(puzzle.action_size):
@@ -171,13 +159,13 @@ class TestPuzzleValidation:
                 print(f"✓ {puzzle_class.__name__} action strings work")
                 
             except Exception as e:
-                pytest.fail(f"Action string conversion failed for {puzzle_class.__name__}({params}): {e}")
+                pytest.fail(f"Action string conversion failed for {puzzle_class.__name__}: {e}")
     
     def test_string_parsing(self, puzzle_configs, rng_key):
         """Test string representation of states"""
-        for puzzle_class, params in puzzle_configs:
+        for puzzle_class in puzzle_configs:
             try:
-                puzzle = puzzle_class(**params)
+                puzzle = puzzle_class()
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
                 
@@ -202,13 +190,13 @@ class TestPuzzleValidation:
                 print(f"✓ {puzzle_class.__name__} string parsing works")
                 
             except Exception as e:
-                pytest.fail(f"String parsing failed for {puzzle_class.__name__}({params}): {e}")
+                pytest.fail(f"String parsing failed for {puzzle_class.__name__}: {e}")
     
     def test_jax_compilation(self, puzzle_configs, rng_key):
         """Test that puzzle methods work correctly with JAX compilation"""
-        for puzzle_class, params in puzzle_configs:
+        for puzzle_class in puzzle_configs:
             try:
-                puzzle = puzzle_class(**params)
+                puzzle = puzzle_class()
                 
                 # Test that core methods are JIT compiled (they should not raise errors)
                 solve_config = puzzle.get_solve_config(key=rng_key)
@@ -228,13 +216,13 @@ class TestPuzzleValidation:
                 print(f"✓ {puzzle_class.__name__} JAX compilation works")
                 
             except Exception as e:
-                pytest.fail(f"JAX compilation failed for {puzzle_class.__name__}({params}): {e}")
+                pytest.fail(f"JAX compilation failed for {puzzle_class.__name__}: {e}")
     
     def test_batched_operations(self, puzzle_configs, rng_key):
         """Test batched operations work correctly"""
-        for puzzle_class, params in puzzle_configs:
+        for puzzle_class in puzzle_configs:
             try:
-                puzzle = puzzle_class(**params)
+                puzzle = puzzle_class()
                 
                 # Create multiple states and configs for batching
                 keys = jax.random.split(rng_key, 3)
@@ -260,13 +248,13 @@ class TestPuzzleValidation:
                     print(f"⚠ {puzzle_class.__name__} batched operations not fully testable: {batch_e}")
                 
             except Exception as e:
-                pytest.fail(f"Batched operations test setup failed for {puzzle_class.__name__}({params}): {e}")
+                pytest.fail(f"Batched operations test setup failed for {puzzle_class.__name__}: {e}")
     
     def test_puzzle_properties(self, puzzle_configs):
         """Test puzzle property flags"""
-        for puzzle_class, params in puzzle_configs:
+        for puzzle_class in puzzle_configs:
             try:
-                puzzle = puzzle_class(**params)
+                puzzle = puzzle_class()
                 
                 # Test boolean properties
                 assert isinstance(puzzle.has_target, bool), "has_target should be boolean"
@@ -280,13 +268,13 @@ class TestPuzzleValidation:
                 print(f"✓ {puzzle_class.__name__} properties are consistent")
                 
             except Exception as e:
-                pytest.fail(f"Property test failed for {puzzle_class.__name__}({params}): {e}")
+                pytest.fail(f"Property test failed for {puzzle_class.__name__}: {e}")
     
     def test_state_equality(self, puzzle_configs, rng_key):
         """Test state equality comparisons work correctly"""
-        for puzzle_class, params in puzzle_configs:
+        for puzzle_class in puzzle_configs:
             try:
-                puzzle = puzzle_class(**params)
+                puzzle = puzzle_class()
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 state1 = puzzle.get_initial_state(solve_config, key=rng_key)
                 state2 = puzzle.get_initial_state(solve_config, key=rng_key)
@@ -302,7 +290,7 @@ class TestPuzzleValidation:
                 print(f"✓ {puzzle_class.__name__} state equality works")
                 
             except Exception as e:
-                pytest.fail(f"State equality test failed for {puzzle_class.__name__}({params}): {e}")
+                pytest.fail(f"State equality test failed for {puzzle_class.__name__}: {e}")
 
 
 def run_comprehensive_puzzle_tests():

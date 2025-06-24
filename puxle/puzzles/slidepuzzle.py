@@ -236,11 +236,10 @@ class SlidePuzzleHard(SlidePuzzle):
     This class is a extension of SlidePuzzle, it will generate the hardest state for the puzzle.
     """
 
-    def __init__(self, size: int):
-        super().__init__(size)
-        self.size = size
+    def __init__(self, size: int = 4, **kwargs):
+        super().__init__(size, **kwargs)
         if size not in [3, 4]:
-            raise ValueError("Size of the puzzle must be 3 or 4")
+            raise ValueError(f"Size of the puzzle must be 3 or 4, got {size}")
 
         if size == 3:
             self.hardest_state = self.State(
