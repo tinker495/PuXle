@@ -44,11 +44,13 @@ class LightsOut(Puzzle):
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
 
-            def packing(self) -> "LightsOut.State":
+            @property
+            def packed(self) -> "LightsOut.State":
                 board = to_uint8(self.board)
                 return State(board=board)
 
-            def unpacking(self) -> "LightsOut.State":
+            @property
+            def unpacked(self) -> "LightsOut.State":
                 board = from_uint8(self.board, (size * size,))
                 return State(board=board)
 
@@ -65,7 +67,7 @@ class LightsOut(Puzzle):
             return "□" if x == 0 else "■"
 
         def parser(state: "LightsOut.State", **kwargs):
-            return form.format(*map(to_char, state.unpacking().board))
+            return form.format(*map(to_char, state.unpacked.board))
 
         return parser
 
@@ -75,7 +77,7 @@ class LightsOut(Puzzle):
         return self._get_suffled_state(solve_config, solve_config.TargetState, key, num_shuffle=8)
 
     def get_target_state(self, key=None) -> "LightsOut.State":
-        return self.State(board=jnp.zeros(self.size**2, dtype=bool)).packing()
+        return self.State(board=jnp.zeros(self.size**2, dtype=bool)).packed
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         return self.SolveConfig(TargetState=self.get_target_state(key))
@@ -87,7 +89,7 @@ class LightsOut(Puzzle):
         This function should return a neighbours, and the cost of the move.
         if impossible to move in a direction cost should be inf and State should be same as input state.
         """
-        board = state.unpacking().board
+        board = state.unpacked.board
         # actions - combinations of range(size) with 2 elements
         actions = jnp.stack(
             jnp.meshgrid(jnp.arange(self.size), jnp.arange(self.size), indexing="ij"), axis=-1
@@ -104,7 +106,7 @@ class LightsOut(Puzzle):
             next_board, cost = jax.lax.cond(
                 filled, lambda _: (flip(board, action), 1.0), lambda _: (board, jnp.inf), None
             )
-            next_state = self.State(board=next_board).packing()
+            next_state = self.State(board=next_board).packed
             return next_state, cost
 
         next_states, costs = jax.vmap(map_fn, in_axes=(0, None))(actions, filled)
@@ -159,7 +161,7 @@ class LightsOut(Puzzle):
             # Calculate the size of each cell in the grid
             cell_size = imgsize // self.size
             # Reshape the flat board state into a 2D array
-            board = np.array(state.unpacking().board).reshape(self.size, self.size)
+            board = np.array(state.unpacked.board).reshape(self.size, self.size)
             # Define colors in BGR: light on → bright yellow, light off → black, and grid lines → gray
             on_color = (255, 255, 0)  # Yellow
             off_color = (0, 0, 0)  # Black

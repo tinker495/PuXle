@@ -10,18 +10,21 @@ class FieldDescriptor(FieldDescriptor):
 
 
 class PuzzleState(Xtructurable):
-    def packing(self, **kwargs) -> "PuzzleState":
+
+    @property
+    def packed(self, **kwargs) -> "PuzzleState":
         """
         This function should return a bit packed array that represents
         """
-        pass
+        return self
 
-    def unpacking(self, **kwargs) -> "PuzzleState":
+    @property
+    def unpacked(self, **kwargs) -> "PuzzleState":
         """
         This function should return a Xtructurable object that represents the state.
         raw state is bit packed, so it is space efficient, but it is not good for observation & state transition.
         """
-        pass
+        return self
 
 
 def state_dataclass(cls: Type[T]) -> Type[T]:
@@ -31,19 +34,19 @@ def state_dataclass(cls: Type[T]) -> Type[T]:
 
     cls = xtructure_dataclass(cls)
 
-    if not hasattr(cls, "packing") and not hasattr(cls, "unpacking"):
+    if not hasattr(cls, "packed") and not hasattr(cls, "unpacked"):
         # if packing and unpacking are not implemented, return the state as is
-        def packing(self) -> cls:
+        def packed(self) -> cls:
             return self
 
-        setattr(cls, "packing", packing)
+        setattr(cls, "packed", property(packed))
 
-        def unpacking(self) -> cls:
+        def unpacked(self) -> cls:
             return self
 
-        setattr(cls, "unpacking", unpacking)
+        setattr(cls, "unpacked", property(unpacked))
 
-    elif hasattr(cls, "packing") ^ hasattr(cls, "unpacking"):
+    elif hasattr(cls, "packed") ^ hasattr(cls, "unpacked"):
         # packing and unpacking must be implemented together
         raise ValueError("State class must implement both packing and unpacking or neither")
     else:
