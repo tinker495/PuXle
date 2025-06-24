@@ -13,18 +13,19 @@ from puxle.utils.util import to_uint8, from_uint8
 TYPE = jnp.uint8
 
 
-class Object(Enum):
-    EMPTY = 0
-    WALL = 1
-    PLAYER = 2
-    BOX = 3
-    TARGET = 4
-    PLAYER_ON_TARGET = 5
-    BOX_ON_TARGET = 6
 
 
 class Sokoban(Puzzle):
     size: int = 10
+
+    class Object(Enum):
+        EMPTY = 0
+        WALL = 1
+        PLAYER = 2
+        BOX = 3
+        TARGET = 4
+        PLAYER_ON_TARGET = 5
+        BOX_ON_TARGET = 6
 
     def define_state_class(self) -> PuzzleState:
         """Defines the state class for Sokoban using xtructure."""
@@ -90,7 +91,7 @@ class Sokoban(Puzzle):
         board = from_uint8(state.board, (self.size * self.size), 2)
         t_board = from_uint8(solve_config.TargetState.board, (self.size * self.size), 2)
         # Remove the player from the current board.
-        rm_player = jnp.where(board == Object.PLAYER.value, Object.EMPTY.value, board)
+        rm_player = jnp.where(board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board)
         return jnp.all(rm_player == t_board)
 
     def action_to_string(self, action: int) -> str:
@@ -120,19 +121,19 @@ class Sokoban(Puzzle):
 
         def to_char(x):
             match x:
-                case Object.EMPTY.value:
+                case Sokoban.Object.EMPTY.value:
                     return " "
-                case Object.WALL.value:
+                case Sokoban.Object.WALL.value:
                     return colored("■", "white")
-                case Object.PLAYER.value:
+                case Sokoban.Object.PLAYER.value:
                     return colored("●", "red")
-                case Object.BOX.value:
+                case Sokoban.Object.BOX.value:
                     return colored("■", "yellow")
-                case Object.TARGET.value:
+                case Sokoban.Object.TARGET.value:
                     return colored("x", "red")
-                case Object.PLAYER_ON_TARGET.value:
+                case Sokoban.Object.PLAYER_ON_TARGET.value:
                     return colored("ⓧ", "red")
-                case Object.BOX_ON_TARGET.value:
+                case Sokoban.Object.BOX_ON_TARGET.value:
                     return colored("■", "green")
                 case _:
                     return "?"
@@ -144,18 +145,18 @@ class Sokoban(Puzzle):
                 goal = from_uint8(solve_config.TargetState.board, (self.size * self.size), 2)
                 for i in range(self.size):
                     for j in range(self.size):
-                        if goal[i * self.size + j] == Object.BOX.value:
+                        if goal[i * self.size + j] == Sokoban.Object.BOX.value:
                             match board[i * self.size + j]:
-                                case Object.PLAYER.value:
+                                case Sokoban.Object.PLAYER.value:
                                     board = board.at[i * self.size + j].set(
-                                        Object.PLAYER_ON_TARGET.value
+                                        Sokoban.Object.PLAYER_ON_TARGET.value
                                     )
-                                case Object.BOX.value:
+                                case Sokoban.Object.BOX.value:
                                     board = board.at[i * self.size + j].set(
-                                        Object.BOX_ON_TARGET.value
+                                        Sokoban.Object.BOX_ON_TARGET.value
                                     )
-                                case Object.EMPTY.value:
-                                    board = board.at[i * self.size + j].set(Object.TARGET.value)
+                                case Sokoban.Object.EMPTY.value:
+                                    board = board.at[i * self.size + j].set(Sokoban.Object.TARGET.value)
 
             return form.format(*map(to_char, board))
 
@@ -179,7 +180,7 @@ class Sokoban(Puzzle):
             return i * self.size + j
 
         def is_empty(i, j):
-            return board[flat_idx(i, j)] == Object.EMPTY.value
+            return board[flat_idx(i, j)] == Sokoban.Object.EMPTY.value
 
         def is_valid_pos(i, j):
             return jnp.logical_and(
@@ -200,9 +201,9 @@ class Sokoban(Puzzle):
 
                 def move_empty(_):
                     new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
-                        Object.EMPTY.value
+                        Sokoban.Object.EMPTY.value
                     )
-                    new_board = new_board.at[flat_idx(new_x, new_y)].set(Object.PLAYER.value)
+                    new_board = new_board.at[flat_idx(new_x, new_y)].set(Sokoban.Object.PLAYER.value)
                     # Pack the updated board.
                     return self.State(board=to_uint8(new_board, 2)), 1.0
 
@@ -217,19 +218,19 @@ class Sokoban(Puzzle):
 
                     def do_push(_):
                         new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
-                            Object.EMPTY.value
+                            Sokoban.Object.EMPTY.value
                         )
-                        new_board = new_board.at[flat_idx(new_x, new_y)].set(Object.PLAYER.value)
-                        new_board = new_board.at[flat_idx(push_x, push_y)].set(Object.BOX.value)
+                        new_board = new_board.at[flat_idx(new_x, new_y)].set(Sokoban.Object.PLAYER.value)
+                        new_board = new_board.at[flat_idx(push_x, push_y)].set(Sokoban.Object.BOX.value)
                         return self.State(board=to_uint8(new_board, 2)), 1.0
 
                     return jax.lax.cond(valid_push, do_push, invalid_case, operand=None)
 
                 return jax.lax.cond(
-                    jnp.equal(target, Object.EMPTY.value),
+                    jnp.equal(target, Sokoban.Object.EMPTY.value),
                     move_empty,
                     lambda _: jax.lax.cond(
-                        jnp.equal(target, Object.BOX.value), push_box, invalid_case, operand=None
+                        jnp.equal(target, Sokoban.Object.BOX.value), push_box, invalid_case, operand=None
                     ),
                     operand=None,
                 )
@@ -251,7 +252,7 @@ class Sokoban(Puzzle):
 
     def _getPlayerPosition(self, state: "Sokoban.State"):
         board = from_uint8(state.board, (self.size * self.size), 2)
-        flat_index = jnp.argmax(board == Object.PLAYER.value)
+        flat_index = jnp.argmax(board == Sokoban.Object.PLAYER.value)
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
     def get_img_parser(self):
@@ -338,15 +339,15 @@ class Sokoban(Puzzle):
                 for j in range(self.size):
                     cell_val = int(board[i * self.size + j])
                     if (
-                        goal is not None and goal[i * self.size + j] == Object.BOX.value
+                        goal is not None and goal[i * self.size + j] == Sokoban.Object.BOX.value
                     ):  # If this cell is marked as a target
                         match cell_val:
-                            case Object.PLAYER.value:
-                                asset = assets.get(Object.PLAYER_ON_TARGET.value)  # agent on target
-                            case Object.BOX.value:
-                                asset = assets.get(Object.BOX_ON_TARGET.value)  # box on target
-                            case Object.EMPTY.value:
-                                asset = assets.get(Object.TARGET.value)  # target floor (box target)
+                            case Sokoban.Object.PLAYER.value:
+                                asset = assets.get(Sokoban.Object.PLAYER_ON_TARGET.value)  # agent on target
+                            case Sokoban.Object.BOX.value:
+                                asset = assets.get(Sokoban.Object.BOX_ON_TARGET.value)  # box on target
+                            case Sokoban.Object.EMPTY.value:
+                                asset = assets.get(Sokoban.Object.TARGET.value)  # target floor (box target)
                             case _:
                                 asset = assets.get(cell_val)
                     else:
@@ -368,7 +369,7 @@ class Sokoban(Puzzle):
         """
         Get the positions of all boxes on the board.
         """
-        flat_index = jnp.argsort(board == Object.BOX.value)[-number_of_boxes:]
+        flat_index = jnp.argsort(board == Sokoban.Object.BOX.value)[-number_of_boxes:]
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
     def _place_agent_randomly(self, board: jnp.ndarray, key: jax.random.PRNGKey) -> jnp.ndarray:
@@ -389,14 +390,14 @@ class Sokoban(Puzzle):
         mask = jnp.where(near_positions[:, 1] < 0, 0, mask)
         mask = jnp.where(near_positions[:, 1] >= self.size, 0, mask)
         mask = jnp.where(
-            board[near_positions[:, 0] * self.size + near_positions[:, 1]] != Object.EMPTY.value,
+            board[near_positions[:, 0] * self.size + near_positions[:, 1]] != Sokoban.Object.EMPTY.value,
             0,
             mask,
         )
         prob = mask / jnp.sum(mask)
         idx = jax.random.choice(key, jnp.arange(near_positions.shape[0]), p=prob)
         new_board = board.at[near_positions[idx, 0] * self.size + near_positions[idx, 1]].set(
-            Object.PLAYER.value
+            Sokoban.Object.PLAYER.value
         )
         packed_board = to_uint8(new_board, 2)
         return packed_board
@@ -417,7 +418,7 @@ class Sokoban(Puzzle):
         This function shoulde transformt the state to the solve config.
         """
         board = from_uint8(state.board, (self.size * self.size), 2)
-        rm_player = jnp.where(board == Object.PLAYER.value, Object.EMPTY.value, board)
+        rm_player = jnp.where(board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board)
         solve_config.TargetState = self.State(board=to_uint8(rm_player, 2))
         return solve_config
 
@@ -440,7 +441,7 @@ class Sokoban(Puzzle):
             return i * self.size + j
 
         def is_empty(i, j):
-            return board[flat_idx(i, j)] == Object.EMPTY.value
+            return board[flat_idx(i, j)] == Sokoban.Object.EMPTY.value
 
         def is_valid_pos(i, j):
             return jnp.logical_and(
@@ -456,7 +457,7 @@ class Sokoban(Puzzle):
             front_pos = current_pos + direction
             valid_front = is_valid_pos(front_pos[0], front_pos[1])
             box_at_front = jnp.logical_and(
-                valid_front, board[flat_idx(front_pos[0], front_pos[1])] == Object.BOX.value
+                valid_front, board[flat_idx(front_pos[0], front_pos[1])] == Sokoban.Object.BOX.value
             )
             empty_prev = jnp.logical_and(valid_prev, is_empty(prev_pos[0], prev_pos[1]))
 
@@ -470,13 +471,13 @@ class Sokoban(Puzzle):
             def do_pull(_):
                 new_board = board
                 new_board = new_board.at[flat_idx(front_pos[0], front_pos[1])].set(
-                    Object.EMPTY.value
+                    Sokoban.Object.EMPTY.value
                 )
                 new_board = new_board.at[flat_idx(current_pos[0], current_pos[1])].set(
-                    Object.BOX.value
+                    Sokoban.Object.BOX.value
                 )
                 new_board = new_board.at[flat_idx(prev_pos[0], prev_pos[1])].set(
-                    Object.PLAYER.value
+                    Sokoban.Object.PLAYER.value
                 )
                 return self.State(board=to_uint8(new_board, 2)), 1.0
 
@@ -484,10 +485,10 @@ class Sokoban(Puzzle):
             def do_simple(_):
                 new_board = board
                 new_board = new_board.at[flat_idx(current_pos[0], current_pos[1])].set(
-                    Object.EMPTY.value
+                    Sokoban.Object.EMPTY.value
                 )
                 new_board = new_board.at[flat_idx(prev_pos[0], prev_pos[1])].set(
-                    Object.PLAYER.value
+                    Sokoban.Object.PLAYER.value
                 )
                 return self.State(board=to_uint8(new_board, 2)), 1.0
 
