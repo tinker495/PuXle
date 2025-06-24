@@ -48,7 +48,7 @@ class DotKnot(Puzzle):
 
         return State
 
-    def __init__(self, size: int, color_num: int = 4, **kwargs):
+    def __init__(self, size: int = 10, color_num: int = 4, **kwargs):
         assert size >= 4, "Size must be at least 4 for packing"
         self.size = size
         self.color_num = color_num

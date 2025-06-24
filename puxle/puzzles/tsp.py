@@ -55,7 +55,7 @@ class TSP(Puzzle):
 
         return SolveConfig
 
-    def __init__(self, size: int, **kwargs):
+    def __init__(self, size: int = 16, **kwargs):
         self.size = size
         super().__init__(**kwargs)
 

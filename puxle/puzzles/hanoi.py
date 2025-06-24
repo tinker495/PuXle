@@ -42,7 +42,7 @@ class TowerOfHanoi(Puzzle):
 
         return State
 
-    def __init__(self, size: int, **kwargs):
+    def __init__(self, size: int = 5, **kwargs):
         """
         Initialize the Tower of Hanoi puzzle
 

@@ -25,7 +25,7 @@ class SlidePuzzle(Puzzle):
 
         return State
 
-    def __init__(self, size: int, **kwargs):
+    def __init__(self, size: int = 4, **kwargs):
         self.size = size
         super().__init__(**kwargs)
 

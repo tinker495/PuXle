@@ -40,7 +40,7 @@ class PancakeSorting(Puzzle):
 
         return State
 
-    def __init__(self, size: int, **kwargs):
+    def __init__(self, size: int = 35, **kwargs):
         """
         Initialize the Pancake Sorting puzzle
 

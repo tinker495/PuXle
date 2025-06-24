@@ -51,7 +51,7 @@ class Maze(Puzzle):
 
         return State
 
-    def __init__(self, size: int, **kwargs):
+    def __init__(self, size: int = 23, **kwargs):
         # Parameter p is no longer used for maze generation
         self.size = size
         super().__init__(**kwargs)
