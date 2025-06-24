@@ -1,3 +1,10 @@
+"""
+PuXle: Parallelized Puzzles with JAX
+
+This setup.py is maintained for backward compatibility.
+The main configuration is now in pyproject.toml.
+"""
+
 import setuptools
 
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -18,6 +25,8 @@ setuptools.setup(
         "chex>=0.1.0",
         "tabulate>=0.9.0",
         "termcolor>=1.1.0",
+        "opencv-python>=4.10.0",
+        "tqdm>=4.67.1",
         "xtructure @ git+https://github.com/tinker495/xtructure.git",
     ],
     extras_require={
@@ -33,3 +42,6 @@ setuptools.setup(
     ],
     python_requires=">=3.8",
 )
+
+if __name__ == "__main__":
+    setuptools.setup()

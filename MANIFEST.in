@@ -1,0 +1,22 @@
+include README.md
+include LICENSE
+include requirements.txt
+include pyproject.toml
+
+# Include all data files
+recursive-include puxle/data *.npy *.png *.jpg *.jpeg *.gif *.txt *.json *.yaml *.yml
+recursive-include images *.png *.jpg *.jpeg *.gif
+
+# Exclude unnecessary files
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .git*
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude *.dylib
+global-exclude *.dll
+exclude venv/**
+exclude .venv/**
+exclude build/**
+exclude dist/**
+exclude *.egg-info/**

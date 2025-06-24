@@ -1,0 +1,39 @@
+"""
+Puzzle implementations for PuXle.
+
+This module contains implementations of various classic puzzles optimized for JAX-based computation.
+All puzzle classes inherit from the base Puzzle class and provide parallelized environments
+for AI research and reinforcement learning.
+"""
+
+from puxle.puzzles.dotknot import DotKnot
+from puxle.puzzles.hanoi import TowerOfHanoi
+from puxle.puzzles.lightsout import LightsOut, LightsOutHard
+from puxle.puzzles.maze import Maze
+from puxle.puzzles.pancake import PancakeSorting
+from puxle.puzzles.rubikscube import RubiksCube, RubiksCubeDS, RubiksCubeHard, RubiksCubeRandom
+from puxle.puzzles.slidepuzzle import SlidePuzzle, SlidePuzzleHard, SlidePuzzleRandom
+from puxle.puzzles.sokoban import Sokoban, SokobanDS, SokobanHard
+from puxle.puzzles.topspin import TopSpin
+from puxle.puzzles.tsp import TSP
+
+__all__ = [
+    "DotKnot",
+    "TowerOfHanoi",
+    "LightsOut",
+    "LightsOutHard",
+    "Maze",
+    "PancakeSorting",
+    "RubiksCube",
+    "RubiksCubeDS",
+    "RubiksCubeHard",
+    "RubiksCubeRandom",
+    "SlidePuzzle",
+    "SlidePuzzleHard",
+    "SlidePuzzleRandom",
+    "Sokoban",
+    "SokobanDS",
+    "SokobanHard",
+    "TSP",
+    "TopSpin",
+]
