@@ -1,28 +1,54 @@
-from puxle.dotknot import DotKnot
-from puxle.hanoi import TowerOfHanoi
-from puxle.lightsout import LightsOut, LightsOutHard
-from puxle.maze import Maze
-from puxle.pancake import PancakeSorting
-from puxle.puzzle_base import Puzzle
-from puxle.rubikscube import RubiksCube, RubiksCubeDS, RubiksCubeHard, RubiksCubeRandom
-from puxle.slidepuzzle import SlidePuzzle, SlidePuzzleHard, SlidePuzzleRandom
-from puxle.sokoban import Sokoban, SokobanDS, SokobanHard
-from puxle.topspin import TopSpin
-from puxle.tsp import TSP
+"""
+PuXle: Parallelized Puzzles with JAX
+
+A high-performance library for parallelized puzzle environments built on JAX.
+Provides a collection of classic puzzles optimized for AI research, reinforcement learning, 
+and search algorithms.
+"""
+
+# Core framework
+from puxle.core import Puzzle, PuzzleState, FieldDescriptor, state_dataclass
+
+# All puzzle implementations
+from puxle.puzzles import (
+    DotKnot,
+    TowerOfHanoi,
+    LightsOut,
+    LightsOutHard,
+    Maze,
+    PancakeSorting,
+    RubiksCube,
+    RubiksCubeDS,
+    RubiksCubeHard,
+    RubiksCubeRandom,
+    SlidePuzzle,
+    SlidePuzzleHard,
+    SlidePuzzleRandom,
+    Sokoban,
+    SokobanDS,
+    SokobanHard,
+    TSP,
+    TopSpin,
+)
 
 __version__ = "0.1.0"
 
 __all__ = [
+    # Core framework
+    "Puzzle",
+    "PuzzleState", 
+    "FieldDescriptor",
+    "state_dataclass",
+    # Puzzle implementations
     "DotKnot",
     "TowerOfHanoi",
     "LightsOut",
     "LightsOutHard",
     "Maze",
     "PancakeSorting",
-    "Puzzle",
     "RubiksCube",
     "RubiksCubeDS",
-    "RubiksCubeHard",
+    "RubiksCubeHard", 
     "RubiksCubeRandom",
     "SlidePuzzle",
     "SlidePuzzleHard",

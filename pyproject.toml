@@ -86,7 +86,7 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["puxle*"]
-exclude = ["tests*", "docs*", "examples*"]
+exclude = ["tests*", "docs*", "examples*", "puxle.data*"]
 
 [tool.setuptools.package-data]
 puxle = [

@@ -5,10 +5,10 @@ import jax
 import jax.numpy as jnp
 from tabulate import tabulate
 
-from puxle.annotate import IMG_SIZE
-from puxle.puzzle_base import Puzzle
-from puxle.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puxle.util import coloring_str
+from puxle.utils.annotate import IMG_SIZE
+from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.utils.util import coloring_str
 
 TYPE = jnp.uint8
 LINE_THICKNESS = 3

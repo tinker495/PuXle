@@ -5,8 +5,8 @@ import chex
 import jax
 import jax.numpy as jnp
 
-from puxle.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puxle.util import add_img_parser
+from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.utils.util import add_img_parser
 
 T = TypeVar("T")
 

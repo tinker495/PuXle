@@ -3,10 +3,10 @@ import jax
 import jax.numpy as jnp
 
 from JAxtar.annotate import ACTION_DTYPE  # ensure consistency with search utilities
-from puxle.annotate import IMG_SIZE
-from puxle.puzzle_base import Puzzle
-from puxle.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puxle.util import from_uint8, to_uint8
+from puxle.utils.annotate import IMG_SIZE
+from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.utils.util import from_uint8, to_uint8
 
 # Use 16-bit unsigned integers so that problem sizes >255 are handled without overflow.
 TYPE = jnp.uint16
