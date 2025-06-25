@@ -47,15 +47,24 @@ class RubiksCube(Puzzle):
 
     def define_state_class(self) -> PuzzleState:
         str_parser = self.get_string_parser()
-        raw = jnp.full((6, self.size * self.size), -1, dtype=TYPE)
-        packed = to_uint8(raw, 4)
+        raw_shape = (6, self.size * self.size)
+        raw = jnp.full(raw_shape, -1, dtype=TYPE)
+        packed_faces = to_uint8(raw, 4)
 
         @state_dataclass
         class State:
-            faces: FieldDescriptor[TYPE, packed.shape]
+            faces: FieldDescriptor[TYPE, packed_faces.shape]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
+            
+            @property
+            def packed(self):
+                return State(faces=to_uint8(self.faces, 4))
+            
+            @property
+            def unpacked(self):
+                return State(faces=from_uint8(self.faces, raw_shape, 4))
 
         return State
 
@@ -70,7 +79,7 @@ class RubiksCube(Puzzle):
     def get_string_parser(self):
         def parser(state: "RubiksCube.State", **kwargs):
             # Unpack the state faces before printing
-            unpacked_faces = from_uint8(state.faces, (6, self.size * self.size), 4)
+            unpacked_faces = state.unpacked.faces
 
             # Helper function to get face string
             def get_empty_face_string():
@@ -125,11 +134,8 @@ class RubiksCube(Puzzle):
         return self._get_suffled_state(solve_config, solve_config.TargetState, key, num_shuffle=10)
 
     def get_target_state(self, key=None) -> "RubiksCube.State":
-        raw_faces = jnp.repeat(jnp.arange(6)[:, None], self.size * self.size, axis=1).astype(
-            TYPE
-        )  # 6 faces, 3x3 each
-        packed_faces = to_uint8(raw_faces, 4)
-        return self.State(faces=packed_faces)
+        faces = jnp.repeat(jnp.arange(6)[:, None], self.size * self.size, axis=1).astype(TYPE)  # 6 faces, 3x3 each
+        return self.State(faces=faces).packed
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         return self.SolveConfig(TargetState=self.get_target_state(key))
@@ -137,11 +143,11 @@ class RubiksCube(Puzzle):
     def get_neighbours(
         self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State", filled: bool = True
     ) -> tuple["RubiksCube.State", chex.Array]:
-        def map_fn(face, axis, index, clockwise):
+        def map_fn(state, axis, index, clockwise):
             return jax.lax.cond(
                 filled,
-                lambda _: (self._rotate(face, axis, index, clockwise), 1.0),
-                lambda _: (face, jnp.inf),
+                lambda _: (self._rotate(state, axis, index, clockwise), 1.0),
+                lambda _: (state, jnp.inf),
                 None,
             )
 
@@ -151,17 +157,10 @@ class RubiksCube(Puzzle):
         axis_grid = axis_grid.reshape(-1)
         index_grid = index_grid.reshape(-1)
         clockwise_grid = clockwise_grid.reshape(-1)
-
-        # Unpack the state faces before processing
-        unpacked_faces = from_uint8(state.faces, (6, self.size * self.size), 4)
-        shaped_faces = unpacked_faces.reshape((6, self.size, self.size))
-
-        new_faces, costs = jax.vmap(map_fn, in_axes=(None, 0, 0, 0))(
-            shaped_faces, axis_grid, index_grid, clockwise_grid
+        new_states, costs = jax.vmap(map_fn, in_axes=(None, 0, 0, 0))(
+            state, axis_grid, index_grid, clockwise_grid
         )
-        neighbour_unpacked = new_faces.reshape((-1, 6, self.size * self.size))
-        neighbour_packed = jax.vmap(lambda faces: to_uint8(faces, 4))(neighbour_unpacked)
-        return self.State(faces=neighbour_packed), costs
+        return new_states, costs
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State") -> bool:
         return state == solve_config.TargetState
@@ -176,11 +175,14 @@ class RubiksCube(Puzzle):
     def _rotate_face(shaped_faces: chex.Array, clockwise: bool, mul: int):
         return rot90_traceable(shaped_faces, jnp.where(clockwise, mul, -mul))
 
-    def _rotate(self, shaped_faces: chex.Array, axis: int, index: int, clockwise: bool = True):
+    def _rotate(self, state: "RubiksCube.State", axis: int, index: int, clockwise: bool = True):
         # rotate the edge clockwise or counterclockwise
         # axis is the axis of the rotation, 0 for x, 1 for y, 2 for z
         # index is the index of the edge to rotate
         # clockwise is a boolean, True for clockwise, False for counterclockwise
+        faces = state.unpacked.faces
+        shaped_faces = faces.reshape((6, self.size, self.size))
+
         rotate_edge_map = jnp.array(
             [
                 [UP, FRONT, DOWN, BACK],  # x-axis
@@ -242,7 +244,8 @@ class RubiksCube(Puzzle):
                 ),  # 6: back
             ],
         )
-        return shaped_faces
+        faces = jnp.reshape(shaped_faces, (6, self.size * self.size))
+        return self.State(faces=faces).packed
 
     def get_img_parser(self):
         """
@@ -307,7 +310,7 @@ class RubiksCube(Puzzle):
                 return int(u * scale + offset_x), int(v * scale + offset_y)
 
             # Obtain the color data for each face and reshape them into grids
-            board = from_uint8(state.faces, (6, self.size * self.size), 4)
+            board = state.unpacked.faces
             board = np.array(board)
             face_colors = {}
             face_colors[UP] = np.array(board[UP].reshape((self.size, self.size)))
