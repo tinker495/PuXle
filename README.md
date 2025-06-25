@@ -146,47 +146,6 @@ Run with coverage:
 pytest --cov=puxle tests/
 ```
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)  
-5. Open a Pull Request
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Built with [JAX](https://github.com/google/jax) for high-performance computing
-- Inspired by classic puzzle environments and AI research
-- Special thanks to the JAX and Python communities
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/tinker495/puxle/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/tinker495/puxle/discussions)
-- **Email**: wjdrbtjr495@gmail.com
-
-## 📈 Citation
-
-If you use PuXle in your research, please cite:
-
-```bibtex
-@software{puxle2025,
-  title={PuXle: Parallelized Puzzles with JAX},
-  author={Jung, KyuSeok},
-  year={2025},
-  url={https://github.com/tinker495/puxle}
-}
-```
-
----
-
-<div align="center">
-  Made with ❤️ for the AI research community
-</div>
