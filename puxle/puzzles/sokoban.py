@@ -29,6 +29,7 @@ class Sokoban(Puzzle):
         TARGET = 4
         PLAYER_ON_TARGET = 5
         BOX_ON_TARGET = 6
+        TARGET_PLAYER = 7
 
     class SolveCondition(Enum):
         ALL_BOXES_ON_TARGET = 0
@@ -104,7 +105,9 @@ class Sokoban(Puzzle):
             data = self.get_data(key)
         target_data, _ = data
         if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET:
-            target_data = self._place_agent_randomly(target_data, key)
+            board = self.State(board=target_data).unpacked.board
+            target_data = self._place_agent_randomly(board, key)
+            target_data = self.State(board=target_data).packed.board
         return self.SolveConfig(TargetState=self.State(board=target_data))
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State") -> bool:
@@ -150,7 +153,7 @@ class Sokoban(Puzzle):
                 case Sokoban.Object.WALL.value:
                     return colored("■", "white")
                 case Sokoban.Object.PLAYER.value:
-                    return colored("●", "red")
+                    return colored("●", "green")
                 case Sokoban.Object.BOX.value:
                     return colored("■", "yellow")
                 case Sokoban.Object.TARGET.value:
@@ -159,6 +162,8 @@ class Sokoban(Puzzle):
                     return colored("ⓧ", "red")
                 case Sokoban.Object.BOX_ON_TARGET.value:
                     return colored("■", "green")
+                case Sokoban.Object.TARGET_PLAYER.value:
+                    return colored("●", "red")
                 case _:
                     return "?"
 
@@ -181,6 +186,8 @@ class Sokoban(Puzzle):
                                     )
                                 case Sokoban.Object.EMPTY.value:
                                     board = board.at[i * self.size + j].set(Sokoban.Object.TARGET.value)
+                        if goal[i * self.size + j] == Sokoban.Object.PLAYER.value:
+                            board = board.at[i * self.size + j].set(Sokoban.Object.TARGET_PLAYER.value)
 
             return form.format(*map(to_char, board))
 
@@ -354,6 +361,11 @@ class Sokoban(Puzzle):
                 (cell_w, cell_h),
                 interpolation=cv2.INTER_AREA,
             ),
+            7: cv2.resize(
+                cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
+                (cell_w, cell_h),
+                interpolation=cv2.INTER_AREA,
+            ),
         }
 
         def img_func(state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs):
@@ -379,6 +391,10 @@ class Sokoban(Puzzle):
                                 asset = assets.get(Sokoban.Object.TARGET.value)  # target floor (box target)
                             case _:
                                 asset = assets.get(cell_val)
+                    elif (
+                        goal is not None and goal[i * self.size + j] == Sokoban.Object.PLAYER.value
+                    ):
+                        asset = assets.get(Sokoban.Object.TARGET_PLAYER.value)
                     else:
                         asset = assets.get(cell_val)
                     if asset is not None:
