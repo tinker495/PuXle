@@ -19,6 +19,7 @@ TYPE = jnp.uint8
 
 class Sokoban(Puzzle):
     size: int = 10
+    solve_condition: "Sokoban.SolveCondition" = None
 
     class Object(Enum):
         EMPTY = 0
@@ -28,6 +29,10 @@ class Sokoban(Puzzle):
         TARGET = 4
         PLAYER_ON_TARGET = 5
         BOX_ON_TARGET = 6
+
+    class SolveCondition(Enum):
+        ALL_BOXES_ON_TARGET = 0
+        ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET = 1
 
     def define_state_class(self) -> PuzzleState:
         """Defines the state class for Sokoban using xtructure."""
@@ -53,8 +58,9 @@ class Sokoban(Puzzle):
 
         return State
 
-    def __init__(self, size: int = 10, **kwargs):
+    def __init__(self, size: int = 10, solve_condition: SolveCondition = SolveCondition.ALL_BOXES_ON_TARGET, **kwargs):
         self.size = size
+        self.solve_condition = solve_condition
         assert size == 10, "Boxoban dataset only supports size 10"
         super().__init__(**kwargs)
 
@@ -97,6 +103,8 @@ class Sokoban(Puzzle):
             # When no data is provided, generate data using get_data method
             data = self.get_data(key)
         target_data, _ = data
+        if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET:
+            target_data = self._place_agent_randomly(target_data, key)
         return self.SolveConfig(TargetState=self.State(board=target_data))
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State") -> bool:
@@ -104,8 +112,11 @@ class Sokoban(Puzzle):
         board = state.unpacked.board
         t_board = solve_config.TargetState.unpacked.board
         # Remove the player from the current board.
-        rm_player = jnp.where(board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board)
-        return jnp.all(rm_player == t_board)
+        if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET:
+            return jnp.all(board == t_board)
+        else:
+            rm_player = jnp.where(board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board)
+            return jnp.all(rm_player == t_board)
 
     def action_to_string(self, action: int) -> str:
         """
@@ -424,7 +435,10 @@ class Sokoban(Puzzle):
         """
         This function shoulde transformt the solve config to the state.
         """
-        board = self._place_agent_randomly(solve_config.TargetState.unpacked.board, key)
+        board = solve_config.TargetState.unpacked.board
+        if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET:
+            board = self._place_agent_randomly(board, key)
+
         return self.State(board=board).packed
 
     def hindsight_transform(
@@ -434,8 +448,11 @@ class Sokoban(Puzzle):
         This function shoulde transformt the state to the solve config.
         """
         board = state.unpacked.board
-        rm_player = jnp.where(board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board)
-        solve_config.TargetState = self.State(board=rm_player).packed
+        if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET:
+            rm_player = jnp.where(board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board)
+            solve_config.TargetState = self.State(board=rm_player).packed
+        else:
+            solve_config.TargetState = self.State(board=board).packed
         return solve_config
 
     def get_inverse_neighbours(
