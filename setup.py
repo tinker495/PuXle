@@ -28,6 +28,7 @@ setuptools.setup(
         "termcolor>=1.1.0",
         "opencv-python>=4.10.0",
         "tqdm>=4.67.1",
+        "numpy>=2.2.0",
         "xtructure @ git+https://github.com/tinker495/xtructure.git",
     ],
     extras_require={
