@@ -187,7 +187,15 @@ class Sokoban(Puzzle):
                                 case Sokoban.Object.EMPTY.value:
                                     board = board.at[i * self.size + j].set(Sokoban.Object.TARGET.value)
                         if goal[i * self.size + j] == Sokoban.Object.PLAYER.value:
-                            board = board.at[i * self.size + j].set(Sokoban.Object.TARGET_PLAYER.value)
+                            match board[i * self.size + j]:
+                                case Sokoban.Object.PLAYER.value:
+                                    board = board.at[i * self.size + j].set(Sokoban.Object.PLAYER.value)
+                                case Sokoban.Object.BOX.value:
+                                    board = board.at[i * self.size + j].set(Sokoban.Object.BOX.value)
+                                case Sokoban.Object.EMPTY.value:
+                                    board = board.at[i * self.size + j].set(Sokoban.Object.TARGET_PLAYER.value)
+                                case _:
+                                    pass
 
             return form.format(*map(to_char, board))
 
@@ -362,7 +370,11 @@ class Sokoban(Puzzle):
                 interpolation=cv2.INTER_AREA,
             ),
             7: cv2.resize(
-                cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
+                np.roll(
+                    cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
+                    -1,
+                    axis=2, # color channel G -> R
+                ),
                 (cell_w, cell_h),
                 interpolation=cv2.INTER_AREA,
             ),
@@ -394,7 +406,15 @@ class Sokoban(Puzzle):
                     elif (
                         goal is not None and goal[i * self.size + j] == Sokoban.Object.PLAYER.value
                     ):
-                        asset = assets.get(Sokoban.Object.TARGET_PLAYER.value)
+                        match board[i * self.size + j]:
+                            case Sokoban.Object.BOX.value:
+                                asset = assets.get(Sokoban.Object.BOX.value)
+                            case Sokoban.Object.PLAYER.value:
+                                asset = assets.get(Sokoban.Object.PLAYER.value)
+                            case Sokoban.Object.EMPTY.value:
+                                asset = assets.get(Sokoban.Object.TARGET_PLAYER.value)
+                            case _:
+                                pass
                     else:
                         asset = assets.get(cell_val)
                     if asset is not None:
