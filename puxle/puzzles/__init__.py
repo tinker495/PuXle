@@ -13,7 +13,7 @@ from puxle.puzzles.maze import Maze
 from puxle.puzzles.pancake import PancakeSorting
 from puxle.puzzles.rubikscube import RubiksCube, RubiksCubeRandom
 from puxle.puzzles.slidepuzzle import SlidePuzzle, SlidePuzzleHard, SlidePuzzleRandom
-from puxle.puzzles.sokoban import Sokoban, SokobanDS, SokobanHard
+from puxle.puzzles.sokoban import Sokoban, SokobanHard
 from puxle.puzzles.topspin import TopSpin
 from puxle.puzzles.tsp import TSP
 

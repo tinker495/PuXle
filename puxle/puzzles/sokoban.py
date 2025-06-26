@@ -1,10 +1,6 @@
 from enum import Enum
 import os
-try:
-    from importlib.resources import files
-except ImportError:
-    # Python < 3.9 fallback
-    from importlib_resources import files
+from importlib.resources import files
 
 import chex
 import jax
@@ -546,13 +542,3 @@ class SokobanHard(Sokoban):
             self.target_puzzles = jnp.load(os.path.join(data_dir, "target_hard.npy"))
         
         self.num_puzzles = self.init_puzzles.shape[0]
-
-
-class SokobanDS(Sokoban):
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
-        if data is None:
-            # When no data is provided, generate data using get_data method
-            data = self.get_data(key)
-        target_board, _ = data
-        packed_board = self._place_agent_randomly(target_board, key)
-        return self.SolveConfig(TargetState=self.State(board=packed_board))
