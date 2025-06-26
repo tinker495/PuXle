@@ -68,8 +68,9 @@ class RubiksCube(Puzzle):
 
         return State
 
-    def __init__(self, size: int = 3, **kwargs):
+    def __init__(self, size: int = 3, initial_shuffle: int = 10, **kwargs):
         self.size = size
+        self.initial_shuffle = initial_shuffle
         is_even = size % 2 == 0
         self.index_grid = jnp.asarray(
             [i for i in range(size) if is_even or not i == (size // 2)], dtype=jnp.uint8
@@ -131,7 +132,9 @@ class RubiksCube(Puzzle):
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "RubiksCube.State":
-        return self._get_suffled_state(solve_config, solve_config.TargetState, key, num_shuffle=10)
+        return self._get_suffled_state(
+            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
+        )
 
     def get_target_state(self, key=None) -> "RubiksCube.State":
         faces = jnp.repeat(jnp.arange(6)[:, None], self.size * self.size, axis=1).astype(TYPE)  # 6 faces, 3x3 each
@@ -445,31 +448,6 @@ class RubiksCube(Puzzle):
             return img
 
         return img_func
-
-
-class RubiksCubeHard(RubiksCube):
-    """
-    This class is a extension of RubiksCube, it will generate the hardest state for the puzzle.
-    """
-
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> RubiksCube.State:
-        return self._get_suffled_state(solve_config, solve_config.TargetState, key, num_shuffle=50)
-
-
-class RubiksCubeDS(RubiksCube):
-    """
-    This class is a extension of RubiksCube, it will generate the state with the most moves for making dataset.
-    """
-
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> RubiksCube.State:
-        return self._get_suffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=1000
-        )
-
 
 class RubiksCubeRandom(RubiksCube):
     """

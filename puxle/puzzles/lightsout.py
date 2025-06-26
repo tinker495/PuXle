@@ -56,8 +56,9 @@ class LightsOut(Puzzle):
 
         return State
 
-    def __init__(self, size: int = 7, **kwargs):
+    def __init__(self, size: int = 7, initial_shuffle: int = 8, **kwargs):
         self.size = size
+        self.initial_shuffle = initial_shuffle
         super().__init__(**kwargs)
 
     def get_string_parser(self):
@@ -74,7 +75,9 @@ class LightsOut(Puzzle):
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "LightsOut.State":
-        return self._get_suffled_state(solve_config, solve_config.TargetState, key, num_shuffle=8)
+        return self._get_suffled_state(
+            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
+        )
 
     def get_target_state(self, key=None) -> "LightsOut.State":
         return self.State(board=jnp.zeros(self.size**2, dtype=bool)).packed
@@ -179,18 +182,6 @@ class LightsOut(Puzzle):
 
         return img_func
 
-
-class LightsOutHard(LightsOut):
-    """
-    This class is a extension of LightsOut, it will generate the hardest state for the puzzle.
-    """
-
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> LightsOut.State:
-        return self._get_suffled_state(solve_config, solve_config.TargetState, key, num_shuffle=50)
-
-
 class LightsOutRandom(LightsOut):
     """
     This class is a extension of LightsOut, it will generate the random state for the puzzle.
@@ -203,7 +194,7 @@ class LightsOutRandom(LightsOut):
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         solve_config = super().get_solve_config(key, data)
         solve_config.TargetState = self._get_suffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=1000
+            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
         )
         return solve_config
 
@@ -211,5 +202,5 @@ class LightsOutRandom(LightsOut):
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> LightsOut.State:
         return self._get_suffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=1000
+            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
         )
