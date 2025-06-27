@@ -10,6 +10,7 @@ from puxle.puzzles.dotknot import DotKnot
 from puxle.puzzles.hanoi import TowerOfHanoi
 from puxle.puzzles.lightsout import LightsOut, LightsOutRandom
 from puxle.puzzles.maze import Maze
+from puxle.puzzles.room import Room
 from puxle.puzzles.pancake import PancakeSorting
 from puxle.puzzles.rubikscube import RubiksCube, RubiksCubeRandom
 from puxle.puzzles.slidepuzzle import SlidePuzzle, SlidePuzzleHard, SlidePuzzleRandom
@@ -23,6 +24,7 @@ __all__ = [
     "LightsOut",
     "LightsOutRandom",
     "Maze",
+    "Room",
     "PancakeSorting",
     "RubiksCube",
     "RubiksCubeRandom",
