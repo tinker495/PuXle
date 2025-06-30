@@ -27,6 +27,9 @@ from puxle.puzzles import (
     SokobanHard,
     TSP,
     TopSpin,
+    Knapsack,
+    JobShop,
+    CVRP,
 )
 
 __version__ = "0.1.0"
@@ -54,4 +57,7 @@ __all__ = [
     "SokobanHard",
     "TSP",
     "TopSpin",
+    "Knapsack",
+    "JobShop",
+    "CVRP",
 ]

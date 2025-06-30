@@ -17,6 +17,9 @@ from puxle.puzzles.slidepuzzle import SlidePuzzle, SlidePuzzleHard, SlidePuzzleR
 from puxle.puzzles.sokoban import Sokoban, SokobanHard
 from puxle.puzzles.topspin import TopSpin
 from puxle.puzzles.tsp import TSP
+from puxle.puzzles.knapsack import Knapsack
+from puxle.puzzles.cvrp import CVRP
+from puxle.puzzles.jobshop import JobShop
 
 __all__ = [
     "DotKnot",
@@ -32,8 +35,10 @@ __all__ = [
     "SlidePuzzleHard",
     "SlidePuzzleRandom",
     "Sokoban",
-    "SokobanDS",
     "SokobanHard",
     "TSP",
     "TopSpin",
+    "Knapsack",
+    "JobShop",
+    "CVRP",
 ]
