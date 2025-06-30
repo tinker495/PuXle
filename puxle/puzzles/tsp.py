@@ -112,7 +112,6 @@ class TSP(Puzzle):
         This function returns neighbours and the cost of the move.
         If moving to a point already visited, the cost is infinity.
         """
-        # Define possible moves: up, down, left, right
         mask = state.unpacked.mask
         point = state.point
 
