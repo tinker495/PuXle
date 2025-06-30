@@ -21,12 +21,6 @@ class DotKnot(Puzzle):
 
     size: int
 
-    def get_solve_config_default_gen(self):
-        def gen():
-            return self.SolveConfig()
-
-        return gen
-
     def define_solve_config_class(self) -> PuzzleState:
         @state_dataclass
         class SolveConfig:
