@@ -245,7 +245,7 @@ def add_img_parser(cls: Type[T], imgfunc: callable) -> Type[T]:
             results = []
             for i in trange(batch_len):
                 index = jnp.unravel_index(i, batch_shape)
-                current_state = jax.tree_util.tree_map(lambda x: x[index], self)
+                current_state = self[index]
                 results.append(imgfunc(current_state, **kwargs))
             results = np.stack(results, axis=0)
             return results

@@ -164,10 +164,20 @@ class Knapsack(Puzzle):
     
     def is_solved(self, solve_config: "Knapsack.SolveConfig", state: "Knapsack.State") -> bool:
         """
-        In knapsack, there's no specific target state.
-        We could define "solved" as having selected at least one item.
+        The knapsack is solved when no more items can be added due to weight constraints.
+        This means all unselected items would exceed the remaining capacity.
         """
-        return jnp.sum(state.unpacked.selected) > 0
+        selected = state.unpacked.selected
+        current_weight = jnp.sum(selected * solve_config.weights)
+        remaining_capacity = solve_config.capacity - current_weight
+        
+        # Find unselected items that can still fit
+        unselected_mask = ~selected
+        can_add_each = unselected_mask & (solve_config.weights <= remaining_capacity)
+        can_add_any = jnp.any(can_add_each)
+        
+        # Solved when no more items can be added (and at least one item is selected)
+        return (~can_add_any) & (jnp.sum(selected) > 0)
     
     def action_to_string(self, action: int) -> str:
         """Return string representation of the action"""
