@@ -171,14 +171,14 @@ class TSP(Puzzle):
 
         def img_func(
             state: "TSP.State",
-            path: list["TSP.State"],
-            idx: int,
             solve_config: "TSP.SolveConfig",
             **kwargs,
         ):
             imgsize = IMG_SIZE[0]
             # Create a white background image
             img = np.ones(IMG_SIZE + (3,), np.uint8) * 255
+            path = kwargs.get("path", [])
+            idx = kwargs.get("idx", 0)
 
             # Get the visited mask as booleans
             visited = state.unpacked.mask
@@ -208,7 +208,7 @@ class TSP(Puzzle):
 
             # Visualize the given path by drawing lines connecting the successive points from 'paths'
             # up to the current index 'idx'
-            if path and len(path) > 1:
+            if path and idx > 0 and len(path) > idx:
                 route_points = [scaled_points[path[i].point] for i in range(idx + 1)]
                 cv2.polylines(
                     img,
