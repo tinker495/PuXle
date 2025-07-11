@@ -329,3 +329,13 @@ class Puzzle(ABC):
             cond_fun, body_fun, (0, init_state, init_state, key)
         )
         return final_state
+
+    def __repr__(self):
+        state_fields = list(self.State.__annotations__.keys())
+        solve_config_fields = list(self.SolveConfig.__annotations__.keys())
+        return (
+            f"Puzzle({self.__class__.__name__}, "
+            f"action_size={self.action_size}, "
+            f"state_fields={state_fields}, "
+            f"solve_config_fields={solve_config_fields})"
+        )
