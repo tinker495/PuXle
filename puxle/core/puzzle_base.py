@@ -298,6 +298,9 @@ class Puzzle(ABC):
     def _get_suffled_state(
         self, solve_config: "Puzzle.SolveConfig", init_state: "Puzzle.State", key, num_shuffle
     ):
+        key, subkey = jax.random.split(key)
+        num_shuffle += jax.random.randint(subkey, (), 0, 2)  # add a random 1 to 0 to the initial shuffle.
+
         def cond_fun(loop_state):
             iteration_count, _, _, _ = loop_state
             return iteration_count < num_shuffle
