@@ -17,6 +17,54 @@
 - **Extensible**: Easy-to-extend base classes for creating new puzzle environments
 - **GPU Acceleration**: Full GPU support through JAX
 
+## 🌐 Xtructure Ecosystem Integration
+
+**PuXle** is built as a specialized component within the [Xtructure](https://github.com/tinker495/Xtructure) ecosystem, leveraging Xtructure's powerful framework for structured data management in JAX environments.
+
+### 🔗 What is Xtructure?
+
+Xtructure is a foundational library that provides:
+- **Structured State Management**: Type-safe dataclass definitions compatible with JAX transformations
+- **Memory Optimization**: Efficient bit-packing and unpacking for memory-constrained environments
+- **Batch Operations**: Seamless conversion between single and batched data structures
+- **JAX Integration**: Full compatibility with `jit`, `vmap`, `grad`, and other JAX transformations
+
+### 🎯 PuXle's Role in the Ecosystem
+
+PuXle serves as a **high-performance puzzle environment library** that demonstrates and extends Xtructure's capabilities:
+
+1. **Efficient State Representation**: Each puzzle state uses Xtructure's `FieldDescriptor` and `state_dataclass` decorators to create memory-efficient, JAX-compatible data structures.
+
+2. **Bit-Level Optimization**: Puzzle states are automatically packed into minimal bit representations (e.g., Rubik's Cube faces use 4-bit encoding), significantly reducing memory usage for large-scale parallel operations.
+
+3. **Seamless Batching**: Leverages Xtructure's structured type system to enable efficient vectorized operations across thousands of puzzle instances simultaneously.
+
+4. **Research Infrastructure**: Provides a standardized, high-performance foundation for AI research in puzzle domains, search algorithms, and reinforcement learning.
+
+### 🏗️ Technical Integration
+
+```python
+# Example: How PuXle leverages Xtructure for state management
+from xtructure import FieldDescriptor, xtructure_dataclass
+from puxle.utils.util import to_uint8, from_uint8
+
+@state_dataclass
+class RubiksCubeState:
+    faces: FieldDescriptor[jnp.uint8, (packed_shape,)]
+    
+    @property
+    def packed(self):
+        # Efficient 4-bit packing using Xtructure utilities
+        return State(faces=to_uint8(self.faces, 4))
+    
+    @property
+    def unpacked(self):
+        # Seamless unpacking for computations
+        return State(faces=from_uint8(self.faces, raw_shape, 4))
+```
+
+This integration makes PuXle not just a puzzle library, but a showcase of how Xtructure enables efficient, scalable, and JAX-native data structures for complex computational domains.
+
 ## 📦 Installation
 
 ### Basic Installation
