@@ -43,61 +43,26 @@ PuXle serves as a **high-performance puzzle environment library** that demonstra
 
 5. **Complex State Management & Hashing**: Xtructure's advanced dataclass system enables automatic state hashing and comparison for heterogeneous puzzle states, making it ideal for search algorithms like A*.
 
-### 🔍 Advanced State Management with Xtructure
+### 🔍 Advanced State Management
 
-One of Xtructure's most powerful features is its ability to handle **complex, heterogeneous state definitions** with automatic hashing and equality comparison. This is crucial for implementing sophisticated search algorithms:
+Xtructure's key strength is handling **complex, heterogeneous state definitions** with automatic hashing and equality comparison:
 
-#### Multi-Component State Structures
 ```python
-# Sokoban: 2D board with player, boxes, and targets
+# Different puzzles, different state structures - all automatically hashable
 @state_dataclass
 class SokobanState:
     board: FieldDescriptor[jnp.uint8, (packed_shape,)]  # 2-bit packed board
     
-# TSP: Visited cities mask + current position
 @state_dataclass  
 class TSPState:
     mask: FieldDescriptor[jnp.uint8, (packed_mask_shape,)]  # 1-bit packed mask
     point: FieldDescriptor[jnp.uint16]  # Current city index
-    
-# Each state automatically gets proper hashing and equality
 ```
 
-#### Automatic State Hashing for Search Algorithms
-Xtructure automatically generates hash functions for complex states, enabling:
-- **Visited set management** in BFS/DFS
-- **Priority queue operations** in A* search
-- **Memoization** in dynamic programming
-- **Duplicate detection** in search trees
-
-```python
-# States can be directly used in hash-based data structures
-visited_states = set()
-priority_queue = [(heuristic(state), state) for state in initial_states]
-
-# Xtructure handles the complexity of hashing multi-field states
-if current_state not in visited_states:
-    visited_states.add(current_state)
-    for neighbor in get_neighbors(current_state):
-        heapq.heappush(priority_queue, (f_score(neighbor), neighbor))
-```
-
-#### Enabling Advanced Search Algorithms
-This robust state management foundation makes PuXle ideal for implementing:
-
-1. **JAxtar-style A* Search**: Efficient pathfinding with automatic state hashing
-2. **Monte Carlo Tree Search (MCTS)**: Fast state comparison and tree traversal
-3. **Beam Search**: Parallel state exploration with memory-efficient storage
-4. **Bidirectional Search**: Forward/backward state space exploration
-
-### 🚀 Real-World Applications
-
-The combination of PuXle's puzzle environments and Xtructure's state management enables:
-
-- **Neural Search Algorithms**: Train neural networks to guide search (like in JAxtar)
-- **Parallel Search**: Vectorized search across multiple puzzle instances
-- **Hybrid Solvers**: Combine classical search with learned heuristics
-- **Research Benchmarks**: Standardized evaluation for AI search methods
+This enables direct use in hash-based algorithms:
+- **A* Search**: Efficient pathfinding with automatic state hashing
+- **MCTS**: Fast state comparison and tree traversal  
+- **Neural Search**: Foundation for projects like [JAxtar](https://github.com/tinker495/JAxtar)
 
 ### 🏗️ Technical Integration
 
@@ -119,27 +84,11 @@ class RubiksCubeState:
     def unpacked(self):
         # Seamless unpacking for computations
         return State(faces=from_uint8(self.faces, raw_shape, 4))
-    
-    # Automatic hashing and equality comparison
-    # No need to implement __hash__ or __eq__ manually!
 
-# Usage in search algorithms
-def a_star_search(initial_state, goal_state):
-    open_set = {initial_state}  # Automatic hashing works
-    closed_set = set()
-    
-    while open_set:
-        current = min(open_set, key=lambda s: f_score(s))
-        if current == goal_state:  # Automatic equality comparison
-            return reconstruct_path(current)
-        
-        open_set.remove(current)
-        closed_set.add(current)
-        
-        for neighbor in get_neighbors(current):
-            if neighbor in closed_set:  # Hash-based lookup
-                continue
-            open_set.add(neighbor)
+# Usage in search algorithms - automatic hashing and equality
+visited_states = {initial_state}  # Works directly with sets
+if current_state == goal_state:   # Automatic equality comparison
+    return solution_path
 ```
 
 This integration makes PuXle not just a puzzle library, but a **complete framework for developing advanced search algorithms** that can handle complex, structured states efficiently at scale.
