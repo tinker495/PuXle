@@ -25,7 +25,6 @@
 
 Xtructure is a foundational library that provides:
 - **Structured State Management**: Type-safe dataclass definitions compatible with JAX transformations
-- **Memory Optimization**: Efficient bit-packing and unpacking for memory-constrained environments
 - **Batch Operations**: Seamless conversion between single and batched data structures
 - **JAX Integration**: Full compatibility with `jit`, `vmap`, `grad`, and other JAX transformations
 
