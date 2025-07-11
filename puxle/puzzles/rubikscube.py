@@ -463,14 +463,13 @@ class RubiksCubeRandom(RubiksCube):
     def fixed_target(self) -> bool:
         return False
 
+    def __init__(self, size: int = 3, initial_shuffle: int = 100, **kwargs):
+        super().__init__(size=size, initial_shuffle=initial_shuffle, **kwargs)
+
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         solve_config = super().get_solve_config(key, data)
         solve_config.TargetState = self._get_suffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=100
+            solve_config, solve_config.TargetState, key,
+            num_shuffle=100 + jax.random.randint(key, (), 0, 3)
         )
         return solve_config
-
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> RubiksCube.State:
-        return self._get_suffled_state(solve_config, solve_config.TargetState, key, num_shuffle=100)
