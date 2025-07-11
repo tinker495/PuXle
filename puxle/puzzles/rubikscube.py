@@ -133,7 +133,12 @@ class RubiksCube(Puzzle):
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "RubiksCube.State":
         return self._get_suffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
+            solve_config,
+            solve_config.TargetState,
+            key,
+            num_shuffle=self.initial_shuffle + jax.random.randint(key, (), 0, 3)
+            # add a random 1 to 0 to the initial shuffle.
+            # This is to solve the problem of even or odd solution lengths when the numbers are the same.
         )
 
     def get_target_state(self, key=None) -> "RubiksCube.State":
