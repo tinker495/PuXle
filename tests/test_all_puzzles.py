@@ -304,7 +304,8 @@ class TestPuzzleValidation:
                 else:
                     # Test for non-reversible puzzles or those without inverse map
                     # Case 1: Custom inverse implementation (e.g., Sokoban)
-                    if puzzle.get_inverse_neighbours.__func__ is not Puzzle.get_inverse_neighbours.__func__:
+                    is_custom_inverse = puzzle.get_inverse_neighbours.__qualname__ != Puzzle.get_inverse_neighbours.__qualname__
+                    if is_custom_inverse:
                         try:
                             solve_config = puzzle.get_solve_config(key=rng_key)
                             initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
