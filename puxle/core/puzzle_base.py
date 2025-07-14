@@ -31,6 +31,16 @@ class Puzzle(ABC):
         """
         return None
 
+    @property
+    def is_reversible(self) -> bool:
+        """
+        Indicates whether the puzzle is fully reversible through the inverse_action_map.
+        This is true if an inverse_action_map is provided.
+        Puzzles with custom, non-symmetric inverse logic (like Sokoban)
+        should override this to return False.
+        """
+        return self.forward_action_map is not None
+
     class State(PuzzleState):
         pass
 
@@ -304,8 +314,13 @@ class Puzzle(ABC):
                 "To use `get_inverse_neighbours`, you must either implement the map "
                 "for a reversible puzzle or override this method for a non-reversible one."
             )
+
         neighbours, costs = self.get_neighbours(solve_config, state, filled)
-        return neighbours[self.forward_action_map], costs[self.forward_action_map]
+        
+        permuted_neighbours = jax.tree_util.tree_map(lambda x: x[self.forward_action_map], neighbours)
+        permuted_costs = costs[self.forward_action_map]
+
+        return permuted_neighbours, permuted_costs
 
     def batched_get_inverse_neighbours(
         self,

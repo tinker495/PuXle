@@ -260,6 +260,7 @@ class TestPuzzleValidation:
                 assert isinstance(puzzle.has_target, bool), "has_target should be boolean"
                 assert isinstance(puzzle.only_target, bool), "only_target should be boolean" 
                 assert isinstance(puzzle.fixed_target, bool), "fixed_target should be boolean"
+                assert isinstance(puzzle.is_reversible, bool), "is_reversible should be boolean"
                 
                 # Logical consistency checks
                 if puzzle.only_target:
@@ -270,6 +271,59 @@ class TestPuzzleValidation:
             except Exception as e:
                 pytest.fail(f"Property test failed for {puzzle_class.__name__}: {e}")
     
+    def test_inverse_actions(self, puzzle_configs, rng_key):
+        """Test inverse action functionality"""
+        for puzzle_class in puzzle_configs:
+            try:
+                puzzle = puzzle_class()
+                
+                if puzzle.is_reversible:
+                    # Test for perfectly reversible puzzles
+                    solve_config = puzzle.get_solve_config(key=rng_key)
+                    initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
+                    
+                    neighbors, costs = puzzle.get_neighbours(solve_config, initial_state, filled=True)
+                    
+                    for i in range(puzzle.action_size):
+                        # If a move is possible
+                        if jnp.isfinite(costs[i]):
+                            next_state = jax.tree_util.tree_map(lambda x: x[i], neighbors)
+                            
+                            # Taking the inverse action from the next state should return to the initial state
+                            inv_neighbors, inv_costs = puzzle.get_inverse_neighbours(solve_config, next_state, filled=True)
+                            
+                            # The action that leads from S_prev to S_next is i.
+                            # So, the state before S_next via action i was S_initial.
+                            # get_inverse_neighbours(S_next)[i] should be S_initial
+                            state_after_inverse = jax.tree_util.tree_map(lambda x: x[i], inv_neighbors)
+                            
+                            assert state_after_inverse == initial_state, f"Inverse action did not return to original state for action {i}"
+                    
+                    print(f"✓ {puzzle_class.__name__} inverse actions are reversible")
+                
+                else:
+                    # Test for non-reversible puzzles or those without inverse map
+                    # Case 1: Custom inverse implementation (e.g., Sokoban)
+                    if puzzle.get_inverse_neighbours.__func__ is not Puzzle.get_inverse_neighbours.__func__:
+                        try:
+                            solve_config = puzzle.get_solve_config(key=rng_key)
+                            initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
+                            puzzle.get_inverse_neighbours(solve_config, initial_state, filled=True)
+                            print(f"✓ {puzzle_class.__name__} custom get_inverse_neighbours called successfully")
+                        except Exception as e:
+                            pytest.fail(f"Custom get_inverse_neighbours for {puzzle_class.__name__} failed: {e}")
+                    
+                    # Case 2: No inverse map and no custom implementation
+                    else:
+                        with pytest.raises(NotImplementedError):
+                            solve_config = puzzle.get_solve_config(key=rng_key)
+                            initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
+                            puzzle.get_inverse_neighbours(solve_config, initial_state, filled=True)
+                        print(f"✓ {puzzle_class.__name__} correctly raised NotImplementedError for inverse actions")
+            
+            except Exception as e:
+                pytest.fail(f"Inverse action test failed for {puzzle_class.__name__}: {e}")
+
     def test_state_equality(self, puzzle_configs, rng_key):
         """Test state equality comparisons work correctly"""
         for puzzle_class in puzzle_configs:
