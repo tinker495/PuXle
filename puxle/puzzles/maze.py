@@ -314,6 +314,14 @@ class Maze(Puzzle):
             case _:
                 raise ValueError(f"Invalid action: {action}")
 
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Defines the inverse action mapping for the Maze.
+        Actions are [L, R, U, D], so the inverse is [R, L, D, U].
+        """
+        return jnp.array([1, 0, 3, 2])
+
     def _get_visualize_format(self):
         size = self.size
         form = "┏━"

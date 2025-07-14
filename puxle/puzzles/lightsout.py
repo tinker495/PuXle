@@ -124,6 +124,14 @@ class LightsOut(Puzzle):
         """
         return action_to_char(action)
 
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Defines the inverse action mapping for LightsOut.
+        Each action (flipping a tile) is its own inverse.
+        """
+        return jnp.arange(self.action_size)
+
     def _get_visualize_format(self):
         size = self.size
         action_idx = 0
