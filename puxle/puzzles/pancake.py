@@ -259,6 +259,14 @@ class PancakeSorting(Puzzle):
         """Return a string representation of the action"""
         return f"Flip at position {action + 1}"
 
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Defines the inverse action mapping for PancakeSorting.
+        Each action (flipping a prefix of the stack) is its own inverse.
+        """
+        return jnp.arange(self.action_size)
+
     def _get_random_state(self, key):
         """Generate a random initial state"""
         if key is None:

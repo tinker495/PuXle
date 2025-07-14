@@ -171,6 +171,28 @@ class RubiksCube(Puzzle):
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State") -> bool:
         return state == solve_config.TargetState
 
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Defines the inverse action mapping for Rubik's Cube.
+        A rotation in one direction (e.g., clockwise) is inverted by a rotation
+        in the opposite direction (counter-clockwise) on the same axis and slice.
+
+        Actions are generated from a meshgrid of (axis, index, clockwise), with
+        clockwise being the fastest-changing dimension. This means actions are
+        interleaved as [cw, ccw, cw, ccw, ...]. The inverse of action `2k` (cw)
+        is `2k+1` (ccw), and vice versa.
+        """
+        num_actions = 3 * len(self.index_grid) * 2
+        actions = jnp.arange(num_actions)
+
+        # Reshape to pair up cw/ccw actions, flip them, and flatten back
+        inv_map = jnp.reshape(actions, (-1, 2))
+        inv_map = jnp.flip(inv_map, axis=1)
+        inv_map = jnp.reshape(inv_map, (-1,))
+
+        return inv_map
+
     def action_to_string(self, action: int) -> str:
         """
         This function should return a string representation of the action.

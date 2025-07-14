@@ -66,6 +66,10 @@ class Sokoban(Puzzle):
         super().__init__(**kwargs)
 
     @property
+    def is_reversible(self) -> bool:
+        return False
+        
+    @property
     def fixed_target(self) -> bool:
         return False
 

@@ -134,6 +134,15 @@ class SlidePuzzle(Puzzle):
             case _:
                 raise ValueError(f"Invalid action: {action}")
 
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Defines the inverse action mapping for the Slide Puzzle.
+        The actions are moving the blank tile [R, L, D, U].
+        The inverse is therefore [L, R, U, D].
+        """
+        return jnp.array([1, 0, 3, 2])
+
     def _get_visualize_format(self):
         size = self.size
         form = "┏━"

@@ -117,6 +117,15 @@ class TopSpin(Puzzle):
             case _:
                 raise ValueError(f"Invalid action: {action}")
 
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Defines the inverse action mapping for TopSpin.
+        - Shift Left (0) <-> Shift Right (1)
+        - Reverse Turnstile (2) is its own inverse.
+        """
+        return jnp.array([1, 0, 2])
+
     def get_img_parser(self):
         import cv2
         import numpy as np
