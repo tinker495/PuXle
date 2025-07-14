@@ -39,7 +39,7 @@ class Puzzle(ABC):
         Puzzles with custom, non-symmetric inverse logic (like Sokoban)
         should override this to return False.
         """
-        return self.forward_action_map is not None
+        return self.inverse_action_map is not None
 
     class State(PuzzleState):
         pass

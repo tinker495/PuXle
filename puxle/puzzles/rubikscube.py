@@ -177,18 +177,21 @@ class RubiksCube(Puzzle):
         Defines the inverse action mapping for Rubik's Cube.
         A rotation in one direction (e.g., clockwise) is inverted by a rotation
         in the opposite direction (counter-clockwise) on the same axis and slice.
+
+        Actions are generated from a meshgrid of (axis, index, clockwise), with
+        clockwise being the fastest-changing dimension. This means actions are
+        interleaved as [cw, ccw, cw, ccw, ...]. The inverse of action `2k` (cw)
+        is `2k+1` (ccw), and vice versa.
         """
-        # Actions are generated from meshgrid(axis, index, clockwise).
-        # The number of unique (axis, index) combinations.
-        num_base_actions = 3 * len(self.index_grid)
+        num_actions = 3 * len(self.index_grid) * 2
+        actions = jnp.arange(num_actions)
 
-        # The first half of actions corresponds to clockwise=0, the second to clockwise=1.
-        # The inverse of a clockwise move is a counter-clockwise move, and vice versa.
-        cw_actions = jnp.arange(num_base_actions)
-        ccw_actions = jnp.arange(num_base_actions, 2 * num_base_actions)
+        # Reshape to pair up cw/ccw actions, flip them, and flatten back
+        inv_map = jnp.reshape(actions, (-1, 2))
+        inv_map = jnp.flip(inv_map, axis=1)
+        inv_map = jnp.reshape(inv_map, (-1,))
 
-        # Map clockwise actions to counter-clockwise, and vice versa.
-        return jnp.concatenate([ccw_actions, cw_actions])
+        return inv_map
 
     def action_to_string(self, action: int) -> str:
         """
