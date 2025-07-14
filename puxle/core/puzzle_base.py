@@ -15,6 +15,22 @@ class Puzzle(ABC):
 
     action_size: int = None
 
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Returns an array mapping each action to its inverse, or None if not defined.
+        If implemented, this method should return a jnp.ndarray where `map[i]` is the
+        inverse of action `i`. This is used by the default `get_inverse_neighbours`
+        to automatically calculate inverse transitions for reversible puzzles.
+
+        For example, if action 0 is 'up' and 1 is 'down', then the map
+        should contain inverse_action_map[0] = 1 and inverse_action_map[1] = 0.
+
+        If this is not implemented or returns None, `get_inverse_neighbours` will raise
+        a NotImplementedError.
+        """
+        return None
+
     class State(PuzzleState):
         pass
 
@@ -79,6 +95,12 @@ class Puzzle(ABC):
 
         if self.action_size is None:
             self.action_size = self._get_action_size()
+            
+        inv_map = self.inverse_action_map
+        if inv_map is not None:
+            self.forward_action_map = jnp.argsort(inv_map)
+        else:
+            self.forward_action_map = None
 
     def data_init(self):
         """
@@ -269,12 +291,21 @@ class Puzzle(ABC):
     ) -> tuple[State, chex.Array]:
         """
         This function should return inverse neighbours and the cost of the move.
-        For puzzles that are reversible, this function can simply return the same neighbours as `get_neighbours`.
-        However, for puzzles like Sokoban, which are not reversible (pushing a box is not easily reversed),
-        this function needs to be implemented specifically to return the actual inverse neighbours.
-        By default, it can just use the `get_neighbours` function if inverse neighbours are not explicitly defined.
+        By default, it uses `inverse_action_map` to calculate inverse transitions
+        for reversible puzzles. If `inverse_action_map` is not defined, this function
+        will raise a NotImplementedError.
+
+        For puzzles that are not reversible (e.g., Sokoban), this method must be
+        overridden with a specific implementation.
         """
-        return self.get_neighbours(solve_config, state, filled)
+        if self.forward_action_map is None:
+            raise NotImplementedError(
+                "This puzzle does not define an `inverse_action_map`. "
+                "To use `get_inverse_neighbours`, you must either implement the map "
+                "for a reversible puzzle or override this method for a non-reversible one."
+            )
+        neighbours, costs = self.get_neighbours(solve_config, state, filled)
+        return neighbours[self.forward_action_map], costs[self.forward_action_map]
 
     def batched_get_inverse_neighbours(
         self,
