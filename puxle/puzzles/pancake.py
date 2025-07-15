@@ -240,9 +240,8 @@ class PancakeSorting(Puzzle):
         def map_fn(flip_pos, filled):
             next_stack, cost = jax.lax.cond(
                 filled,
-                lambda _: (flip_stack(stack, flip_pos), 1.0),
-                lambda _: (stack, jnp.inf),
-                None,
+                lambda : (flip_stack(stack, flip_pos), 1.0),
+                lambda : (stack, jnp.inf),
             )
             return next_stack, cost
 

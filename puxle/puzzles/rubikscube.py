@@ -152,9 +152,8 @@ class RubiksCube(Puzzle):
         def map_fn(state, axis, index, clockwise):
             return jax.lax.cond(
                 filled,
-                lambda _: (self._rotate(state, axis, index, clockwise), 1.0),
-                lambda _: (state, jnp.inf),
-                None,
+                lambda : (self._rotate(state, axis, index, clockwise), 1.0),
+                lambda : (state, jnp.inf),
             )
 
         axis_grid, index_grid, clockwise_grid = jnp.meshgrid(

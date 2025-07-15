@@ -235,14 +235,14 @@ class Sokoban(Puzzle):
             new_x, new_y = new_pos[0], new_pos[1]
             valid_move = is_valid_pos(new_x, new_y)
 
-            def invalid_case(_):
+            def invalid_case():
                 return state, 1.0
 
-            def process_move(_):
+            def process_move():
                 target = board[flat_idx(new_x, new_y)]
                 # Case when target cell is empty: simply move the player.
 
-                def move_empty(_):
+                def move_empty():
                     new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
                         Sokoban.Object.EMPTY.value
                     )
@@ -250,7 +250,7 @@ class Sokoban(Puzzle):
                     return self.State(board=new_board).packed, 1.0
 
                 # Case when target cell contains a box: attempt to push it.
-                def push_box(_):
+                def push_box():
                     push_pos = (new_pos + direction).astype(current_pos.dtype)
                     push_x, push_y = push_pos[0], push_pos[1]
                     valid_push = jnp.logical_and(
@@ -258,7 +258,7 @@ class Sokoban(Puzzle):
                     )
                     valid_push = jnp.logical_and(valid_push, filled)
 
-                    def do_push(_):
+                    def do_push():
                         new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
                             Sokoban.Object.EMPTY.value
                         )
@@ -266,18 +266,17 @@ class Sokoban(Puzzle):
                         new_board = new_board.at[flat_idx(push_x, push_y)].set(Sokoban.Object.BOX.value)
                         return self.State(board=new_board).packed, 1.0
 
-                    return jax.lax.cond(valid_push, do_push, invalid_case, operand=None)
+                    return jax.lax.cond(valid_push, do_push, invalid_case)
 
                 return jax.lax.cond(
                     jnp.equal(target, Sokoban.Object.EMPTY.value),
                     move_empty,
-                    lambda _: jax.lax.cond(
-                        jnp.equal(target, Sokoban.Object.BOX.value), push_box, invalid_case, operand=None
-                    ),
-                    operand=None,
+                    lambda : jax.lax.cond(
+                        jnp.equal(target, Sokoban.Object.BOX.value), push_box, invalid_case
+                    )
                 )
 
-            return jax.lax.cond(valid_move, process_move, invalid_case, operand=None)
+            return jax.lax.cond(valid_move, process_move, invalid_case)
 
         new_states, costs = jax.vmap(move)(moves)
         costs = jnp.where(filled, costs, jnp.inf)
@@ -534,14 +533,14 @@ class Sokoban(Puzzle):
             )
             empty_prev = jnp.logical_and(valid_prev, is_empty(prev_pos[0], prev_pos[1]))
 
-            def invalid(_):
+            def invalid():
                 return state, 1.0
 
             # Inverse pull: the forward push is inverted by pulling the box from ahead.
             # In a forward push, the player moved from prev_pos
             # to current_pos and pushed the box from current_pos to front_pos.
             # Here, we "pull" the box from front_pos back into current_pos while moving the player to prev_pos.
-            def do_pull(_):
+            def do_pull():
                 new_board = board
                 new_board = new_board.at[flat_idx(front_pos[0], front_pos[1])].set(
                     Sokoban.Object.EMPTY.value
@@ -555,7 +554,7 @@ class Sokoban(Puzzle):
                 return self.State(board=new_board).packed, 1.0
 
             # Inverse simple move: simply move the player back if no box is involved.
-            def do_simple(_):
+            def do_simple():
                 new_board = board
                 new_board = new_board.at[flat_idx(current_pos[0], current_pos[1])].set(
                     Sokoban.Object.EMPTY.value
@@ -565,18 +564,17 @@ class Sokoban(Puzzle):
                 )
                 return self.State(board=new_board).packed, 1.0
 
-            def branch_fn(_):
+            def branch_fn():
                 # Only allow a move if the previous cell is empty.
                 return jax.lax.cond(
                     empty_prev,
-                    lambda _: jax.lax.cond(
-                        box_at_front, do_pull, lambda _: do_simple(None), operand=None
+                    lambda : jax.lax.cond(
+                        box_at_front, do_pull, do_simple,
                     ),
                     invalid,
-                    operand=None,
                 )
 
-            return jax.lax.cond(valid_prev, branch_fn, invalid, operand=None)
+            return jax.lax.cond(valid_prev, branch_fn, invalid)
 
         new_states, costs = jax.vmap(inv_move)(moves)
         costs = jnp.where(filled, costs, jnp.inf)

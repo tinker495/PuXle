@@ -145,9 +145,8 @@ class DotKnot(Puzzle):
             valid_move = valid_move & available
             new_board = jax.lax.cond(
                 valid_move,
-                lambda _: point_move(unpacked_board, pos, new_pos, point_idx, color_idx, is_merge),
-                lambda _: unpacked_board,
-                operand=None,
+                lambda : point_move(unpacked_board, pos, new_pos, point_idx, color_idx, is_merge),
+                lambda : unpacked_board,
             )
             new_state = self.State(board=new_board).packed
             cost = jnp.where(valid_move, 1.0, jnp.inf)
@@ -221,9 +220,8 @@ class DotKnot(Puzzle):
             is_already_filled = board[random_index] != 0
             board = jax.lax.cond(
                 is_already_filled,
-                lambda _: board,
-                lambda _: board.at[random_index].set(idx),
-                operand=None,
+                lambda : board,
+                lambda : board.at[random_index].set(idx),
             )
             next_idx = jnp.where(is_already_filled, idx, idx + 1)
             return board, key, next_idx

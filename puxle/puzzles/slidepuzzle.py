@@ -106,9 +106,8 @@ class SlidePuzzle(Puzzle):
             next_x, next_y = next_pos
             next_board, cost = jax.lax.cond(
                 jnp.logical_and(is_valid(next_x, next_y), filled),
-                lambda _: (swap(board, x, y, next_x, next_y), 1.0),
-                lambda _: (board, jnp.inf),
-                None,
+                lambda : (swap(board, x, y, next_x, next_y), 1.0),
+                lambda : (board, jnp.inf),
             )
             return self.State(board=next_board).packed, cost
 

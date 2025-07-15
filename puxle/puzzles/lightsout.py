@@ -107,7 +107,7 @@ class LightsOut(Puzzle):
 
         def map_fn(action, filled):
             next_board, cost = jax.lax.cond(
-                filled, lambda _: (flip(board, action), 1.0), lambda _: (board, jnp.inf), None
+                filled, lambda : (flip(board, action), 1.0), lambda : (board, jnp.inf)
             )
             next_state = self.State(board=next_board).packed
             return next_state, cost
