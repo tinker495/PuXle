@@ -108,9 +108,12 @@ class Puzzle(ABC):
             
         inv_map = self.inverse_action_map
         if inv_map is not None:
-            self.forward_action_map = jnp.argsort(inv_map)
+            # _inverse_action_permutation is an array of indices such that
+            # the i-th inverse neighbour is neighbours[_inverse_action_permutation[i]]
+            # where neighbours are the forward neighbours from get_neighbours.
+            self._inverse_action_permutation = inv_map
         else:
-            self.forward_action_map = None
+            self._inverse_action_permutation = None
 
     def data_init(self):
         """
@@ -308,7 +311,7 @@ class Puzzle(ABC):
         For puzzles that are not reversible (e.g., Sokoban), this method must be
         overridden with a specific implementation.
         """
-        if self.forward_action_map is None:
+        if self._inverse_action_permutation is None:
             raise NotImplementedError(
                 "This puzzle does not define an `inverse_action_map`. "
                 "To use `get_inverse_neighbours`, you must either implement the map "
@@ -316,9 +319,10 @@ class Puzzle(ABC):
             )
 
         neighbours, costs = self.get_neighbours(solve_config, state, filled)
-        
-        permuted_neighbours = jax.tree_util.tree_map(lambda x: x[self.forward_action_map], neighbours)
-        permuted_costs = costs[self.forward_action_map]
+        # The i-th inverse neighbour is the state from which applying action i leads to the current state.
+        # This is found by permuting the forward neighbours using _inverse_action_permutation.
+        permuted_neighbours = neighbours[self._inverse_action_permutation]
+        permuted_costs = costs[self._inverse_action_permutation]
 
         return permuted_neighbours, permuted_costs
 
