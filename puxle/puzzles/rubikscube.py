@@ -49,7 +49,7 @@ class RubiksCube(Puzzle):
         str_parser = self.get_string_parser()
         raw_shape = (6, self.size * self.size)
         raw = jnp.full(raw_shape, -1, dtype=TYPE)
-        packed_faces = to_uint8(raw, 4)
+        packed_faces = to_uint8(raw, 3)
 
         @state_dataclass
         class State:
@@ -60,11 +60,11 @@ class RubiksCube(Puzzle):
             
             @property
             def packed(self):
-                return State(faces=to_uint8(self.faces, 4))
+                return State(faces=to_uint8(self.faces, 3))
             
             @property
             def unpacked(self):
-                return State(faces=from_uint8(self.faces, raw_shape, 4))
+                return State(faces=from_uint8(self.faces, raw_shape, 3))
 
         return State
 
