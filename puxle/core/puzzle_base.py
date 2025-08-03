@@ -202,7 +202,7 @@ class Puzzle(ABC):
         """
         pass
 
-    def get_inits(self, key=None) -> tuple[State, SolveConfig]:
+    def get_inits(self, key=None) -> tuple[SolveConfig, State]:
         """
         This function should return a initial state and solve config.
         """
