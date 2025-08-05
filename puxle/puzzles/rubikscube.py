@@ -195,8 +195,63 @@ class RubiksCube(Puzzle):
     def action_to_string(self, action: int) -> str:
         """
         This function should return a string representation of the action.
+        Actions are encoded as (axis, index, clockwise) where:
+        - axis: 0=x-axis, 1=y-axis, 2=z-axis
+        - index: slice index (0 or 2 for 3x3 cube)
+        - clockwise: 0=counterclockwise, 1=clockwise
+        
+        For cubes larger than 3x3x3, internal slice rotations are named
+        with layer numbers (e.g., L2, R2 for 4x4x4 cube).
         """
-        return f"{rotate_face_map[int(action // 2)]}_{'cw' if action % 2 == 0 else 'ccw'}"
+        # Decode action into components
+        num_indices = len(self.index_grid)
+        axis = action // (num_indices * 2)
+        index = (action // 2) % num_indices
+        clockwise = action % 2
+        
+        # Map (axis, index) to face using the same logic as _rotate method
+        actual_index = self.index_grid[index]
+        
+        if self.size <= 3:
+            # For 3x3x3 and smaller cubes, use the original logic
+            is_edge = jnp.isin(actual_index, jnp.array([0, self.size - 1]))
+            switch_num = jnp.where(
+                is_edge, 1 + 2 * axis + actual_index // (self.size - 1), 0
+            )
+            
+            # Map switch_num to face string
+            face_map = {
+                1: "left",    # axis=0, index=0
+                2: "right",   # axis=0, index=2 (for size=3)
+                3: "down",    # axis=1, index=0
+                4: "up",      # axis=1, index=2 (for size=3)
+                5: "front",   # axis=2, index=0
+                6: "back",    # axis=2, index=2 (for size=3)
+            }
+            
+            face_str = face_map.get(int(switch_num), "slice") if switch_num > 0 else "slice"
+        else:
+            # For cubes larger than 3x3x3, use layer-based naming
+            # Define face name pairs for each axis: (negative_direction, positive_direction)
+            face_pairs = [("L", "R"), ("D", "U"), ("F", "B")]
+            negative_face, positive_face = face_pairs[axis]
+            
+            # Determine which face this slice is closer to and calculate layer number
+            mid_point = self.size / 2
+            if actual_index < mid_point:
+                # Closer to negative direction face (L, D, F)
+                face_name = negative_face
+                layer_num = actual_index + 1
+            else:
+                # Closer to positive direction face (R, U, B)
+                face_name = positive_face
+                layer_num = self.size - actual_index
+            
+            # For layer 1, don't include the number
+            face_str = face_name if layer_num == 1 else f"{face_name}{layer_num}"
+        
+        direction = "cw" if clockwise else "ccw"
+        return f"{face_str}_{direction}"
 
     @staticmethod
     def _rotate_face(shaped_faces: chex.Array, clockwise: bool, mul: int):
@@ -246,7 +301,7 @@ class RubiksCube(Puzzle):
         is_edge = jnp.isin(index, jnp.array([0, self.size - 1]))
         switch_num = jnp.where(
             is_edge, 1 + 2 * axis + index // (self.size - 1), 0
-        )  # 0: None, 1: left, 2: right, 3: up, 4: down, 5: front, 6: back
+        )  # 0: None, 1: left, 2: right, 3: down, 4: up, 5: front, 6: back
         shaped_faces = jax.lax.switch(
             switch_num,
             [
