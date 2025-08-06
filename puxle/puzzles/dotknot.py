@@ -32,6 +32,7 @@ class DotKnot(Puzzle):
         str_parser = self.get_string_parser()
         board = jnp.zeros((self.size * self.size), dtype=TYPE)
         packed_board = to_uint8(board, 4)
+        size = self.size
 
         @state_dataclass
         class State:
@@ -39,6 +40,14 @@ class DotKnot(Puzzle):
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
+
+            @property
+            def packed(self) -> "State":
+                return State(board=to_uint8(self.board, 4))
+
+            @property
+            def unpacked(self) -> "State":
+                return State(board=from_uint8(self.board, (size * size), 4))
 
         return State
 
@@ -70,7 +79,7 @@ class DotKnot(Puzzle):
                 return "?"  # for debug and target
 
         def parser(state, **kwargs):
-            unpacked = from_uint8(state.board, (self.size * self.size), 4)
+            unpacked = state.unpacked.board
             return form.format(*map(to_char, unpacked))
 
         return parser
@@ -91,7 +100,7 @@ class DotKnot(Puzzle):
         If impossible to move in a direction, cost should be inf and State should be same as input state.
         """
         # Unpack the board for processing.
-        unpacked_board = from_uint8(state.board, (self.size * self.size), 4)
+        unpacked_board = state.unpacked.board
 
         # Determine the smallest available color among {1, 2, ..., self.color_num}.
         colors = jnp.arange(1, self.color_num + 1, dtype=TYPE)
@@ -136,11 +145,10 @@ class DotKnot(Puzzle):
             valid_move = valid_move & available
             new_board = jax.lax.cond(
                 valid_move,
-                lambda _: point_move(unpacked_board, pos, new_pos, point_idx, color_idx, is_merge),
-                lambda _: unpacked_board,
-                operand=None,
+                lambda : point_move(unpacked_board, pos, new_pos, point_idx, color_idx, is_merge),
+                lambda : unpacked_board,
             )
-            new_state = self.State(board=to_uint8(new_board, 4))
+            new_state = self.State(board=new_board).packed
             cost = jnp.where(valid_move, 1.0, jnp.inf)
             return new_state, cost
 
@@ -148,7 +156,7 @@ class DotKnot(Puzzle):
         return new_states, costs
 
     def is_solved(self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State") -> bool:
-        unpacked = from_uint8(state.board, (self.size * self.size), 4)
+        unpacked = state.unpacked.board
         empty = jnp.all(unpacked == 0)  # ALL empty is not solved condition
         gr = jnp.greater_equal(unpacked, 1)  # ALL point a is solved condition
         le = jnp.less_equal(unpacked, self.color_num * 2)  # ALL point b is solved condition
@@ -189,7 +197,7 @@ class DotKnot(Puzzle):
         return form
 
     def _getBlankPosition(self, state: "DotKnot.State", idx: int):
-        unpacked_board = from_uint8(state.board, (self.size * self.size), 4)
+        unpacked_board = state.unpacked.board
         one_hot = unpacked_board == idx
         available = jnp.any(one_hot)
         flat_index = jnp.argmax(one_hot)
@@ -212,9 +220,8 @@ class DotKnot(Puzzle):
             is_already_filled = board[random_index] != 0
             board = jax.lax.cond(
                 is_already_filled,
-                lambda _: board,
-                lambda _: board.at[random_index].set(idx),
-                operand=None,
+                lambda : board,
+                lambda : board.at[random_index].set(idx),
             )
             next_idx = jnp.where(is_already_filled, idx, idx + 1)
             return board, key, next_idx
@@ -222,8 +229,7 @@ class DotKnot(Puzzle):
         board, _, _ = jax.lax.while_loop(
             lambda val: val[2] < self.color_num * 2 + 1, _while_loop, (init_board, key, 1)
         )
-        packed_board = to_uint8(board, 4)
-        return self.State(board=packed_board)
+        return self.State(board=board).packed
 
     def get_solve_config_img_parser(self):
         def parser(solve_config: "DotKnot.SolveConfig"):
@@ -249,7 +255,7 @@ class DotKnot(Puzzle):
                 (50, 50, 50),
                 -1,
             )
-            board_flat = from_uint8(state.board, (self.size * self.size), 4)
+            board_flat = state.unpacked.board
             knot_max = 2 * self.color_num  # Values <= knot_max represent knots
             for idx, val in enumerate(board_flat):
                 if val == 0:

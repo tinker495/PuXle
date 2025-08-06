@@ -6,11 +6,12 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**PuXle** is a high-performance library for parallelized puzzle environments built on JAX. It provides a collection of classic puzzles optimized for AI research, reinforcement learning, and search algorithms.
+**PuXle** is a high-performance library for parallelized puzzle environments built on JAX. It provides a collection of classic puzzles optimized for AI research, reinforcement learning, and search algorithms. PuXle leverages [Xtructure](https://github.com/tinker495/Xtructure.git) as a backend for JAX-optimized data structures, offering advantages such as efficient batched operations, GPU-accelerated priority queues and hash tables for faster puzzle solving in AI research. PuXle serves as the puzzle implementation backend for [JAxtar](https://github.com/tinker495/JAxtar), enabling JAX-native parallelizable A* and Q* solvers for neural heuristic search research.
 
 ## 🚀 Features
 
 - **High Performance**: JAX-powered parallelization for lightning-fast puzzle solving
+- **Optimized Data Structures**: Powered by Xtructure for efficient batched operations, GPU-accelerated priority queues, and hash tables
 - **Diverse Puzzles**: 11+ classic puzzles including Rubik's Cube, Sokoban, Sliding Puzzle, and more
 - **AI Research Ready**: Perfect for reinforcement learning, search algorithms, and AI research
 - **Batch Processing**: Efficient batch operations for training and evaluation
@@ -81,15 +82,20 @@ keys = jax.random.split(jax.random.PRNGKey(0), batch_size)
 solve_configs = jax.vmap(lambda k: puzzle.get_solve_config(k))(keys)
 initial_states = jax.vmap(lambda sc, k: puzzle.get_initial_state(sc, k))(solve_configs, keys)
 
-# Batch solve checking
-solved_states = puzzle.batched_is_solved(solve_configs, initial_states)
+# Batch solve checking with multiple solve configs
+solved_states = puzzle.batched_is_solved(solve_configs, initial_states, multi_solve_config=True)
 print(f"Solved states in batch: {jnp.sum(solved_states)}")
+
+# Alternative: Use single solve config for all states
+single_solve_config = puzzle.get_solve_config(jax.random.PRNGKey(42))
+solved_states_single = puzzle.batched_is_solved(single_solve_config, initial_states, multi_solve_config=False)
+print(f"Solved states with single config: {jnp.sum(solved_states_single)}")
 ```
 
 ### Custom Puzzle Creation
 ```python
-from puxle import Puzzle, state_dataclass
-from puxle.puzzle_state import FieldDescriptor
+import jax.numpy as jnp
+from puxle import Puzzle, state_dataclass, FieldDescriptor
 
 class CustomPuzzle(Puzzle):
     action_size = 4  # Number of possible actions
@@ -110,13 +116,43 @@ class CustomPuzzle(Puzzle):
         return self.State(position=jnp.array([5, 5]))
     
     def get_neighbours(self, solve_config, state, filled=True):
-        # Define valid moves and their costs
-        # Return (next_states, costs) 
-        pass
+        # Define valid moves: up, down, left, right
+        moves = jnp.array([[0, 1], [0, -1], [-1, 0], [1, 0]])
+        new_positions = state.position[None, :] + moves
+        
+        # Create next states
+        next_states = jax.tree_util.tree_map(
+            lambda x: jnp.repeat(x[None, :], 4, axis=0), state
+        )
+        next_states = next_states.replace(position=new_positions)
+        
+        # All moves have cost 1
+        costs = jnp.ones(4)
+        
+        return next_states, costs
     
     def is_solved(self, solve_config, state):
         # Check if current state matches target
         return jnp.array_equal(state.position, solve_config.TargetState.position)
+    
+    def get_string_parser(self):
+        # Required: Return function to convert state to string
+        def string_parser(state):
+            return f"Position: ({state.position[0]}, {state.position[1]})"
+        return string_parser
+    
+    def get_img_parser(self):
+        # Required: Return function to convert state to image array
+        def img_parser(state):
+            # Create a simple 10x10 grid visualization
+            grid = jnp.zeros((10, 10, 3))
+            x, y = state.position
+            # Place a marker at current position (clamp to grid bounds)
+            x = jnp.clip(x, 0, 9)
+            y = jnp.clip(y, 0, 9)
+            grid = grid.at[y, x].set(jnp.array([1.0, 0.0, 0.0]))  # Red dot
+            return grid
+        return img_parser
 ```
 
 ## 🔧 API Reference
@@ -149,3 +185,8 @@ pytest --cov=puxle tests/
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## See Also
+
+- [Xtructure](https://github.com/tinker495/Xtructure): JAX-optimized data structures used as a backend for PuXle.
+- [JAxtar](https://github.com/tinker495/JAxtar): JAX-native parallelizable A* and Q* solver that uses PuXle as its puzzle implementation backend.

@@ -279,9 +279,8 @@ class TowerOfHanoi(Puzzle):
             # Top disk is at index 1 (smallest disk)
             from_top_disk = jax.lax.cond(
                 disks_on_from > 0,
-                lambda _: pegs[from_peg, 1],
-                lambda _: jnp.array(0, dtype=TYPE),
-                None,
+                lambda : pegs[from_peg, 1],
+                lambda : jnp.array(0, dtype=TYPE),
             )
 
             # Check if the to_peg has space and the top disk on to_peg is larger
@@ -291,9 +290,8 @@ class TowerOfHanoi(Puzzle):
             # Only allow placing a smaller disk on top of a larger disk
             valid_to = jax.lax.cond(
                 disks_on_to == 0,
-                lambda _: jnp.array(True, dtype=bool),
-                lambda _: from_top_disk < pegs[to_peg, 1],
-                None,
+                lambda : jnp.array(True, dtype=bool),
+                lambda : from_top_disk < pegs[to_peg, 1],
             )
 
             return jnp.logical_and(valid_from, valid_to)
@@ -333,26 +331,26 @@ class TowerOfHanoi(Puzzle):
         def map_fn(move, filled):
             from_peg, to_peg = move
 
-            def move_disk(_):
+            def move_disk():
                 # Check if the move is valid
                 valid = is_valid_move(pegs, from_peg, to_peg)
 
                 # If valid, make the move; otherwise, keep the original pegs
                 new_pegs = jax.lax.cond(
-                    valid, lambda _: make_move(pegs, from_peg, to_peg), lambda _: pegs, None
+                    valid, lambda : make_move(pegs, from_peg, to_peg), lambda : pegs
                 )
 
                 # Cost is 1 if valid, infinity if invalid
                 cost = jax.lax.cond(
-                    valid, lambda _: jnp.array(1.0), lambda _: jnp.array(jnp.inf), None
+                    valid, lambda : jnp.array(1.0), lambda : jnp.array(jnp.inf)
                 )
 
                 return self.State(pegs=new_pegs), cost
 
-            def no_move(_):
+            def no_move():
                 return self.State(pegs=pegs), jnp.inf
 
-            return jax.lax.cond(filled, move_disk, no_move, None)
+            return jax.lax.cond(filled, move_disk, no_move)
 
         # Apply the mapping function to all possible moves
         # Convert moves to JAX array for vmap

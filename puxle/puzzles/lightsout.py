@@ -107,7 +107,7 @@ class LightsOut(Puzzle):
 
         def map_fn(action, filled):
             next_board, cost = jax.lax.cond(
-                filled, lambda _: (flip(board, action), 1.0), lambda _: (board, jnp.inf), None
+                filled, lambda : (flip(board, action), 1.0), lambda : (board, jnp.inf)
             )
             next_state = self.State(board=next_board).packed
             return next_state, cost
@@ -123,6 +123,14 @@ class LightsOut(Puzzle):
         This function should return a string representation of the action.
         """
         return action_to_char(action)
+
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Defines the inverse action mapping for LightsOut.
+        Each action (flipping a tile) is its own inverse.
+        """
+        return jnp.arange(self.action_size)
 
     def _get_visualize_format(self):
         size = self.size

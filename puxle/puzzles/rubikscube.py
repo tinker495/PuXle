@@ -49,7 +49,7 @@ class RubiksCube(Puzzle):
         str_parser = self.get_string_parser()
         raw_shape = (6, self.size * self.size)
         raw = jnp.full(raw_shape, -1, dtype=TYPE)
-        packed_faces = to_uint8(raw, 4)
+        packed_faces = to_uint8(raw, 3)
 
         @state_dataclass
         class State:
@@ -60,11 +60,11 @@ class RubiksCube(Puzzle):
             
             @property
             def packed(self):
-                return State(faces=to_uint8(self.faces, 4))
+                return State(faces=to_uint8(self.faces, 3))
             
             @property
             def unpacked(self):
-                return State(faces=from_uint8(self.faces, raw_shape, 4))
+                return State(faces=from_uint8(self.faces, raw_shape, 3))
 
         return State
 
@@ -133,7 +133,10 @@ class RubiksCube(Puzzle):
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "RubiksCube.State":
         return self._get_suffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
+            solve_config,
+            solve_config.TargetState,
+            key,
+            num_shuffle=self.initial_shuffle
         )
 
     def get_target_state(self, key=None) -> "RubiksCube.State":
@@ -149,9 +152,8 @@ class RubiksCube(Puzzle):
         def map_fn(state, axis, index, clockwise):
             return jax.lax.cond(
                 filled,
-                lambda _: (self._rotate(state, axis, index, clockwise), 1.0),
-                lambda _: (state, jnp.inf),
-                None,
+                lambda : (self._rotate(state, axis, index, clockwise), 1.0),
+                lambda : (state, jnp.inf),
             )
 
         axis_grid, index_grid, clockwise_grid = jnp.meshgrid(
@@ -168,11 +170,88 @@ class RubiksCube(Puzzle):
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State") -> bool:
         return state == solve_config.TargetState
 
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Defines the inverse action mapping for Rubik's Cube.
+        A rotation in one direction (e.g., clockwise) is inverted by a rotation
+        in the opposite direction (counter-clockwise) on the same axis and slice.
+
+        Actions are generated from a meshgrid of (axis, index, clockwise), with
+        clockwise being the fastest-changing dimension. This means actions are
+        interleaved as [cw, ccw, cw, ccw, ...]. The inverse of action `2k` (cw)
+        is `2k+1` (ccw), and vice versa.
+        """
+        num_actions = 3 * len(self.index_grid) * 2
+        actions = jnp.arange(num_actions)
+
+        # Reshape to pair up cw/ccw actions, flip them, and flatten back
+        inv_map = jnp.reshape(actions, (-1, 2))
+        inv_map = jnp.flip(inv_map, axis=1)
+        inv_map = jnp.reshape(inv_map, (-1,))
+
+        return inv_map
+
     def action_to_string(self, action: int) -> str:
         """
         This function should return a string representation of the action.
+        Actions are encoded as (axis, index, clockwise) where:
+        - axis: 0=x-axis, 1=y-axis, 2=z-axis
+        - index: slice index (0 or 2 for 3x3 cube)
+        - clockwise: 0=counterclockwise, 1=clockwise
+        
+        For cubes larger than 3x3x3, internal slice rotations are named
+        with layer numbers (e.g., L2, R2 for 4x4x4 cube).
         """
-        return f"{rotate_face_map[int(action // 2)]}_{'cw' if action % 2 == 0 else 'ccw'}"
+        # Decode action into components
+        num_indices = len(self.index_grid)
+        axis = action // (num_indices * 2)
+        index = (action // 2) % num_indices
+        clockwise = action % 2
+        
+        # Map (axis, index) to face using the same logic as _rotate method
+        actual_index = self.index_grid[index]
+        
+        if self.size <= 3:
+            # For 3x3x3 and smaller cubes, use the original logic
+            is_edge = jnp.isin(actual_index, jnp.array([0, self.size - 1]))
+            switch_num = jnp.where(
+                is_edge, 1 + 2 * axis + actual_index // (self.size - 1), 0
+            )
+            
+            # Map switch_num to face string
+            face_map = {
+                1: "left",    # axis=0, index=0
+                2: "right",   # axis=0, index=2 (for size=3)
+                3: "down",    # axis=1, index=0
+                4: "up",      # axis=1, index=2 (for size=3)
+                5: "front",   # axis=2, index=0
+                6: "back",    # axis=2, index=2 (for size=3)
+            }
+            
+            face_str = face_map.get(int(switch_num), "slice") if switch_num > 0 else "slice"
+        else:
+            # For cubes larger than 3x3x3, use layer-based naming
+            # Define face name pairs for each axis: (negative_direction, positive_direction)
+            face_pairs = [("L", "R"), ("D", "U"), ("F", "B")]
+            negative_face, positive_face = face_pairs[axis]
+            
+            # Determine which face this slice is closer to and calculate layer number
+            mid_point = self.size / 2
+            if actual_index < mid_point:
+                # Closer to negative direction face (L, D, F)
+                face_name = negative_face
+                layer_num = actual_index + 1
+            else:
+                # Closer to positive direction face (R, U, B)
+                face_name = positive_face
+                layer_num = self.size - actual_index
+            
+            # For layer 1, don't include the number
+            face_str = face_name if layer_num == 1 else f"{face_name}{layer_num}"
+        
+        direction = "cw" if clockwise else "ccw"
+        return f"{face_str}_{direction}"
 
     @staticmethod
     def _rotate_face(shaped_faces: chex.Array, clockwise: bool, mul: int):
@@ -222,7 +301,7 @@ class RubiksCube(Puzzle):
         is_edge = jnp.isin(index, jnp.array([0, self.size - 1]))
         switch_num = jnp.where(
             is_edge, 1 + 2 * axis + index // (self.size - 1), 0
-        )  # 0: None, 1: left, 2: right, 3: up, 4: down, 5: front, 6: back
+        )  # 0: None, 1: left, 2: right, 3: down, 4: up, 5: front, 6: back
         shaped_faces = jax.lax.switch(
             switch_num,
             [
@@ -458,14 +537,13 @@ class RubiksCubeRandom(RubiksCube):
     def fixed_target(self) -> bool:
         return False
 
+    def __init__(self, size: int = 3, initial_shuffle: int = 100, **kwargs):
+        super().__init__(size=size, initial_shuffle=initial_shuffle, **kwargs)
+
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         solve_config = super().get_solve_config(key, data)
         solve_config.TargetState = self._get_suffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=100
+            solve_config, solve_config.TargetState, key,
+            num_shuffle=100
         )
         return solve_config
-
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> RubiksCube.State:
-        return self._get_suffled_state(solve_config, solve_config.TargetState, key, num_shuffle=100)

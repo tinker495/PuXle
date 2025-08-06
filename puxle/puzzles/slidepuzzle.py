@@ -106,9 +106,8 @@ class SlidePuzzle(Puzzle):
             next_x, next_y = next_pos
             next_board, cost = jax.lax.cond(
                 jnp.logical_and(is_valid(next_x, next_y), filled),
-                lambda _: (swap(board, x, y, next_x, next_y), 1.0),
-                lambda _: (board, jnp.inf),
-                None,
+                lambda : (swap(board, x, y, next_x, next_y), 1.0),
+                lambda : (board, jnp.inf),
             )
             return self.State(board=next_board).packed, cost
 
@@ -133,6 +132,15 @@ class SlidePuzzle(Puzzle):
                 return "↓"
             case _:
                 raise ValueError(f"Invalid action: {action}")
+
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Defines the inverse action mapping for the Slide Puzzle.
+        The actions are moving the blank tile [R, L, D, U].
+        The inverse is therefore [L, R, U, D].
+        """
+        return jnp.array([1, 0, 3, 2])
 
     def _get_visualize_format(self):
         size = self.size

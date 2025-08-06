@@ -15,6 +15,32 @@ class Puzzle(ABC):
 
     action_size: int = None
 
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        """
+        Returns an array mapping each action to its inverse, or None if not defined.
+        If implemented, this method should return a jnp.ndarray where `map[i]` is the
+        inverse of action `i`. This is used by the default `get_inverse_neighbours`
+        to automatically calculate inverse transitions for reversible puzzles.
+
+        For example, if action 0 is 'up' and 1 is 'down', then the map
+        should contain inverse_action_map[0] = 1 and inverse_action_map[1] = 0.
+
+        If this is not implemented or returns None, `get_inverse_neighbours` will raise
+        a NotImplementedError.
+        """
+        return None
+
+    @property
+    def is_reversible(self) -> bool:
+        """
+        Indicates whether the puzzle is fully reversible through the inverse_action_map.
+        This is true if an inverse_action_map is provided.
+        Puzzles with custom, non-symmetric inverse logic (like Sokoban)
+        should override this to return False.
+        """
+        return self.inverse_action_map is not None
+
     class State(PuzzleState):
         pass
 
@@ -79,6 +105,15 @@ class Puzzle(ABC):
 
         if self.action_size is None:
             self.action_size = self._get_action_size()
+            
+        inv_map = self.inverse_action_map
+        if inv_map is not None:
+            # _inverse_action_permutation is an array of indices such that
+            # the i-th inverse neighbour is neighbours[_inverse_action_permutation[i]]
+            # where neighbours are the forward neighbours from get_neighbours.
+            self._inverse_action_permutation = inv_map
+        else:
+            self._inverse_action_permutation = None
 
     def data_init(self):
         """
@@ -167,7 +202,7 @@ class Puzzle(ABC):
         """
         pass
 
-    def get_inits(self, key=None) -> tuple[State, SolveConfig]:
+    def get_inits(self, key=None) -> tuple[SolveConfig, State]:
         """
         This function should return a initial state and solve config.
         """
@@ -269,12 +304,27 @@ class Puzzle(ABC):
     ) -> tuple[State, chex.Array]:
         """
         This function should return inverse neighbours and the cost of the move.
-        For puzzles that are reversible, this function can simply return the same neighbours as `get_neighbours`.
-        However, for puzzles like Sokoban, which are not reversible (pushing a box is not easily reversed),
-        this function needs to be implemented specifically to return the actual inverse neighbours.
-        By default, it can just use the `get_neighbours` function if inverse neighbours are not explicitly defined.
+        By default, it uses `inverse_action_map` to calculate inverse transitions
+        for reversible puzzles. If `inverse_action_map` is not defined, this function
+        will raise a NotImplementedError.
+
+        For puzzles that are not reversible (e.g., Sokoban), this method must be
+        overridden with a specific implementation.
         """
-        return self.get_neighbours(solve_config, state, filled)
+        if self._inverse_action_permutation is None:
+            raise NotImplementedError(
+                "This puzzle does not define an `inverse_action_map`. "
+                "To use `get_inverse_neighbours`, you must either implement the map "
+                "for a reversible puzzle or override this method for a non-reversible one."
+            )
+
+        neighbours, costs = self.get_neighbours(solve_config, state, filled)
+        # The i-th inverse neighbour is the state from which applying action i leads to the current state.
+        # This is found by permuting the forward neighbours using _inverse_action_permutation.
+        permuted_neighbours = neighbours[self._inverse_action_permutation]
+        permuted_costs = costs[self._inverse_action_permutation]
+
+        return permuted_neighbours, permuted_costs
 
     def batched_get_inverse_neighbours(
         self,
@@ -298,6 +348,9 @@ class Puzzle(ABC):
     def _get_suffled_state(
         self, solve_config: "Puzzle.SolveConfig", init_state: "Puzzle.State", key, num_shuffle
     ):
+        key, subkey = jax.random.split(key)
+        num_shuffle += jax.random.randint(subkey, (), 0, 2)  # add a random 1 to 0 to the initial shuffle.
+
         def cond_fun(loop_state):
             iteration_count, _, _, _ = loop_state
             return iteration_count < num_shuffle
@@ -326,3 +379,13 @@ class Puzzle(ABC):
             cond_fun, body_fun, (0, init_state, init_state, key)
         )
         return final_state
+
+    def __repr__(self):
+        state_fields = list(self.State.__annotations__.keys())
+        solve_config_fields = list(self.SolveConfig.__annotations__.keys())
+        return (
+            f"Puzzle({self.__class__.__name__}, "
+            f"action_size={self.action_size}, "
+            f"state_fields={state_fields}, "
+            f"solve_config_fields={solve_config_fields})"
+        )
