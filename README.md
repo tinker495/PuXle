@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="images/PuXle.png" alt="PuXle Logo" width="500">
+  <img src="images/PuXle.svg" alt="PuXle Logo" width="500">
 </div>
 
 # PuXle: Parallelized Puzzles with JAX
