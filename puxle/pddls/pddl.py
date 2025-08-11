@@ -1,4 +1,5 @@
-from typing import Dict, List, Tuple
+import os
+from typing import Dict, List, Optional, Tuple
 
 import chex
 import jax
@@ -38,6 +39,45 @@ class PDDL(Puzzle):
             raise ValueError(f"Failed to parse PDDL files: {e}")
 
         super().__init__(**kwargs)
+
+    @classmethod
+    def from_preset(
+        cls,
+        domain: str,
+        problem: Optional[str] = None,
+        *,
+        problem_basename: Optional[str] = None,
+        **kwargs,
+    ) -> "PDDL":
+        """Create a PDDL instance by resolving absolute paths to data under `puxle/data/pddls/`.
+
+        This mirrors the absolute-path loading style used by puzzles like Sokoban.
+
+        Args:
+            domain: Domain folder name under `puxle/data/pddls/` (e.g., "blocksworld").
+            problem: Problem filename within `problems/` (with or without .pddl extension).
+            problem_basename: Alternative to `problem`; basename without extension in `problems/`.
+
+        Returns:
+            PDDL: Initialized PDDL environment.
+        """
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        data_dir = os.path.normpath(os.path.join(base_dir, "..", "data", "pddls", domain))
+
+        domain_path = os.path.abspath(os.path.join(data_dir, "domain.pddl"))
+
+        if problem is None and problem_basename is None:
+            raise ValueError("Provide `problem` or `problem_basename` to locate a problem file.")
+
+        if problem is None and problem_basename is not None:
+            problem = f"{problem_basename}.pddl"
+
+        if not problem.endswith(".pddl"):
+            problem = f"{problem}.pddl"
+
+        problem_path = os.path.abspath(os.path.join(data_dir, "problems", problem))
+
+        return cls(domain_file=domain_path, problem_file=problem_path, **kwargs)
 
     def data_init(self):
         """Initialize PDDL data: ground atoms and actions, build masks."""

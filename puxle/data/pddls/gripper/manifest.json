@@ -1,0 +1,27 @@
+{
+  "domain": "gripper",
+  "requirements": [":strips", ":typing"],
+  "scales": {
+    "S": {"rooms": 2, "balls": [2, 3, 4], "grippers": 2, "count": 3}
+  },
+  "problems": [
+    {"name": "gr-S-01", "path": "problems/gr-S-01.pddl", "scale": "S"},
+    {"name": "gr-S-02", "path": "problems/gr-S-02.pddl", "scale": "S"},
+    {"name": "gr-S-03", "path": "problems/gr-S-03.pddl", "scale": "S"}
+  ],
+  "notes": "Classic STRIPS Gripper with two grippers and two rooms."
+}
+
+{
+  "domain": "gripper",
+  "requirements": [":strips", ":typing"],
+  "scales": {
+    "S": {"rooms": 2, "balls": [2, 3, 4], "grippers": 2, "count": 3}
+  },
+  "problems": [
+    {"name": "gr-S-01", "path": "problems/gr-S-01.pddl", "scale": "S"},
+    {"name": "gr-S-02", "path": "problems/gr-S-02.pddl", "scale": "S"},
+    {"name": "gr-S-03", "path": "problems/gr-S-03.pddl", "scale": "S"}
+  ],
+  "notes": "Classic STRIPS Gripper with two grippers and two rooms."
+}
