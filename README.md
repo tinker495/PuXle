@@ -104,6 +104,8 @@ for i, cost in enumerate(costs):
 | **DotKnot** | Untangle knots puzzle | Medium |
 
 ### PDDL Planning Domains
+**⚠️ Experimental Feature**: PDDL support in PuXle is currently experimental and under active development. While we strive for full STRIPS subset compliance, some edge cases may not be fully supported yet.
+
 PuXle supports the full STRIPS subset of PDDL:
 - **Positive preconditions only**
 - **Add/delete effects** (no conditional effects)
@@ -269,3 +271,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Xtructure](https://github.com/tinker495/Xtructure): JAX-optimized data structures used as a backend for PuXle.
 - [JAxtar](https://github.com/tinker495/JAxtar): JAX-native parallelizable A* and Q* solver that uses PuXle as its planning and puzzle implementation backend.
+
+## 🤝 Contributing and Feedback
+
+We welcome contributions, bug reports, and feature requests! Since the author is still learning about this research field, we particularly appreciate feedback and suggestions for improvements from the community. Please feel free to:
+
+- Open issues for bugs or feature requests
+- Submit pull requests with improvements
+- Provide feedback on PDDL implementation or other features
+- Share your research use cases and requirements
+
+Your input helps make PuXle better for the entire AI research community!
