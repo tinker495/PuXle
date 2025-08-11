@@ -1,0 +1,5 @@
+(define (problem toggle-problem)
+  (:domain toggle)
+  (:init (on))
+  (:goal (off))
+)

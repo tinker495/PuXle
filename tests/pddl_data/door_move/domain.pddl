@@ -1,0 +1,20 @@
+(define (domain door-move)
+  (:requirements :strips :typing)
+  (:types location)
+  (:predicates
+    (at ?x - location)
+    (connected ?a - location ?b - location)
+    (open ?a - location ?b - location)
+    (has-key)
+  )
+  (:action open
+    :parameters (?a - location ?b - location)
+    :precondition (and (at ?a) (connected ?a ?b) (has-key))
+    :effect (open ?a ?b)
+  )
+  (:action move
+    :parameters (?a - location ?b - location)
+    :precondition (and (at ?a) (connected ?a ?b) (open ?a ?b))
+    :effect (and (not (at ?a)) (at ?b))
+  )
+)
