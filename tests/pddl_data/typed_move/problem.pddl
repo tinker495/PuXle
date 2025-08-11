@@ -1,0 +1,12 @@
+(define (problem typed-move-problem)
+  (:domain typed-move)
+  (:objects r1 r2 - room h1 - hall)
+  (:init
+    (at-room r1)
+    (connected-rh r1 h1)
+    (connected-hr h1 r2)
+    (safe-room r2)
+    (safe-hall h1)
+  )
+  (:goal (at-room r2))
+)

@@ -10,7 +10,6 @@ class FieldDescriptor(FieldDescriptor):
 
 
 class PuzzleState(Xtructurable):
-
     @property
     def packed(self, **kwargs) -> "PuzzleState":
         """

@@ -2,10 +2,10 @@ import chex
 import jax
 import jax.numpy as jnp
 
-from puxle.utils.util import to_uint8, from_uint8
-from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import from_uint8, to_uint8
 
 TYPE = jnp.uint8
 
@@ -31,14 +31,14 @@ class SlidePuzzle(Puzzle):
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
-            
+
             @property
             def packed(self) -> "SlidePuzzle.State":
                 if need_pack:
-                    return State(board=to_uint8(self.board, 4)) 
+                    return State(board=to_uint8(self.board, 4))
                 else:
                     return State(board=self.board)
-                          
+
             @property
             def unpacked(self) -> "SlidePuzzle.State":
                 if need_pack:
@@ -74,7 +74,9 @@ class SlidePuzzle(Puzzle):
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         return self.SolveConfig(
-            TargetState=self.State(board=jnp.array([*range(1, self.size**2), 0], dtype=TYPE)).packed
+            TargetState=self.State(
+                board=jnp.array([*range(1, self.size**2), 0], dtype=TYPE)
+            ).packed
         )
 
     def get_neighbours(
@@ -106,8 +108,8 @@ class SlidePuzzle(Puzzle):
             next_x, next_y = next_pos
             next_board, cost = jax.lax.cond(
                 jnp.logical_and(is_valid(next_x, next_y), filled),
-                lambda : (swap(board, x, y, next_x, next_y), 1.0),
-                lambda : (board, jnp.inf),
+                lambda: (swap(board, x, y, next_x, next_y), 1.0),
+                lambda: (board, jnp.inf),
             )
             return self.State(board=next_board).packed, cost
 

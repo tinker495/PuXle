@@ -1,0 +1,12 @@
+(define (problem simple-move-problem)
+  (:domain simple-move)
+  (:objects loc1 loc2 loc3 - location)
+  (:init
+    (at loc1)
+    (connected loc1 loc2)
+    (connected loc2 loc3)
+    (connected loc2 loc1)
+    (connected loc3 loc2)
+  )
+  (:goal (at loc3))
+)

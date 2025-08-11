@@ -1,1 +1,1 @@
-# Sokoban puzzle data 
+# Sokoban puzzle data

@@ -2,10 +2,10 @@ import chex
 import jax
 import jax.numpy as jnp
 
-from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puxle.utils.util import coloring_str, to_uint8, from_uint8
+from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import coloring_str, from_uint8, to_uint8
 
 TYPE = jnp.uint8
 
@@ -145,8 +145,8 @@ class DotKnot(Puzzle):
             valid_move = valid_move & available
             new_board = jax.lax.cond(
                 valid_move,
-                lambda : point_move(unpacked_board, pos, new_pos, point_idx, color_idx, is_merge),
-                lambda : unpacked_board,
+                lambda: point_move(unpacked_board, pos, new_pos, point_idx, color_idx, is_merge),
+                lambda: unpacked_board,
             )
             new_state = self.State(board=new_board).packed
             cost = jnp.where(valid_move, 1.0, jnp.inf)
@@ -220,8 +220,8 @@ class DotKnot(Puzzle):
             is_already_filled = board[random_index] != 0
             board = jax.lax.cond(
                 is_already_filled,
-                lambda : board,
-                lambda : board.at[random_index].set(idx),
+                lambda: board,
+                lambda: board.at[random_index].set(idx),
             )
             next_idx = jnp.where(is_already_filled, idx, idx + 1)
             return board, key, next_idx

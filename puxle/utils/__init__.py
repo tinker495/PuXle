@@ -9,8 +9,8 @@ from puxle.utils.util import (
     add_img_parser,
     coloring_str,
     from_uint8,
-    to_uint8,
     pack_variable_bits,
+    to_uint8,
     unpack_variable_bits,
 )
 
@@ -18,7 +18,7 @@ __all__ = [
     "IMG_SIZE",
     "add_img_parser",
     "coloring_str",
-    "from_uint8", 
+    "from_uint8",
     "to_uint8",
     "pack_variable_bits",
     "unpack_variable_bits",

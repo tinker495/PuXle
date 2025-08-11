@@ -1,5 +1,5 @@
-from enum import Enum
 import os
+from enum import Enum
 from importlib.resources import files
 
 import chex
@@ -7,14 +7,12 @@ import jax
 import jax.numpy as jnp
 from termcolor import colored
 
-from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puxle.utils.util import to_uint8, from_uint8
+from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import from_uint8, to_uint8
 
 TYPE = jnp.uint8
-
-
 
 
 class Sokoban(Puzzle):
@@ -48,7 +46,7 @@ class Sokoban(Puzzle):
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
-            
+
             @property
             def packed(self) -> "State":
                 return State(board=to_uint8(self.board, 2))
@@ -59,7 +57,12 @@ class Sokoban(Puzzle):
 
         return State
 
-    def __init__(self, size: int = 10, solve_condition: SolveCondition = SolveCondition.ALL_BOXES_ON_TARGET, **kwargs):
+    def __init__(
+        self,
+        size: int = 10,
+        solve_condition: SolveCondition = SolveCondition.ALL_BOXES_ON_TARGET,
+        **kwargs,
+    ):
         self.size = size
         self.solve_condition = solve_condition
         assert size == 10, "Boxoban dataset only supports size 10"
@@ -68,7 +71,7 @@ class Sokoban(Puzzle):
     @property
     def is_reversible(self) -> bool:
         return False
-        
+
     @property
     def fixed_target(self) -> bool:
         return False
@@ -83,10 +86,10 @@ class Sokoban(Puzzle):
             # Fallback to relative paths (for development/source directory)
             current_dir = os.path.dirname(os.path.abspath(__file__))
             data_dir = os.path.join(current_dir, "..", "data", "sokoban")
-            
+
             self.init_puzzles = jnp.load(os.path.join(data_dir, "init.npy"))
             self.target_puzzles = jnp.load(os.path.join(data_dir, "target.npy"))
-        
+
         self.num_puzzles = self.init_puzzles.shape[0]
 
     def get_data(self, key: jax.random.PRNGKey) -> tuple[chex.Array, chex.Array]:
@@ -122,7 +125,9 @@ class Sokoban(Puzzle):
         if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET:
             return jnp.all(board == t_board)
         else:
-            rm_player = jnp.where(board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board)
+            rm_player = jnp.where(
+                board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board
+            )
             return jnp.all(rm_player == t_board)
 
     def action_to_string(self, action: int) -> str:
@@ -189,15 +194,23 @@ class Sokoban(Puzzle):
                                         Sokoban.Object.BOX_ON_TARGET.value
                                     )
                                 case Sokoban.Object.EMPTY.value:
-                                    board = board.at[i * self.size + j].set(Sokoban.Object.TARGET.value)
+                                    board = board.at[i * self.size + j].set(
+                                        Sokoban.Object.TARGET.value
+                                    )
                         if goal[i * self.size + j] == Sokoban.Object.PLAYER.value:
                             match board[i * self.size + j]:
                                 case Sokoban.Object.PLAYER.value:
-                                    board = board.at[i * self.size + j].set(Sokoban.Object.PLAYER.value)
+                                    board = board.at[i * self.size + j].set(
+                                        Sokoban.Object.PLAYER.value
+                                    )
                                 case Sokoban.Object.BOX.value:
-                                    board = board.at[i * self.size + j].set(Sokoban.Object.BOX.value)
+                                    board = board.at[i * self.size + j].set(
+                                        Sokoban.Object.BOX.value
+                                    )
                                 case Sokoban.Object.EMPTY.value:
-                                    board = board.at[i * self.size + j].set(Sokoban.Object.TARGET_PLAYER.value)
+                                    board = board.at[i * self.size + j].set(
+                                        Sokoban.Object.TARGET_PLAYER.value
+                                    )
                                 case _:
                                     pass
 
@@ -246,7 +259,9 @@ class Sokoban(Puzzle):
                     new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
                         Sokoban.Object.EMPTY.value
                     )
-                    new_board = new_board.at[flat_idx(new_x, new_y)].set(Sokoban.Object.PLAYER.value)
+                    new_board = new_board.at[flat_idx(new_x, new_y)].set(
+                        Sokoban.Object.PLAYER.value
+                    )
                     return self.State(board=new_board).packed, 1.0
 
                 # Case when target cell contains a box: attempt to push it.
@@ -262,8 +277,12 @@ class Sokoban(Puzzle):
                         new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
                             Sokoban.Object.EMPTY.value
                         )
-                        new_board = new_board.at[flat_idx(new_x, new_y)].set(Sokoban.Object.PLAYER.value)
-                        new_board = new_board.at[flat_idx(push_x, push_y)].set(Sokoban.Object.BOX.value)
+                        new_board = new_board.at[flat_idx(new_x, new_y)].set(
+                            Sokoban.Object.PLAYER.value
+                        )
+                        new_board = new_board.at[flat_idx(push_x, push_y)].set(
+                            Sokoban.Object.BOX.value
+                        )
                         return self.State(board=new_board).packed, 1.0
 
                     return jax.lax.cond(valid_push, do_push, invalid_case)
@@ -271,9 +290,9 @@ class Sokoban(Puzzle):
                 return jax.lax.cond(
                     jnp.equal(target, Sokoban.Object.EMPTY.value),
                     move_empty,
-                    lambda : jax.lax.cond(
+                    lambda: jax.lax.cond(
                         jnp.equal(target, Sokoban.Object.BOX.value), push_box, invalid_case
-                    )
+                    ),
                 )
 
             return jax.lax.cond(valid_move, process_move, invalid_case)
@@ -376,7 +395,7 @@ class Sokoban(Puzzle):
                 np.roll(
                     cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
                     -1,
-                    axis=2, # color channel G -> R
+                    axis=2,  # color channel G -> R
                 ),
                 (cell_w, cell_h),
                 interpolation=cv2.INTER_AREA,
@@ -399,11 +418,17 @@ class Sokoban(Puzzle):
                     ):  # If this cell is marked as a target
                         match cell_val:
                             case Sokoban.Object.PLAYER.value:
-                                asset = assets.get(Sokoban.Object.PLAYER_ON_TARGET.value)  # agent on target
+                                asset = assets.get(
+                                    Sokoban.Object.PLAYER_ON_TARGET.value
+                                )  # agent on target
                             case Sokoban.Object.BOX.value:
-                                asset = assets.get(Sokoban.Object.BOX_ON_TARGET.value)  # box on target
+                                asset = assets.get(
+                                    Sokoban.Object.BOX_ON_TARGET.value
+                                )  # box on target
                             case Sokoban.Object.EMPTY.value:
-                                asset = assets.get(Sokoban.Object.TARGET.value)  # target floor (box target)
+                                asset = assets.get(
+                                    Sokoban.Object.TARGET.value
+                                )  # target floor (box target)
                             case _:
                                 asset = assets.get(cell_val)
                     elif (
@@ -457,7 +482,8 @@ class Sokoban(Puzzle):
         mask = jnp.where(near_positions[:, 1] < 0, 0, mask)
         mask = jnp.where(near_positions[:, 1] >= self.size, 0, mask)
         mask = jnp.where(
-            board[near_positions[:, 0] * self.size + near_positions[:, 1]] != Sokoban.Object.EMPTY.value,
+            board[near_positions[:, 0] * self.size + near_positions[:, 1]]
+            != Sokoban.Object.EMPTY.value,
             0,
             mask,
         )
@@ -488,7 +514,9 @@ class Sokoban(Puzzle):
         """
         board = state.unpacked.board
         if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET:
-            rm_player = jnp.where(board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board)
+            rm_player = jnp.where(
+                board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board
+            )
             solve_config.TargetState = self.State(board=rm_player).packed
         else:
             solve_config.TargetState = self.State(board=board).packed
@@ -568,8 +596,10 @@ class Sokoban(Puzzle):
                 # Only allow a move if the previous cell is empty.
                 return jax.lax.cond(
                     empty_prev,
-                    lambda : jax.lax.cond(
-                        box_at_front, do_pull, do_simple,
+                    lambda: jax.lax.cond(
+                        box_at_front,
+                        do_pull,
+                        do_simple,
                     ),
                     invalid,
                 )
@@ -592,8 +622,8 @@ class SokobanHard(Sokoban):
             # Fallback to relative paths (for development/source directory)
             current_dir = os.path.dirname(os.path.abspath(__file__))
             data_dir = os.path.join(current_dir, "..", "data", "sokoban")
-            
+
             self.init_puzzles = jnp.load(os.path.join(data_dir, "init_hard.npy"))
             self.target_puzzles = jnp.load(os.path.join(data_dir, "target_hard.npy"))
-        
+
         self.num_puzzles = self.init_puzzles.shape[0]

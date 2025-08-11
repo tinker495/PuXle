@@ -3,9 +3,9 @@ import jax
 import jax.numpy as jnp
 from termcolor import colored
 
-from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.utils.annotate import IMG_SIZE
 
 TYPE = jnp.uint8
 
@@ -279,8 +279,8 @@ class TowerOfHanoi(Puzzle):
             # Top disk is at index 1 (smallest disk)
             from_top_disk = jax.lax.cond(
                 disks_on_from > 0,
-                lambda : pegs[from_peg, 1],
-                lambda : jnp.array(0, dtype=TYPE),
+                lambda: pegs[from_peg, 1],
+                lambda: jnp.array(0, dtype=TYPE),
             )
 
             # Check if the to_peg has space and the top disk on to_peg is larger
@@ -290,8 +290,8 @@ class TowerOfHanoi(Puzzle):
             # Only allow placing a smaller disk on top of a larger disk
             valid_to = jax.lax.cond(
                 disks_on_to == 0,
-                lambda : jnp.array(True, dtype=bool),
-                lambda : from_top_disk < pegs[to_peg, 1],
+                lambda: jnp.array(True, dtype=bool),
+                lambda: from_top_disk < pegs[to_peg, 1],
             )
 
             return jnp.logical_and(valid_from, valid_to)
@@ -337,13 +337,11 @@ class TowerOfHanoi(Puzzle):
 
                 # If valid, make the move; otherwise, keep the original pegs
                 new_pegs = jax.lax.cond(
-                    valid, lambda : make_move(pegs, from_peg, to_peg), lambda : pegs
+                    valid, lambda: make_move(pegs, from_peg, to_peg), lambda: pegs
                 )
 
                 # Cost is 1 if valid, infinity if invalid
-                cost = jax.lax.cond(
-                    valid, lambda : jnp.array(1.0), lambda : jnp.array(jnp.inf)
-                )
+                cost = jax.lax.cond(valid, lambda: jnp.array(1.0), lambda: jnp.array(jnp.inf))
 
                 return self.State(pegs=new_pegs), cost
 

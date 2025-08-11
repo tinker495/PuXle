@@ -1,0 +1,11 @@
+(define (problem door-move-problem)
+  (:domain door-move)
+  (:objects r hall d - location)
+  (:init
+    (at r)
+    (has-key)
+    (connected r hall)
+    (connected hall r)
+  )
+  (:goal (at hall))
+)

@@ -2,9 +2,9 @@ import chex
 import jax
 import jax.numpy as jnp
 
-from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.utils.annotate import IMG_SIZE
 from puxle.utils.util import from_uint8, to_uint8
 
 # Use 16-bit unsigned integers so that problem sizes >255 are handled without overflow.
@@ -100,9 +100,7 @@ class TSP(Puzzle):
         distance_matrix = jnp.linalg.norm(points[:, None] - points[None, :], axis=-1).astype(
             jnp.float32
         )
-        start = jax.random.randint(
-            key_start, shape=(), minval=0, maxval=self.size, dtype=TYPE
-        )
+        start = jax.random.randint(key_start, shape=(), minval=0, maxval=self.size, dtype=TYPE)
         return self.SolveConfig(points=points, distance_matrix=distance_matrix, start=start)
 
     def get_neighbours(

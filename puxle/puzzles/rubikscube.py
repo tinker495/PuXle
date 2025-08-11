@@ -5,10 +5,10 @@ import jax
 import jax.numpy as jnp
 from tabulate import tabulate
 
-from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puxle.utils.util import coloring_str, to_uint8, from_uint8
+from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import coloring_str, from_uint8, to_uint8
 
 TYPE = jnp.uint8
 LINE_THICKNESS = 3
@@ -57,11 +57,11 @@ class RubiksCube(Puzzle):
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
-            
+
             @property
             def packed(self):
                 return State(faces=to_uint8(self.faces, 3))
-            
+
             @property
             def unpacked(self):
                 return State(faces=from_uint8(self.faces, raw_shape, 3))
@@ -133,14 +133,13 @@ class RubiksCube(Puzzle):
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "RubiksCube.State":
         return self._get_suffled_state(
-            solve_config,
-            solve_config.TargetState,
-            key,
-            num_shuffle=self.initial_shuffle
+            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
         )
 
     def get_target_state(self, key=None) -> "RubiksCube.State":
-        faces = jnp.repeat(jnp.arange(6)[:, None], self.size * self.size, axis=1).astype(TYPE)  # 6 faces, 3x3 each
+        faces = jnp.repeat(jnp.arange(6)[:, None], self.size * self.size, axis=1).astype(
+            TYPE
+        )  # 6 faces, 3x3 each
         return self.State(faces=faces).packed
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
@@ -152,8 +151,8 @@ class RubiksCube(Puzzle):
         def map_fn(state, axis, index, clockwise):
             return jax.lax.cond(
                 filled,
-                lambda : (self._rotate(state, axis, index, clockwise), 1.0),
-                lambda : (state, jnp.inf),
+                lambda: (self._rotate(state, axis, index, clockwise), 1.0),
+                lambda: (state, jnp.inf),
             )
 
         axis_grid, index_grid, clockwise_grid = jnp.meshgrid(
@@ -199,7 +198,7 @@ class RubiksCube(Puzzle):
         - axis: 0=x-axis, 1=y-axis, 2=z-axis
         - index: slice index (0 or 2 for 3x3 cube)
         - clockwise: 0=counterclockwise, 1=clockwise
-        
+
         For cubes larger than 3x3x3, internal slice rotations are named
         with layer numbers (e.g., L2, R2 for 4x4x4 cube).
         """
@@ -208,34 +207,32 @@ class RubiksCube(Puzzle):
         axis = action // (num_indices * 2)
         index = (action // 2) % num_indices
         clockwise = action % 2
-        
+
         # Map (axis, index) to face using the same logic as _rotate method
         actual_index = self.index_grid[index]
-        
+
         if self.size <= 3:
             # For 3x3x3 and smaller cubes, use the original logic
             is_edge = jnp.isin(actual_index, jnp.array([0, self.size - 1]))
-            switch_num = jnp.where(
-                is_edge, 1 + 2 * axis + actual_index // (self.size - 1), 0
-            )
-            
+            switch_num = jnp.where(is_edge, 1 + 2 * axis + actual_index // (self.size - 1), 0)
+
             # Map switch_num to face string
             face_map = {
-                1: "left",    # axis=0, index=0
-                2: "right",   # axis=0, index=2 (for size=3)
-                3: "down",    # axis=1, index=0
-                4: "up",      # axis=1, index=2 (for size=3)
-                5: "front",   # axis=2, index=0
-                6: "back",    # axis=2, index=2 (for size=3)
+                1: "left",  # axis=0, index=0
+                2: "right",  # axis=0, index=2 (for size=3)
+                3: "down",  # axis=1, index=0
+                4: "up",  # axis=1, index=2 (for size=3)
+                5: "front",  # axis=2, index=0
+                6: "back",  # axis=2, index=2 (for size=3)
             }
-            
+
             face_str = face_map.get(int(switch_num), "slice") if switch_num > 0 else "slice"
         else:
             # For cubes larger than 3x3x3, use layer-based naming
             # Define face name pairs for each axis: (negative_direction, positive_direction)
             face_pairs = [("L", "R"), ("D", "U"), ("F", "B")]
             negative_face, positive_face = face_pairs[axis]
-            
+
             # Determine which face this slice is closer to and calculate layer number
             mid_point = self.size / 2
             if actual_index < mid_point:
@@ -246,10 +243,10 @@ class RubiksCube(Puzzle):
                 # Closer to positive direction face (R, U, B)
                 face_name = positive_face
                 layer_num = self.size - actual_index
-            
+
             # For layer 1, don't include the number
             face_str = face_name if layer_num == 1 else f"{face_name}{layer_num}"
-        
+
         direction = "cw" if clockwise else "ccw"
         return f"{face_str}_{direction}"
 
@@ -528,6 +525,7 @@ class RubiksCube(Puzzle):
 
         return img_func
 
+
 class RubiksCubeRandom(RubiksCube):
     """
     This class is a extension of RubiksCube, it will generate the state with random moves.
@@ -543,7 +541,6 @@ class RubiksCubeRandom(RubiksCube):
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         solve_config = super().get_solve_config(key, data)
         solve_config.TargetState = self._get_suffled_state(
-            solve_config, solve_config.TargetState, key,
-            num_shuffle=100
+            solve_config, solve_config.TargetState, key, num_shuffle=100
         )
         return solve_config

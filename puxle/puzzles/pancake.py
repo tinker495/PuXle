@@ -3,9 +3,9 @@ import jax
 import jax.numpy as jnp
 from termcolor import colored
 
-from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.utils.annotate import IMG_SIZE
 
 TYPE = jnp.uint8
 
@@ -240,8 +240,8 @@ class PancakeSorting(Puzzle):
         def map_fn(flip_pos, filled):
             next_stack, cost = jax.lax.cond(
                 filled,
-                lambda : (flip_stack(stack, flip_pos), 1.0),
-                lambda : (stack, jnp.inf),
+                lambda: (flip_stack(stack, flip_pos), 1.0),
+                lambda: (stack, jnp.inf),
             )
             return next_stack, cost
 
