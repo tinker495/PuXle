@@ -3,9 +3,9 @@ import jax
 import jax.numpy as jnp
 from termcolor import colored
 
-from puxle.utils.annotate import IMG_SIZE
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.utils.annotate import IMG_SIZE
 from puxle.utils.util import from_uint8, to_uint8
 
 TYPE = jnp.uint8
@@ -107,7 +107,7 @@ class LightsOut(Puzzle):
 
         def map_fn(action, filled):
             next_board, cost = jax.lax.cond(
-                filled, lambda : (flip(board, action), 1.0), lambda : (board, jnp.inf)
+                filled, lambda: (flip(board, action), 1.0), lambda: (board, jnp.inf)
             )
             next_state = self.State(board=next_board).packed
             return next_state, cost
@@ -189,6 +189,7 @@ class LightsOut(Puzzle):
             return img
 
         return img_func
+
 
 class LightsOutRandom(LightsOut):
     """

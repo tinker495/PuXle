@@ -105,7 +105,7 @@ class Puzzle(ABC):
 
         if self.action_size is None:
             self.action_size = self._get_action_size()
-            
+
         inv_map = self.inverse_action_map
         if inv_map is not None:
             # _inverse_action_permutation is an array of indices such that
@@ -349,7 +349,9 @@ class Puzzle(ABC):
         self, solve_config: "Puzzle.SolveConfig", init_state: "Puzzle.State", key, num_shuffle
     ):
         key, subkey = jax.random.split(key)
-        num_shuffle += jax.random.randint(subkey, (), 0, 2)  # add a random 1 to 0 to the initial shuffle.
+        num_shuffle += jax.random.randint(
+            subkey, (), 0, 2
+        )  # add a random 1 to 0 to the initial shuffle.
 
         def cond_fun(loop_state):
             iteration_count, _, _, _ = loop_state

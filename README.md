@@ -64,10 +64,7 @@ import jax.numpy as jnp
 from puxle import PDDL
 
 # Initialize PDDL planning domain
-pddl_env = PDDL(
-    domain_file="path/to/domain.pddl",
-    problem_file="path/to/problem.pddl"
-)
+pddl_env = PDDL(domain_file="path/to/domain.pddl", problem_file="path/to/problem.pddl")
 
 # Get initial state and goal configuration
 solve_config, initial_state = pddl_env.get_inits()
@@ -171,50 +168,50 @@ print(f"True atoms in state: {true_atoms}")
 import jax.numpy as jnp
 from puxle import Puzzle, state_dataclass, FieldDescriptor
 
+
 class CustomPuzzle(Puzzle):
     action_size = 4  # Number of possible actions
-    
+
     def define_state_class(self):
         @state_dataclass
         class State:
             position: FieldDescriptor[jnp.ndarray]  # Current position
-            
+
         return State
-    
+
     def get_solve_config(self, key=None, data=None):
         # Define target configuration
         return self.SolveConfig(TargetState=self.State(position=jnp.array([0, 0])))
-    
+
     def get_initial_state(self, solve_config, key=None, data=None):
         # Define initial state
         return self.State(position=jnp.array([5, 5]))
-    
+
     def get_neighbours(self, solve_config, state, filled=True):
         # Define valid moves: up, down, left, right
         moves = jnp.array([[0, 1], [0, -1], [-1, 0], [1, 0]])
         new_positions = state.position[None, :] + moves
-        
+
         # Create next states
-        next_states = jax.tree_util.tree_map(
-            lambda x: jnp.repeat(x[None, :], 4, axis=0), state
-        )
+        next_states = jax.tree_util.tree_map(lambda x: jnp.repeat(x[None, :], 4, axis=0), state)
         next_states = next_states.replace(position=new_positions)
-        
+
         # All moves have cost 1
         costs = jnp.ones(4)
-        
+
         return next_states, costs
-    
+
     def is_solved(self, solve_config, state):
         # Check if current state matches target
         return jnp.array_equal(state.position, solve_config.TargetState.position)
-    
+
     def get_string_parser(self):
         # Required: Return function to convert state to string
         def string_parser(state):
             return f"Position: ({state.position[0]}, {state.position[1]})"
+
         return string_parser
-    
+
     def get_img_parser(self):
         # Required: Return function to convert state to image array
         def img_parser(state):
@@ -226,6 +223,7 @@ class CustomPuzzle(Puzzle):
             y = jnp.clip(y, 0, 9)
             grid = grid.at[y, x].set(jnp.array([1.0, 0.0, 0.0]))  # Red dot
             return grid
+
         return img_parser
 ```
 

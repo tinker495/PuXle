@@ -9,7 +9,7 @@ from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclas
 
 __all__ = [
     "Puzzle",
-    "PuzzleState", 
+    "PuzzleState",
     "FieldDescriptor",
     "state_dataclass",
 ]

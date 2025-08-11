@@ -1,1 +1,1 @@
-# Sokoban image assets 
+# Sokoban image assets

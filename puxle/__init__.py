@@ -2,22 +2,22 @@
 PuXle: Parallelized Puzzles with JAX
 
 A high-performance library for parallelized puzzle environments built on JAX.
-Provides a collection of classic puzzles optimized for AI research, reinforcement learning, 
+Provides a collection of classic puzzles optimized for AI research, reinforcement learning,
 and search algorithms.
 """
 
 # Core framework
-from puxle.core import Puzzle, PuzzleState, FieldDescriptor, state_dataclass
+from puxle.core import FieldDescriptor, Puzzle, PuzzleState, state_dataclass
 
 # All puzzle implementations
 from puxle.puzzles import (
+    TSP,
     DotKnot,
-    TowerOfHanoi,
     LightsOut,
     LightsOutRandom,
     Maze,
-    Room,
     PancakeSorting,
+    Room,
     RubiksCube,
     RubiksCubeRandom,
     SlidePuzzle,
@@ -25,8 +25,8 @@ from puxle.puzzles import (
     SlidePuzzleRandom,
     Sokoban,
     SokobanHard,
-    TSP,
     TopSpin,
+    TowerOfHanoi,
 )
 
 __version__ = "0.1.0"
@@ -34,7 +34,7 @@ __version__ = "0.1.0"
 __all__ = [
     # Core framework
     "Puzzle",
-    "PuzzleState", 
+    "PuzzleState",
     "FieldDescriptor",
     "state_dataclass",
     # Puzzle implementations
