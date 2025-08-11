@@ -2,7 +2,7 @@
   <img src="images/PuXle.svg" alt="PuXle Logo" width="500">
 </div>
 
-# PuXle: Planning using JAX-based Learning Environments
+# **PuXle**: **P**lanning **u**sing ja**X**-based **l**earning **e**nvironments
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 

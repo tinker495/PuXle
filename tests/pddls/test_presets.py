@@ -9,6 +9,9 @@ class TestPDDLPresets:
         [
             ("blocksworld", "bw-S-01"),
             ("gripper", "gr-S-01"),
+            ("logistics", "lg-S-01"),
+            ("rovers", "rv-S-01"),
+            ("satellite", "st-S-01"),
         ],
     )
     def test_from_preset_loads_and_runs(self, domain, problem_basename):

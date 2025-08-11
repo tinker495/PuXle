@@ -48,11 +48,20 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
     "domain, problem, max_depth",
     [
         ("blocksworld", "bw-S-01", 6),
-        ("blocksworld", "bw-S-02", 8),
-        ("blocksworld", "bw-S-03", 12),
+        ("blocksworld", "bw-S-02", 10),
+        ("blocksworld", "bw-S-03", 16),
         ("gripper", "gr-S-01", 8),
         ("gripper", "gr-S-02", 12),
         ("gripper", "gr-S-03", 16),
+        ("logistics", "lg-S-01", 12),
+        ("logistics", "lg-S-02", 18),
+        ("logistics", "lg-S-03", 22),
+        ("rovers", "rv-S-01", 10),
+        ("rovers", "rv-S-02", 16),
+        ("rovers", "rv-S-03", 22),
+        ("satellite", "st-S-01", 8),
+        ("satellite", "st-S-02", 14),
+        ("satellite", "st-S-03", 18),
     ],
 )
 def test_presets_bfs_solves_within_bounds(domain, problem, max_depth):

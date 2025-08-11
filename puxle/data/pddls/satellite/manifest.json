@@ -1,0 +1,13 @@
+{
+  "domain": "satellite",
+  "requirements": [":strips", ":typing"],
+  "scales": {
+    "S": {"satellites": 1, "instruments": [1,2], "targets": [1,2,3], "count": 3}
+  },
+  "problems": [
+    {"name": "st-S-01", "path": "problems/st-S-01.pddl", "scale": "S"},
+    {"name": "st-S-02", "path": "problems/st-S-02.pddl", "scale": "S"},
+    {"name": "st-S-03", "path": "problems/st-S-03.pddl", "scale": "S"}
+  ],
+  "notes": "Minimal STRIPS Satellite variant with turn-to, calibrate, and take-image."
+}
