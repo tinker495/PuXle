@@ -11,6 +11,28 @@ from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import from_uint8, to_uint8
 
+# Refactored helpers
+from .type_system import (
+    collect_type_hierarchy,
+    extract_objects_by_type as ts_extract_objects_by_type,
+    select_most_specific_types as ts_select_most_specific_types,
+)
+from .grounding import ground_actions as gr_ground_actions, ground_predicates as gr_ground_predicates
+from .masks import (
+    build_goal_mask as mk_build_goal_mask,
+    build_initial_state as mk_build_initial_state,
+    build_masks as mk_build_masks,
+    extract_goal_conditions as mk_extract_goal_conditions,
+)
+from .formatting import (
+    action_to_string as fmt_action_to_string,
+    build_label_color_maps,
+    build_solve_config_string_parser,
+    build_state_string_parser,
+    split_atom as fmt_split_atom,
+)
+from .state_defs import build_solve_config_class, build_state_class
+
 
 class PDDL(Puzzle):
     """
@@ -103,77 +125,15 @@ class PDDL(Puzzle):
         self._build_label_color_map()
 
     def _build_label_color_map(self) -> None:
-        """Assign deterministic colors to action names and predicate names for rich visualization."""
-        labels = set()
-        try:
-            for action in getattr(self.domain, "actions", []) or []:
-                if hasattr(action, "name"):
-                    labels.add(action.name)
-            for predicate in getattr(self.domain, "predicates", []) or []:
-                if hasattr(predicate, "name"):
-                    labels.add(predicate.name)
-        except Exception:
-            # Best-effort; leave empty mapping on failure
-            labels = set()
-
-        # A long, visually distinct palette of rich color names
-        palette = [
-            "cyan",
-            "magenta",
-            "green",
-            "yellow",
-            "blue",
-            "bright_cyan",
-            "bright_magenta",
-            "bright_green",
-            "bright_yellow",
-            "bright_blue",
-            "white",
-            "bright_white",
-            "deep_sky_blue1",
-            "plum1",
-            "gold1",
-            "turquoise2",
-            "spring_green2",
-            "orchid",
-            "dodger_blue2",
-            "sandy_brown",
-        ]
-
-        label_color_map = {}
-        for idx, label in enumerate(sorted(labels)):
-            label_color_map[label] = palette[idx % len(palette)]
-
-        # Fallback default color
-        label_color_map.setdefault("default", "white")
+        """Assign deterministic colors to action and predicate names (delegated)."""
+        label_color_map, label_termcolor_map = build_label_color_maps(self.domain)
         self._label_color_map = label_color_map
-
-        # Build a termcolor-compatible palette mapping (limited color set)
-        tc_palette = [
-            "cyan",
-            "magenta",
-            "green",
-            "yellow",
-            "blue",
-            "white",
-            "red",
-        ]
-        label_termcolor_map = {}
-        for idx, label in enumerate(sorted(labels)):
-            label_termcolor_map[label] = tc_palette[idx % len(tc_palette)]
-        label_termcolor_map.setdefault("default", "white")
         self._label_termcolor_map = label_termcolor_map
 
     @staticmethod
     def _split_atom(atom_str: str) -> tuple[str, list[str]]:
         """Split an atom string like "(pred a b)" into ("pred", ["a", "b"])."""
-        content = atom_str
-        if content.startswith("(") and content.endswith(")"):
-            content = content[1:-1]
-        parts = content.split()
-        if not parts:
-            return "", []
-        return parts[0], parts[1:]
+        return fmt_split_atom(atom_str)
 
     # -------------------------
     # Type hierarchy utilities
@@ -181,177 +141,35 @@ class PDDL(Puzzle):
     def _collect_type_hierarchy(
         self,
     ) -> tuple[dict[str, str], dict[str, set[str]], dict[str, set[str]]]:
-        """Extract best-effort type hierarchy from the domain.
-
-        Returns (parent, ancestors, descendants) where:
-        - parent: type -> immediate parent
-        - ancestors: type -> transitive set of ancestors
-        - descendants: type -> transitive set of descendants
-        """
-        parent: dict[str, str] = {}
-        try:
-            types_obj = getattr(self.domain, "types", None)
-            if isinstance(types_obj, dict):
-                for sub_t, par_t in types_obj.items():
-                    if sub_t and par_t and sub_t != par_t:
-                        parent[sub_t] = par_t
-            # Some parsers expose a separate mapping
-            if not parent:
-                th = getattr(self.domain, "type_hierarchy", None)
-                if isinstance(th, dict):
-                    for sub_t, par_t in th.items():
-                        if sub_t and par_t and sub_t != par_t:
-                            parent[sub_t] = par_t
-        except Exception:
-            parent = {}
-
-        ancestors: dict[str, set[str]] = {}
-        descendants: dict[str, set[str]] = {}
-        all_types: set[str] = set(parent.keys()) | set(parent.values())
-
-        for t in all_types:
-            ancestors[t] = set()
-            p = parent.get(t)
-            while p is not None and p not in ancestors[t]:
-                ancestors[t].add(p)
-                p = parent.get(p)
-
-        for t in all_types:
-            descendants[t] = set()
-        for t, ancs in ancestors.items():
-            for a in ancs:
-                descendants.setdefault(a, set()).add(t)
-
-        return parent, ancestors, descendants
+        """Extract type hierarchy from the domain (delegated)."""
+        return collect_type_hierarchy(self.domain)
 
     def _select_most_specific_types(self, type_tags: set[str]) -> list[str]:
-        """Keep the most specific types from a set of tags using the hierarchy.
-
-        Drops 'object' when more specific tags are present and removes any tag
-        that is an ancestor of another tag in the same set.
-        """
-        if not type_tags:
-            return ["object"]
-
+        """Keep the most specific types from a set of tags using the hierarchy (delegated)."""
         if not hasattr(self, "_type_hierarchy_cache"):
             self._type_hierarchy_cache = self._collect_type_hierarchy()
-        _, ancestors, descendants = self._type_hierarchy_cache
-
-        tags = set(type_tags)
-        if "object" in tags and len(tags) > 1:
-            tags.discard("object")
-
-        result: list[str] = []
-        for t in tags:
-            desc = descendants.get(t, set())
-            if not any((other in desc) for other in tags if other != t):
-                result.append(t)
-        if not result:
-            result = sorted(tags)
-        return result
+        return ts_select_most_specific_types(type_tags, self._type_hierarchy_cache)
 
     def _extract_objects_by_type(self) -> Dict[str, List[str]]:
-        """Extract objects grouped by types, respecting hierarchy if available."""
-        objects_by_type: dict[str, list[str]] = {}
-        direct_by_type: dict[str, list[str]] = {}
-
+        """Extract objects grouped by types, respecting hierarchy (delegated)."""
         if not hasattr(self, "_type_hierarchy_cache"):
             self._type_hierarchy_cache = self._collect_type_hierarchy()
-        parent, ancestors, descendants = self._type_hierarchy_cache
-
-        # Handle untyped objects
-        if not hasattr(self.problem, "objects") or not self.problem.objects:
-            objects_by_type["object"] = []
-        else:
-            # Handle different object container types
-            if isinstance(self.problem.objects, dict):
-                # If objects is a dict mapping type -> object list
-                for obj_type, obj_list in self.problem.objects.items():
-                    if obj_type not in direct_by_type:
-                        direct_by_type[obj_type] = []
-                    for obj in obj_list:
-                        obj_name = getattr(obj, "name", str(obj))
-                        direct_by_type[obj_type].append(obj_name)
-                        direct_by_type.setdefault("object", []).append(obj_name)
-            else:
-                # If objects is a set-like container (frozenset, set, list)
-                for obj in self.problem.objects:
-                    obj_name = getattr(obj, "name", str(obj))
-                    # Extract type from type_tags
-                    if hasattr(obj, "type_tags") and obj.type_tags:
-                        for t in self._select_most_specific_types(set(obj.type_tags)):
-                            direct_by_type.setdefault(t, []).append(obj_name)
-                        direct_by_type.setdefault("object", []).append(obj_name)
-                    else:
-                        direct_by_type.setdefault("object", []).append(obj_name)
-        # Expand direct to include descendants under supertypes
-        if direct_by_type:
-            # Initialize with direct entries (deduped)
-            for t, objs in direct_by_type.items():
-                seen = set()
-                deduped = []
-                for o in objs:
-                    if o not in seen:
-                        seen.add(o)
-                        deduped.append(o)
-                objects_by_type[t] = deduped
-
-            all_types = set(direct_by_type.keys()) | set(ancestors.keys()) | set(descendants.keys())
-            for t in sorted(all_types):
-                base = list(objects_by_type.get(t, []))
-                seen = set(base)
-                for d in sorted(descendants.get(t, set())):
-                    for o in direct_by_type.get(d, []):
-                        if o not in seen:
-                            seen.add(o)
-                            base.append(o)
-                objects_by_type[t] = base
-
-        return objects_by_type
+        return ts_extract_objects_by_type(self.problem, self._type_hierarchy_cache)
 
     def _ground_predicates(self) -> Tuple[List[str], Dict[str, int]]:
-        """Ground all predicates to create atom universe."""
-        grounded_atoms = []
-        atom_to_idx = {}
-
-        # Get all predicates from domain
-        predicates = self.domain.predicates
-
-        for predicate in predicates:
-            pred_name = predicate.name
-            # Extract parameter types from terms
-            param_types = []
-            for term in predicate.terms:
-                if hasattr(term, "type_tags") and term.type_tags:
-                    selected = self._select_most_specific_types(set(term.type_tags))
-                    if len(selected) == 1:
-                        param_types.append(selected[0])
-                    else:
-                        param_types.append(selected)
-                else:
-                    param_types.append("object")  # Default type
-
-            # Generate all type-consistent object combinations
-            type_combinations = self._get_type_combinations(param_types)
-
-            for obj_combination in type_combinations:
-                # Create grounded atom string
-                atom_str = f"({pred_name} {' '.join(obj_combination)})"
-                grounded_atoms.append(atom_str)
-                atom_to_idx[atom_str] = len(grounded_atoms) - 1
-
-        return grounded_atoms, atom_to_idx
+        """Ground all predicates to create atom universe (delegated)."""
+        if not hasattr(self, "_type_hierarchy_cache"):
+            self._type_hierarchy_cache = self._collect_type_hierarchy()
+        return gr_ground_predicates(self.domain, self.objects_by_type, self._type_hierarchy_cache)
 
     def _get_type_combinations(self, param_types: List[str]) -> List[List[str]]:
-        """Get all valid object combinations for given parameter types."""
+        """Deprecated: combinations are now handled in the delegated grounding module."""
+        # Backward-compatible fallback using local logic (kept for safety if called elsewhere)
         if not param_types:
             return [[]]
-
-        combinations = []
+        combinations: list[list[str]] = []
         first_type = param_types[0]
         remaining_types = param_types[1:]
-
-        # Get objects of the first type (supports union types)
         if isinstance(first_type, (list, tuple, set)):
             seen_union: set[str] = set()
             available_objects: list[str] = []
@@ -361,170 +179,42 @@ class PDDL(Puzzle):
                         seen_union.add(o)
                         available_objects.append(o)
         else:
-            available_objects = self.objects_by_type.get(first_type, [])
-        # If there are no objects of the required type, there are no valid combinations
+            available_objects = list(self.objects_by_type.get(first_type, []))
         if not available_objects:
             return []
-
-        # Recursively get combinations for remaining types
         sub_combinations = self._get_type_combinations(remaining_types)
-
         for obj in available_objects:
             for sub_combo in sub_combinations:
                 combinations.append([obj] + sub_combo)
-
         return combinations
 
     def _ground_actions(self) -> Tuple[List[Dict], Dict[str, int]]:
-        """Ground all actions to create action universe."""
-        grounded_actions = []
-        action_to_idx = {}
-
-        for action in self.domain.actions:
-            action_name = action.name
-            # Extract parameter types from parameters
-            param_types = []
-            for param in action.parameters:
-                if hasattr(param, "type_tags") and param.type_tags:
-                    selected = self._select_most_specific_types(set(param.type_tags))
-                    if len(selected) == 1:
-                        param_types.append(selected[0])
-                    else:
-                        param_types.append(selected)
-                else:
-                    param_types.append("object")  # Default type
-
-            # Generate all type-consistent parameter combinations
-            param_combinations = self._get_type_combinations(param_types)
-
-            for param_combo in param_combinations:
-                # Get parameter names for this action
-                param_names = [param.name for param in action.parameters]
-
-                # Create grounded action
-                grounded_action = {
-                    "name": action_name,
-                    "parameters": param_combo,
-                    "preconditions": self._ground_formula(
-                        action.precondition, param_combo, param_names
-                    ),
-                    "effects": self._ground_effects(action.effect, param_combo, param_names),
-                }
-
-                action_str = f"({action_name} {' '.join(param_combo)})"
-                grounded_actions.append(grounded_action)
-                action_to_idx[action_str] = len(grounded_actions) - 1
-
-        return grounded_actions, action_to_idx
+        """Ground all actions to create action universe (delegated)."""
+        if not hasattr(self, "_type_hierarchy_cache"):
+            self._type_hierarchy_cache = self._collect_type_hierarchy()
+        return gr_ground_actions(self.domain, self.objects_by_type, self._type_hierarchy_cache)
 
     def _ground_formula(
         self, formula, param_substitution: List[str], param_names: List[str]
     ) -> List[str]:
-        """Ground a formula (precondition) with parameter substitution."""
-        if formula is None:
-            return []
+        """Deprecated: delegated to grounding module; retained for safety."""
+        from .grounding import _ground_formula as _gf
 
-        # Handle simple atomic formulas
-        if hasattr(formula, "name"):
-            pred_name = formula.name
-            args = [getattr(arg, "name", str(arg)) for arg in formula.terms]
-
-            # Apply parameter substitution
-            substituted_args = []
-            for arg in args:
-                if arg in param_names:
-                    # This is a parameter, substitute
-                    param_idx = param_names.index(arg)
-                    if param_idx < len(param_substitution):
-                        substituted_args.append(param_substitution[param_idx])
-                    else:
-                        substituted_args.append(arg)  # Keep original if index out of bounds
-                else:
-                    # This is a constant
-                    substituted_args.append(arg)
-
-            return [f"({pred_name} {' '.join(substituted_args)})"]
-
-        # Handle compound formulas (AND, OR, etc.)
-        if hasattr(formula, "parts"):
-            grounded_parts = []
-            for part in formula.parts:
-                grounded_parts.extend(self._ground_formula(part, param_substitution, param_names))
-            return grounded_parts
-
-        # Handle And/Or objects
-        if hasattr(formula, "operands"):
-            grounded_parts = []
-            for operand in formula.operands:
-                grounded_parts.extend(
-                    self._ground_formula(operand, param_substitution, param_names)
-                )
-            return grounded_parts
-
-        return []
+        return _gf(formula, param_substitution, param_names)
 
     def _ground_effects(
         self, effect, param_substitution: List[str], param_names: List[str]
     ) -> Tuple[List[str], List[str]]:
-        """Ground effects with parameter substitution, return (add_effects, delete_effects)."""
-        add_effects: List[str] = []
-        delete_effects: List[str] = []
+        """Deprecated: delegated to grounding module; retained for safety."""
+        from .grounding import _ground_effects as _ge
 
-        if effect is None:
-            return add_effects, delete_effects
-
-        # Handle conjunctions (And) represented via parts or operands
-        if hasattr(effect, "parts") or hasattr(effect, "operands"):
-            parts = getattr(effect, "parts", []) or getattr(effect, "operands", [])
-            for part in parts:
-                part_add, part_delete = self._ground_effects(part, param_substitution, param_names)
-                add_effects.extend(part_add)
-                delete_effects.extend(part_delete)
-            return add_effects, delete_effects
-
-        # Handle negation (Not)
-        if hasattr(effect, "argument"):
-            grounded = self._ground_formula(effect.argument, param_substitution, param_names)
-            if grounded:
-                delete_effects.append(grounded[0])
-            return add_effects, delete_effects
-
-        # Handle atomic positive literals
-        if hasattr(effect, "name") and hasattr(effect, "terms"):
-            grounded = self._ground_formula(effect, param_substitution, param_names)
-            if grounded:
-                add_effects.append(grounded[0])
-            return add_effects, delete_effects
-
-        return add_effects, delete_effects
+        return _ge(effect, param_substitution, param_names)
 
     def _build_masks(self):
-        """Build JAX arrays for precondition, add, and delete masks."""
-        # Initialize masks
-        pre_mask = jnp.zeros((self.num_actions, self.num_atoms), dtype=jnp.bool_)
-        add_mask = jnp.zeros((self.num_actions, self.num_atoms), dtype=jnp.bool_)
-        del_mask = jnp.zeros((self.num_actions, self.num_atoms), dtype=jnp.bool_)
-
-        # Fill masks based on grounded actions
-        for action_idx, action in enumerate(self.grounded_actions):
-            # Preconditions
-            for precondition in action["preconditions"]:
-                if precondition in self.atom_to_idx:
-                    atom_idx = self.atom_to_idx[precondition]
-                    pre_mask = pre_mask.at[action_idx, atom_idx].set(True)
-
-            # Add effects
-            for add_effect in action["effects"][0]:  # add_effects
-                if add_effect in self.atom_to_idx:
-                    atom_idx = self.atom_to_idx[add_effect]
-                    add_mask = add_mask.at[action_idx, atom_idx].set(True)
-
-            # Delete effects
-            for del_effect in action["effects"][1]:  # delete_effects
-                if del_effect in self.atom_to_idx:
-                    atom_idx = self.atom_to_idx[del_effect]
-                    del_mask = del_mask.at[action_idx, atom_idx].set(True)
-
+        """Build JAX arrays for precondition, add, and delete masks (delegated)."""
+        pre_mask, add_mask, del_mask = mk_build_masks(
+            self.grounded_actions, self.atom_to_idx, self.num_atoms
+        )
         self.pre_mask = pre_mask
         self.add_mask = add_mask
         self.del_mask = del_mask
@@ -534,105 +224,28 @@ class PDDL(Puzzle):
         self._build_goal_mask()
 
     def _build_initial_state(self):
-        """Build initial state as boolean array."""
-        init_state = jnp.zeros(self.num_atoms, dtype=jnp.bool_)
-
-        # Set initial facts to True
-        for fact in self.problem.init:
-            fact_str = (
-                f"({fact.name} {' '.join([getattr(arg, 'name', str(arg)) for arg in fact.terms])})"
-            )
-            if fact_str in self.atom_to_idx:
-                atom_idx = self.atom_to_idx[fact_str]
-                init_state = init_state.at[atom_idx].set(True)
-
-        self.init_state = init_state
+        """Build initial state as boolean array (delegated)."""
+        self.init_state = mk_build_initial_state(self.problem, self.atom_to_idx, self.num_atoms)
 
     def _build_goal_mask(self):
-        """Build goal mask for conjunctive positive goals."""
-        goal_mask = jnp.zeros(self.num_atoms, dtype=jnp.bool_)
-
-        # Extract goal conditions
-        goal_conditions = self._extract_goal_conditions(self.problem.goal)
-
-        for condition in goal_conditions:
-            if condition in self.atom_to_idx:
-                atom_idx = self.atom_to_idx[condition]
-                goal_mask = goal_mask.at[atom_idx].set(True)
-
-        self.goal_mask = goal_mask
+        """Build goal mask for conjunctive positive goals (delegated)."""
+        self.goal_mask = mk_build_goal_mask(self.problem, self.atom_to_idx, self.num_atoms)
 
     def _extract_goal_conditions(self, goal) -> List[str]:
-        """Extract atomic conditions from goal formula."""
-        if goal is None:
-            return []
-
-        # Handle simple atomic goals
-        if hasattr(goal, "name"):
-            return [
-                f"({goal.name} {' '.join([getattr(arg, 'name', str(arg)) for arg in goal.terms])})"
-            ]
-
-        # Handle compound goals (AND, OR, etc.)
-        if hasattr(goal, "parts"):
-            conditions = []
-            for part in goal.parts:
-                conditions.extend(self._extract_goal_conditions(part))
-            return conditions
-
-        # Handle And/Or objects represented with `operands`
-        if hasattr(goal, "operands"):
-            conditions = []
-            for operand in goal.operands:
-                conditions.extend(self._extract_goal_conditions(operand))
-            return conditions
-
-        return []
+        """Extract atomic conditions from goal formula (delegated)."""
+        return mk_extract_goal_conditions(goal)
 
     def define_state_class(self) -> PuzzleState:
         """Define state class with packed atoms."""
+        # Delegate to builder for clarity
         str_parser = self.get_string_parser()
-        num_atoms = self.num_atoms
-
-        # Calculate packed size
-        packed_size = (self.num_atoms + 7) // 8  # Round up for bit packing
-        packed_atoms = to_uint8(self.init_state, 1)
-
-        @state_dataclass
-        class State:
-            atoms: FieldDescriptor[jnp.uint8, (packed_size,), packed_atoms]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
-
-            @property
-            def packed(self):
-                return State(atoms=to_uint8(self.unpacked_atoms, 1))
-
-            @property
-            def unpacked(self):
-                # Keep structural contract; boolean view is provided by `unpacked_atoms`.
-                return self
-
-            @property
-            def unpacked_atoms(self):
-                """Get boolean view of atoms for convenience."""
-                return from_uint8(self.atoms, (num_atoms,), 1)
-
-        return State
+        return build_state_class(self, self.num_atoms, self.init_state, str_parser)
 
     def define_solve_config_class(self) -> PuzzleState:
         """Define solve config with goal mask instead of target state."""
+        # Delegate to builder for clarity
         str_parser = self.get_solve_config_string_parser()
-
-        @state_dataclass
-        class SolveConfig:
-            GoalMask: FieldDescriptor[jnp.bool_, (self.num_atoms,), self.goal_mask]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
-
-        return SolveConfig
+        return build_solve_config_class(self, self.goal_mask, str_parser)
 
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
@@ -689,167 +302,7 @@ class PDDL(Puzzle):
     def get_string_parser(self) -> callable:
         """Return string parser for states. If a solve_config is provided, annotate goal atoms."""
 
-        def parser(state: "PDDL.State", solve_config: "PDDL.SolveConfig" = None, **kwargs):
-            atoms = state.unpacked_atoms
-            # Collect indices of true atoms (convert JAX bools to Python bools)
-            true_indices = [i for i in range(self.num_atoms) if bool(atoms[i])]
-            true_count = len(true_indices)
-            false_count = int(self.num_atoms - true_count)
-            density = (true_count / max(1, self.num_atoms)) * 100.0
-
-            # Optional goal context
-            goal_mask = None
-            goal_count = 0
-            goals_satisfied = 0
-            if solve_config is not None and hasattr(solve_config, "GoalMask"):
-                goal_mask = solve_config.GoalMask
-                try:
-                    goal_count = int(jnp.sum(goal_mask))
-                    goals_satisfied = int(jnp.sum(jnp.logical_and(goal_mask, atoms)))
-                except Exception:
-                    # Best-effort fallback in case GoalMask is not a jax array
-                    gm = [bool(goal_mask[i]) for i in range(self.num_atoms)]
-                    goal_count = sum(gm)
-                    goals_satisfied = sum(
-                        1 for i in range(self.num_atoms) if gm[i] and bool(atoms[i])
-                    )
-
-            # Prepare human-friendly samples (from true atoms)
-            max_show = int(kwargs.get("max_show", 12))
-            # If a goal mask is available, prioritize goal atoms at the top
-            if goal_mask is not None:
-                try:
-                    goal_true = [i for i in true_indices if bool(goal_mask[i])]
-                    non_goal_true = [i for i in true_indices if not bool(goal_mask[i])]
-                except Exception:
-                    # Best-effort fallback
-                    gm = [bool(goal_mask[i]) for i in range(self.num_atoms)]
-                    goal_true = [i for i in true_indices if gm[i]]
-                    non_goal_true = [i for i in true_indices if not gm[i]]
-                ordered_true_indices = goal_true + non_goal_true
-            else:
-                ordered_true_indices = true_indices
-
-            sample_indices = ordered_true_indices[:max_show]
-            sample_atoms = [self.grounded_atoms[i] for i in sample_indices]
-            truncated = true_count > len(sample_atoms)
-            # Also prepare raw (with parentheses) for backward-compatibility checks in tests
-            raw_sample_line = (
-                "Raw sample atoms: " + ", ".join(sample_atoms)
-                if sample_atoms
-                else "Raw sample atoms: <none>"
-            )
-
-            # Options / flags
-            show_summary = bool(kwargs.get("show_summary", False))
-            show_more = bool(kwargs.get("show_more", False))
-
-            # Try pretty formatting with Rich; gracefully fall back if unavailable
-            try:
-                from rich.console import Console
-                from rich.table import Table
-                from rich.text import Text
-
-                width = int(kwargs.get("width", 100))
-                console = Console(width=width, highlight=False, soft_wrap=True)
-
-                table = Table(title="PDDL State", header_style="bold magenta", show_lines=False)
-                table.add_column("Field", style="bold cyan", no_wrap=True)
-                table.add_column("Value")
-
-                if show_summary:
-                    table.add_row("Total atoms", str(self.num_atoms))
-                    table.add_row("True atoms", str(true_count))
-                    table.add_row("False atoms", str(false_count))
-                    table.add_row("Density", f"{density:.2f}%")
-                    if goal_mask is not None:
-                        table.add_row("Goal atoms", str(goal_count))
-                        table.add_row("Goals satisfied", f"{goals_satisfied}/{goal_count}")
-
-                # Add a section for sample true atoms
-                sample_table = Table(show_header=True, header_style="bold green")
-                sample_table.add_column("#", justify="right", no_wrap=True)
-                sample_table.add_column("Atom")
-                for row_idx, (idx, atom_str) in enumerate(
-                    zip(sample_indices, sample_atoms), start=1
-                ):
-                    label, args = self._split_atom(atom_str)
-                    color = getattr(self, "_label_color_map", {}).get(label, "white")
-                    text = Text()
-                    text.append(label, style=color)
-                    if args:
-                        text.append(" " + " ".join(args))
-                    if goal_mask is not None and bool(goal_mask[idx]):
-                        # Append only a trailing marker for goal-related atoms
-                        try:
-                            satisfied = bool(atoms[idx])
-                        except Exception:
-                            satisfied = True
-                        text.append(" - " + ("✓" if satisfied else "✗"))
-                    sample_table.add_row(str(row_idx), text)
-
-                # If truncated and not explicitly showing counts, add an ellipsis row
-                if truncated and not show_more:
-                    sample_table.add_row("", "...")
-
-                if sample_atoms:
-                    if show_summary:
-                        table.add_row("Sample true atoms", "")
-                        table.add_row("", sample_table)
-                else:
-                    if show_summary:
-                        table.add_row("Sample true atoms", "<none>")
-
-                # Indicate if there are more atoms not shown
-                if show_more:
-                    remaining = max(0, true_count - len(sample_atoms))
-                    if remaining > 0:
-                        table.add_row("More", f"... and {remaining} more true atoms")
-
-                show_header = bool(kwargs.get("header", False))
-                show_raw = bool(kwargs.get("raw", False))
-                header_line = f"State: {true_count}/{self.num_atoms} true atoms ({density:.2f}%)"
-                with console.capture() as capture:
-                    if show_summary:
-                        console.print(table)
-                    else:
-                        console.print(sample_table)
-                parts = []
-                if show_header:
-                    parts.append(header_line)
-                if show_raw:
-                    parts.append(raw_sample_line)
-                parts.append(capture.get())
-                return "\n".join(parts)
-            except Exception:
-                # Fallback simple text; default atoms-only unless summary/more requested
-                pieces: list[str] = []
-                if kwargs.get("header", False):
-                    pieces.append(
-                        f"State: {true_count}/{self.num_atoms} true atoms ({density:.2f}%)"
-                    )
-                if show_summary:
-                    pieces.append(f"Summary: true={true_count}, total={self.num_atoms}")
-                    if goal_mask is not None:
-                        pieces.append(f"Goals satisfied: {goals_satisfied}/{goal_count}")
-                # Annotated atoms list
-                annotated_atoms: list[str] = []
-                for idx, atom_str in zip(sample_indices, sample_atoms):
-                    if goal_mask is not None and bool(goal_mask[idx]):
-                        mark = "✓" if bool(atoms[idx]) else "✗"
-                        annotated_atoms.append(f"{atom_str} - {mark}")
-                    else:
-                        annotated_atoms.append(atom_str)
-                pieces.append(", ".join(annotated_atoms) if annotated_atoms else "")
-                if truncated and not show_more:
-                    pieces.append("...")
-                if show_more:
-                    remaining = max(0, true_count - len(sample_atoms))
-                    if remaining > 0:
-                        pieces.append(f"... and {remaining} more true atoms")
-                return "\n".join([p for p in pieces if p])
-
-        return parser
+        return build_state_string_parser(self)
 
     def get_img_parser(self) -> callable:
         """Return image parser for states. If a solve_config is provided, annotate goal atoms."""
@@ -890,22 +343,8 @@ class PDDL(Puzzle):
         return img_parser
 
     def action_to_string(self, action: int, colored: bool = True) -> str:
-        """Return string representation of action.
-
-        - Default (colored=False): legacy format "(name arg1 arg2)" (keeps tests stable)
-        - colored=True: parenthesis-free with termcolor on the action name
-        """
-        if 0 <= action < len(self.grounded_actions):
-            action_data = self.grounded_actions[action]
-            name = action_data["name"]
-            params = action_data["parameters"]
-            if colored:
-                color = getattr(self, "_label_termcolor_map", {}).get(name, "white")
-                colored_name = termcolor.colored(name, color)
-                params_str = " ".join(params)
-                return f"{colored_name} {params_str}" if params_str else colored_name
-            return f"({name} {' '.join(params)})"
-        return f"action_{action}"
+        """Return string representation of action (delegated)."""
+        return fmt_action_to_string(self.grounded_actions, action, getattr(self, "_label_termcolor_map", {}), colored)
 
     @property
     def has_target(self) -> bool:
@@ -925,95 +364,7 @@ class PDDL(Puzzle):
     def get_solve_config_string_parser(self) -> callable:
         """Return string parser for solve config with goal mask."""
 
-        def parser(solve_config: "PDDL.SolveConfig", **kwargs):
-            goal_mask = solve_config.GoalMask
-            goal_indices = [i for i in range(self.num_atoms) if bool(goal_mask[i])]
-            goal_count = len(goal_indices)
-            max_show = int(kwargs.get("max_show", 12))
-            sample_indices = goal_indices[:max_show]
-            sample_atoms = [self.grounded_atoms[i] for i in sample_indices]
-            raw_sample_line = (
-                "Raw sample goals: " + ", ".join(sample_atoms)
-                if sample_atoms
-                else "Raw sample goals: <none>"
-            )
-
-            # Options / flags
-            show_summary = bool(kwargs.get("show_summary", False))
-            show_more = bool(kwargs.get("show_more", False))
-
-            # Try pretty formatting with Rich; gracefully fall back if unavailable
-            try:
-                from rich.console import Console
-                from rich.table import Table
-                from rich.text import Text
-
-                width = int(kwargs.get("width", 100))
-                console = Console(width=width, highlight=False, soft_wrap=True)
-
-                table = Table(title="PDDL Solve Config (Goal Mask)", header_style="bold magenta")
-                table.add_column("Field", style="bold cyan", no_wrap=True)
-                table.add_column("Value")
-
-                if show_summary:
-                    table.add_row("Total atoms", str(self.num_atoms))
-                    table.add_row("Goal atoms", str(goal_count))
-
-                sample_table = Table(show_header=True, header_style="bold green")
-                sample_table.add_column("#", justify="right", no_wrap=True)
-                sample_table.add_column("Goal Atom")
-                for idx, atom_str in enumerate(sample_atoms, start=1):
-                    label, args = self._split_atom(atom_str)
-                    color = getattr(self, "_label_color_map", {}).get(label, "white")
-                    text = Text()
-                    text.append(label, style=color)
-                    if args:
-                        text.append(" " + " ".join(args))
-                    sample_table.add_row(str(idx), text)
-
-                if sample_atoms:
-                    if show_summary:
-                        table.add_row("Sample goals", "")
-                        table.add_row("", sample_table)
-                else:
-                    if show_summary:
-                        table.add_row("Sample goals", "<none>")
-
-                if show_more:
-                    remaining = max(0, goal_count - len(sample_atoms))
-                    if remaining > 0:
-                        table.add_row("More", f"... and {remaining} more goal atoms")
-
-                show_header = bool(kwargs.get("header", False))
-                show_raw = bool(kwargs.get("raw", False))
-                header_line = f"Goal: {goal_count} atoms"
-                with console.capture() as capture:
-                    if show_summary:
-                        console.print(table)
-                    else:
-                        console.print(sample_table)
-                parts = []
-                if show_header:
-                    parts.append(header_line)
-                if show_raw:
-                    parts.append(raw_sample_line)
-                parts.append(capture.get())
-                return "\n".join(parts)
-            except Exception:
-                # Fallback simple text; atoms-only by default
-                pieces: list[str] = []
-                if kwargs.get("header", False):
-                    pieces.append(f"Goal: {goal_count} atoms")
-                if show_summary:
-                    pieces.append(f"Goals: {goal_count}/{self.num_atoms}")
-                pieces.append(", ".join(sample_atoms) if sample_atoms else "")
-                if show_more:
-                    remaining = max(0, goal_count - len(sample_atoms))
-                    if remaining > 0:
-                        pieces.append(f"... and {remaining} more goal atoms")
-                return "\n".join([p for p in pieces if p])
-
-        return parser
+        return build_solve_config_string_parser(self)
 
     def get_solve_config_img_parser(self) -> callable:
         """Return image parser for solve config with goal mask."""
