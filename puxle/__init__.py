@@ -8,6 +8,7 @@ and search algorithms.
 
 # Core framework
 from puxle.core import FieldDescriptor, Puzzle, PuzzleState, state_dataclass
+from puxle.pddls import PDDL
 
 # All puzzle implementations
 from puxle.puzzles import (
@@ -54,4 +55,5 @@ __all__ = [
     "SokobanHard",
     "TSP",
     "TopSpin",
+    "PDDL",
 ]

@@ -1,0 +1,13 @@
+(define (problem bw-S-04)
+  (:domain blocksworld)
+  (:objects a b c d - block)
+  (:init
+    (ontable a)
+    (on b a)
+    (on c b)
+    (on d c)
+    (clear d)
+    (handempty)
+  )
+  (:goal (and (on a b) (on b c) (on c d)))
+)

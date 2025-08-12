@@ -30,6 +30,7 @@ setuptools.setup(
         "tqdm>=4.67.1",
         "numpy>=2.2.0",
         "xtructure @ git+https://github.com/tinker495/xtructure.git",
+        "pddl>=0.4.3",
     ],
     extras_require={
         "dev": [

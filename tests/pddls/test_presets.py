@@ -12,6 +12,12 @@ class TestPDDLPresets:
             ("logistics", "lg-S-01"),
             ("rovers", "rv-S-01"),
             ("satellite", "st-S-01"),
+            # Harder instances
+            ("blocksworld", "bw-S-04"),
+            ("gripper", "gr-S-04"),
+            ("logistics", "lg-S-04"),
+            ("rovers", "rv-S-04"),
+            ("satellite", "st-S-04"),
         ],
     )
     def test_from_preset_loads_and_runs(self, domain, problem_basename):
