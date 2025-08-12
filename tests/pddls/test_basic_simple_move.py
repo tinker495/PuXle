@@ -119,8 +119,8 @@ class TestPDDLWrapper:
         # Initial state should not be solved
         assert not bool(puzzle.is_solved(solve_config, initial_state))
 
-        # Check initial state string representation
-        state_str = str(initial_state)
+        # Check initial state string representation (with header/raw for deterministic text)
+        state_str = puzzle.get_string_parser()(initial_state, header=True, raw=True)
         assert "(at loc1)" in state_str
         assert "(connected loc1 loc2)" in state_str
         assert "(connected loc2 loc3)" in state_str
@@ -144,7 +144,7 @@ class TestPDDLWrapper:
         # Find move loc1->loc2 (should be applicable from init)
         move_idx = None
         for i in range(puzzle.num_actions):
-            if puzzle.action_to_string(i) == "(move loc1 loc2)":
+            if puzzle.action_to_string(i, colored=False) == "(move loc1 loc2)":
                 move_idx = i
                 break
 
@@ -153,7 +153,7 @@ class TestPDDLWrapper:
 
         # Check that taking the action yields correct result
         next_state = jax.tree_util.tree_map(lambda x: x[move_idx], neighbors)
-        next_state_str = str(next_state)
+        next_state_str = puzzle.get_string_parser()(next_state, header=True, raw=True)
 
         # Should have at loc2 and not at loc1
         assert "(at loc2)" in next_state_str
@@ -235,7 +235,7 @@ class TestPDDLWrapper:
     def test_action_to_string(self, puzzle):
         """Test action string conversion."""
         for i in range(puzzle.action_size):
-            action_str = puzzle.action_to_string(i)
+            action_str = puzzle.action_to_string(i, colored=False)
             assert isinstance(action_str, str)
             assert len(action_str) > 0
             assert action_str.startswith("(move ")
@@ -246,7 +246,7 @@ class TestPDDLWrapper:
         solve_config, initial_state = puzzle.get_inits(rng_key)
 
         # Test state string representation
-        state_str = str(initial_state)
+        state_str = puzzle.get_string_parser()(initial_state, header=True, raw=True)
         assert isinstance(state_str, str)
         assert len(state_str) > 0
         assert state_str.startswith("State:")

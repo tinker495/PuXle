@@ -175,9 +175,89 @@ class PDDL(Puzzle):
             return "", []
         return parts[0], parts[1:]
 
+    # -------------------------
+    # Type hierarchy utilities
+    # -------------------------
+    def _collect_type_hierarchy(
+        self,
+    ) -> tuple[dict[str, str], dict[str, set[str]], dict[str, set[str]]]:
+        """Extract best-effort type hierarchy from the domain.
+
+        Returns (parent, ancestors, descendants) where:
+        - parent: type -> immediate parent
+        - ancestors: type -> transitive set of ancestors
+        - descendants: type -> transitive set of descendants
+        """
+        parent: dict[str, str] = {}
+        try:
+            types_obj = getattr(self.domain, "types", None)
+            if isinstance(types_obj, dict):
+                for sub_t, par_t in types_obj.items():
+                    if sub_t and par_t and sub_t != par_t:
+                        parent[sub_t] = par_t
+            # Some parsers expose a separate mapping
+            if not parent:
+                th = getattr(self.domain, "type_hierarchy", None)
+                if isinstance(th, dict):
+                    for sub_t, par_t in th.items():
+                        if sub_t and par_t and sub_t != par_t:
+                            parent[sub_t] = par_t
+        except Exception:
+            parent = {}
+
+        ancestors: dict[str, set[str]] = {}
+        descendants: dict[str, set[str]] = {}
+        all_types: set[str] = set(parent.keys()) | set(parent.values())
+
+        for t in all_types:
+            ancestors[t] = set()
+            p = parent.get(t)
+            while p is not None and p not in ancestors[t]:
+                ancestors[t].add(p)
+                p = parent.get(p)
+
+        for t in all_types:
+            descendants[t] = set()
+        for t, ancs in ancestors.items():
+            for a in ancs:
+                descendants.setdefault(a, set()).add(t)
+
+        return parent, ancestors, descendants
+
+    def _select_most_specific_types(self, type_tags: set[str]) -> list[str]:
+        """Keep the most specific types from a set of tags using the hierarchy.
+
+        Drops 'object' when more specific tags are present and removes any tag
+        that is an ancestor of another tag in the same set.
+        """
+        if not type_tags:
+            return ["object"]
+
+        if not hasattr(self, "_type_hierarchy_cache"):
+            self._type_hierarchy_cache = self._collect_type_hierarchy()
+        _, ancestors, descendants = self._type_hierarchy_cache
+
+        tags = set(type_tags)
+        if "object" in tags and len(tags) > 1:
+            tags.discard("object")
+
+        result: list[str] = []
+        for t in tags:
+            desc = descendants.get(t, set())
+            if not any((other in desc) for other in tags if other != t):
+                result.append(t)
+        if not result:
+            result = sorted(tags)
+        return result
+
     def _extract_objects_by_type(self) -> Dict[str, List[str]]:
-        """Extract objects grouped by their types."""
-        objects_by_type = {}
+        """Extract objects grouped by types, respecting hierarchy if available."""
+        objects_by_type: dict[str, list[str]] = {}
+        direct_by_type: dict[str, list[str]] = {}
+
+        if not hasattr(self, "_type_hierarchy_cache"):
+            self._type_hierarchy_cache = self._collect_type_hierarchy()
+        parent, ancestors, descendants = self._type_hierarchy_cache
 
         # Handle untyped objects
         if not hasattr(self.problem, "objects") or not self.problem.objects:
@@ -187,24 +267,45 @@ class PDDL(Puzzle):
             if isinstance(self.problem.objects, dict):
                 # If objects is a dict mapping type -> object list
                 for obj_type, obj_list in self.problem.objects.items():
-                    if obj_type not in objects_by_type:
-                        objects_by_type[obj_type] = []
+                    if obj_type not in direct_by_type:
+                        direct_by_type[obj_type] = []
                     for obj in obj_list:
                         obj_name = getattr(obj, "name", str(obj))
-                        objects_by_type[obj_type].append(obj_name)
+                        direct_by_type[obj_type].append(obj_name)
+                        direct_by_type.setdefault("object", []).append(obj_name)
             else:
                 # If objects is a set-like container (frozenset, set, list)
                 for obj in self.problem.objects:
                     obj_name = getattr(obj, "name", str(obj))
                     # Extract type from type_tags
                     if hasattr(obj, "type_tags") and obj.type_tags:
-                        obj_type = list(obj.type_tags)[0]
+                        for t in self._select_most_specific_types(set(obj.type_tags)):
+                            direct_by_type.setdefault(t, []).append(obj_name)
+                        direct_by_type.setdefault("object", []).append(obj_name)
                     else:
-                        obj_type = "object"  # Default type
+                        direct_by_type.setdefault("object", []).append(obj_name)
+        # Expand direct to include descendants under supertypes
+        if direct_by_type:
+            # Initialize with direct entries (deduped)
+            for t, objs in direct_by_type.items():
+                seen = set()
+                deduped = []
+                for o in objs:
+                    if o not in seen:
+                        seen.add(o)
+                        deduped.append(o)
+                objects_by_type[t] = deduped
 
-                    if obj_type not in objects_by_type:
-                        objects_by_type[obj_type] = []
-                    objects_by_type[obj_type].append(obj_name)
+            all_types = set(direct_by_type.keys()) | set(ancestors.keys()) | set(descendants.keys())
+            for t in sorted(all_types):
+                base = list(objects_by_type.get(t, []))
+                seen = set(base)
+                for d in sorted(descendants.get(t, set())):
+                    for o in direct_by_type.get(d, []):
+                        if o not in seen:
+                            seen.add(o)
+                            base.append(o)
+                objects_by_type[t] = base
 
         return objects_by_type
 
@@ -222,7 +323,11 @@ class PDDL(Puzzle):
             param_types = []
             for term in predicate.terms:
                 if hasattr(term, "type_tags") and term.type_tags:
-                    param_types.append(list(term.type_tags)[0])
+                    selected = self._select_most_specific_types(set(term.type_tags))
+                    if len(selected) == 1:
+                        param_types.append(selected[0])
+                    else:
+                        param_types.append(selected)
                 else:
                     param_types.append("object")  # Default type
 
@@ -246,8 +351,17 @@ class PDDL(Puzzle):
         first_type = param_types[0]
         remaining_types = param_types[1:]
 
-        # Get objects of the first type
-        available_objects = self.objects_by_type.get(first_type, [])
+        # Get objects of the first type (supports union types)
+        if isinstance(first_type, (list, tuple, set)):
+            seen_union: set[str] = set()
+            available_objects: list[str] = []
+            for t in first_type:
+                for o in self.objects_by_type.get(t, []):
+                    if o not in seen_union:
+                        seen_union.add(o)
+                        available_objects.append(o)
+        else:
+            available_objects = self.objects_by_type.get(first_type, [])
         # If there are no objects of the required type, there are no valid combinations
         if not available_objects:
             return []
@@ -272,7 +386,11 @@ class PDDL(Puzzle):
             param_types = []
             for param in action.parameters:
                 if hasattr(param, "type_tags") and param.type_tags:
-                    param_types.append(list(param.type_tags)[0])
+                    selected = self._select_most_specific_types(set(param.type_tags))
+                    if len(selected) == 1:
+                        param_types.append(selected[0])
+                    else:
+                        param_types.append(selected)
                 else:
                     param_types.append("object")  # Default type
 
@@ -569,9 +687,9 @@ class PDDL(Puzzle):
         return jnp.all(jnp.logical_or(~goal_mask, s))
 
     def get_string_parser(self) -> callable:
-        """Return string parser for states."""
+        """Return string parser for states. If a solve_config is provided, annotate goal atoms."""
 
-        def parser(state: "PDDL.State", **kwargs):
+        def parser(state: "PDDL.State", solve_config: "PDDL.SolveConfig" = None, **kwargs):
             atoms = state.unpacked_atoms
             # Collect indices of true atoms (convert JAX bools to Python bools)
             true_indices = [i for i in range(self.num_atoms) if bool(atoms[i])]
@@ -579,7 +697,24 @@ class PDDL(Puzzle):
             false_count = int(self.num_atoms - true_count)
             density = (true_count / max(1, self.num_atoms)) * 100.0
 
-            # Prepare human-friendly samples
+            # Optional goal context
+            goal_mask = None
+            goal_count = 0
+            goals_satisfied = 0
+            if solve_config is not None and hasattr(solve_config, "GoalMask"):
+                goal_mask = solve_config.GoalMask
+                try:
+                    goal_count = int(jnp.sum(goal_mask))
+                    goals_satisfied = int(jnp.sum(jnp.logical_and(goal_mask, atoms)))
+                except Exception:
+                    # Best-effort fallback in case GoalMask is not a jax array
+                    gm = [bool(goal_mask[i]) for i in range(self.num_atoms)]
+                    goal_count = sum(gm)
+                    goals_satisfied = sum(
+                        1 for i in range(self.num_atoms) if gm[i] and bool(atoms[i])
+                    )
+
+            # Prepare human-friendly samples (from true atoms)
             max_show = int(kwargs.get("max_show", 12))
             sample_indices = true_indices[:max_show]
             sample_atoms = [self.grounded_atoms[i] for i in sample_indices]
@@ -589,6 +724,10 @@ class PDDL(Puzzle):
                 if sample_atoms
                 else "Raw sample atoms: <none>"
             )
+
+            # Options / flags
+            show_summary = bool(kwargs.get("show_summary", False))
+            show_more = bool(kwargs.get("show_more", False))
 
             # Try pretty formatting with Rich; gracefully fall back if unavailable
             try:
@@ -603,40 +742,59 @@ class PDDL(Puzzle):
                 table.add_column("Field", style="bold cyan", no_wrap=True)
                 table.add_column("Value")
 
-                table.add_row("Total atoms", str(self.num_atoms))
-                table.add_row("True atoms", str(true_count))
-                table.add_row("False atoms", str(false_count))
-                table.add_row("Density", f"{density:.2f}%")
+                if show_summary:
+                    table.add_row("Total atoms", str(self.num_atoms))
+                    table.add_row("True atoms", str(true_count))
+                    table.add_row("False atoms", str(false_count))
+                    table.add_row("Density", f"{density:.2f}%")
+                    if goal_mask is not None:
+                        table.add_row("Goal atoms", str(goal_count))
+                        table.add_row("Goals satisfied", f"{goals_satisfied}/{goal_count}")
 
                 # Add a section for sample true atoms
                 sample_table = Table(show_header=True, header_style="bold green")
                 sample_table.add_column("#", justify="right", no_wrap=True)
                 sample_table.add_column("Atom")
-                for idx, atom_str in enumerate(sample_atoms, start=1):
+                for row_idx, (idx, atom_str) in enumerate(
+                    zip(sample_indices, sample_atoms), start=1
+                ):
                     label, args = self._split_atom(atom_str)
                     color = getattr(self, "_label_color_map", {}).get(label, "white")
                     text = Text()
                     text.append(label, style=color)
                     if args:
                         text.append(" " + " ".join(args))
-                    sample_table.add_row(str(idx), text)
+                    if goal_mask is not None and bool(goal_mask[idx]):
+                        # Append only a trailing marker for goal-related atoms
+                        try:
+                            satisfied = bool(atoms[idx])
+                        except Exception:
+                            satisfied = True
+                        text.append(" - " + ("✓" if satisfied else "✗"))
+                    sample_table.add_row(str(row_idx), text)
 
                 if sample_atoms:
-                    table.add_row("Sample true atoms", "")
-                    table.add_row("", sample_table)
+                    if show_summary:
+                        table.add_row("Sample true atoms", "")
+                        table.add_row("", sample_table)
                 else:
-                    table.add_row("Sample true atoms", "<none>")
+                    if show_summary:
+                        table.add_row("Sample true atoms", "<none>")
 
                 # Indicate if there are more atoms not shown
-                remaining = max(0, true_count - len(sample_atoms))
-                if remaining > 0:
-                    table.add_row("More", f"... and {remaining} more true atoms")
+                if show_more:
+                    remaining = max(0, true_count - len(sample_atoms))
+                    if remaining > 0:
+                        table.add_row("More", f"... and {remaining} more true atoms")
 
                 show_header = bool(kwargs.get("header", False))
                 show_raw = bool(kwargs.get("raw", False))
                 header_line = f"State: {true_count}/{self.num_atoms} true atoms ({density:.2f}%)"
                 with console.capture() as capture:
-                    console.print(table)
+                    if show_summary:
+                        console.print(table)
+                    else:
+                        console.print(sample_table)
                 parts = []
                 if show_header:
                     parts.append(header_line)
@@ -645,22 +803,44 @@ class PDDL(Puzzle):
                 parts.append(capture.get())
                 return "\n".join(parts)
             except Exception:
-                # Fallback simple text
-                if true_count <= 10:
-                    return f"State: {', '.join(sample_atoms)}"
-                return (
-                    f"State: {true_count}/{self.num_atoms} true atoms "
-                    f"(showing first {min(10, len(sample_atoms))}): {', '.join(sample_atoms[:10])}..."
-                )
+                # Fallback simple text; default atoms-only unless summary/more requested
+                pieces: list[str] = []
+                if kwargs.get("header", False):
+                    pieces.append(
+                        f"State: {true_count}/{self.num_atoms} true atoms ({density:.2f}%)"
+                    )
+                if show_summary:
+                    pieces.append(f"Summary: true={true_count}, total={self.num_atoms}")
+                    if goal_mask is not None:
+                        pieces.append(f"Goals satisfied: {goals_satisfied}/{goal_count}")
+                # Annotated atoms list
+                annotated_atoms: list[str] = []
+                for idx, atom_str in zip(sample_indices, sample_atoms):
+                    if goal_mask is not None and bool(goal_mask[idx]):
+                        mark = "✓" if bool(atoms[idx]) else "✗"
+                        annotated_atoms.append(f"{atom_str} - {mark}")
+                    else:
+                        annotated_atoms.append(atom_str)
+                pieces.append(", ".join(annotated_atoms) if annotated_atoms else "")
+                if show_more:
+                    remaining = max(0, true_count - len(sample_atoms))
+                    if remaining > 0:
+                        pieces.append(f"... and {remaining} more true atoms")
+                return "\n".join([p for p in pieces if p])
 
         return parser
 
     def get_img_parser(self) -> callable:
-        """Return image parser for states."""
+        """Return image parser for states. If a solve_config is provided, annotate goal atoms."""
 
-        def img_parser(state: "PDDL.State", **kwargs):
+        def img_parser(state: "PDDL.State", solve_config: "PDDL.SolveConfig" = None, **kwargs):
             # Create a simple visualization: grid showing atom values
             atoms = state.unpacked_atoms
+
+            # Optional goal context
+            goal_mask = None
+            if solve_config is not None and hasattr(solve_config, "GoalMask"):
+                goal_mask = solve_config.GoalMask
 
             # Create a square grid
             grid_size = int(jnp.ceil(jnp.sqrt(self.num_atoms)))
@@ -670,8 +850,18 @@ class PDDL(Puzzle):
                 row = i // grid_size
                 col = i % grid_size
                 if row < grid_size and col < grid_size:
-                    # Green for true atoms, red for false
-                    color = jnp.array([0.0, 1.0, 0.0]) if atoms[i] else jnp.array([1.0, 0.0, 0.0])
+                    if goal_mask is not None and bool(goal_mask[i]):
+                        # Goal-aware coloring
+                        color = (
+                            jnp.array([0.0, 0.0, 1.0])  # blue for goal satisfied
+                            if atoms[i]
+                            else jnp.array([1.0, 1.0, 0.0])  # yellow for goal not yet satisfied
+                        )
+                    else:
+                        # Green for true atoms, red for false
+                        color = (
+                            jnp.array([0.0, 1.0, 0.0]) if atoms[i] else jnp.array([1.0, 0.0, 0.0])
+                        )
                     img = img.at[row, col].set(color)
 
             return img
@@ -727,6 +917,10 @@ class PDDL(Puzzle):
                 else "Raw sample goals: <none>"
             )
 
+            # Options / flags
+            show_summary = bool(kwargs.get("show_summary", False))
+            show_more = bool(kwargs.get("show_more", False))
+
             # Try pretty formatting with Rich; gracefully fall back if unavailable
             try:
                 from rich.console import Console
@@ -740,8 +934,9 @@ class PDDL(Puzzle):
                 table.add_column("Field", style="bold cyan", no_wrap=True)
                 table.add_column("Value")
 
-                table.add_row("Total atoms", str(self.num_atoms))
-                table.add_row("Goal atoms", str(goal_count))
+                if show_summary:
+                    table.add_row("Total atoms", str(self.num_atoms))
+                    table.add_row("Goal atoms", str(goal_count))
 
                 sample_table = Table(show_header=True, header_style="bold green")
                 sample_table.add_column("#", justify="right", no_wrap=True)
@@ -756,20 +951,26 @@ class PDDL(Puzzle):
                     sample_table.add_row(str(idx), text)
 
                 if sample_atoms:
-                    table.add_row("Sample goals", "")
-                    table.add_row("", sample_table)
+                    if show_summary:
+                        table.add_row("Sample goals", "")
+                        table.add_row("", sample_table)
                 else:
-                    table.add_row("Sample goals", "<none>")
+                    if show_summary:
+                        table.add_row("Sample goals", "<none>")
 
-                remaining = max(0, goal_count - len(sample_atoms))
-                if remaining > 0:
-                    table.add_row("More", f"... and {remaining} more goal atoms")
+                if show_more:
+                    remaining = max(0, goal_count - len(sample_atoms))
+                    if remaining > 0:
+                        table.add_row("More", f"... and {remaining} more goal atoms")
 
                 show_header = bool(kwargs.get("header", False))
                 show_raw = bool(kwargs.get("raw", False))
                 header_line = f"Goal: {goal_count} atoms"
                 with console.capture() as capture:
-                    console.print(table)
+                    if show_summary:
+                        console.print(table)
+                    else:
+                        console.print(sample_table)
                 parts = []
                 if show_header:
                     parts.append(header_line)
@@ -778,12 +979,18 @@ class PDDL(Puzzle):
                 parts.append(capture.get())
                 return "\n".join(parts)
             except Exception:
-                if goal_count <= 10:
-                    return f"Goal: {goal_count} atoms: {', '.join(sample_atoms)}"
-                return (
-                    f"Goal: {goal_count}/{self.num_atoms} atoms "
-                    f"(showing first {min(10, len(sample_atoms))}): {', '.join(sample_atoms[:10])}..."
-                )
+                # Fallback simple text; atoms-only by default
+                pieces: list[str] = []
+                if kwargs.get("header", False):
+                    pieces.append(f"Goal: {goal_count} atoms")
+                if show_summary:
+                    pieces.append(f"Goals: {goal_count}/{self.num_atoms}")
+                pieces.append(", ".join(sample_atoms) if sample_atoms else "")
+                if show_more:
+                    remaining = max(0, goal_count - len(sample_atoms))
+                    if remaining > 0:
+                        pieces.append(f"... and {remaining} more goal atoms")
+                return "\n".join([p for p in pieces if p])
 
         return parser
 

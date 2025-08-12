@@ -156,7 +156,7 @@ class TestPDDLParametric:
         puzzle = PDDL(spec.domain, spec.problem)
 
         for i in range(puzzle.action_size):
-            action_str = puzzle.action_to_string(i)
+            action_str = puzzle.action_to_string(i, colored=False)
             assert isinstance(action_str, str)
             assert len(action_str) > 0
             assert action_str.startswith("(") and action_str.endswith(")")

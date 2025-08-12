@@ -251,7 +251,7 @@ class TestPDDLEquivalence:
 
         # Check action string representations
         for i in range(puzzle.action_size):
-            our_action_str = puzzle.action_to_string(i)
+            our_action_str = puzzle.action_to_string(i, colored=False)
             ref_action = reference.grounded_actions[i]
             ref_action_str = f"({ref_action['name']} {' '.join(ref_action['parameters'])})"
 
