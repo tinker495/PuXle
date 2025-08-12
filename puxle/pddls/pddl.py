@@ -248,13 +248,9 @@ class PDDL(Puzzle):
 
         # Get objects of the first type
         available_objects = self.objects_by_type.get(first_type, [])
-
-        # Fallback to all objects if type not found (matching reference implementation)
+        # If there are no objects of the required type, there are no valid combinations
         if not available_objects:
-            all_objects = []
-            for obj_list in self.objects_by_type.values():
-                all_objects.extend(obj_list)
-            available_objects = all_objects
+            return []
 
         # Recursively get combinations for remaining types
         sub_combinations = self._get_type_combinations(remaining_types)
@@ -353,46 +349,34 @@ class PDDL(Puzzle):
         self, effect, param_substitution: List[str], param_names: List[str]
     ) -> Tuple[List[str], List[str]]:
         """Ground effects with parameter substitution, return (add_effects, delete_effects)."""
+        add_effects: List[str] = []
+        delete_effects: List[str] = []
+
         if effect is None:
-            return [], []
+            return add_effects, delete_effects
 
-        add_effects = []
-        delete_effects = []
-
-        # Handle simple effects
-        if hasattr(effect, "predicate"):
-            effect_str = self._ground_formula(effect, param_substitution, param_names)[0]
-            if hasattr(effect, "negated") and effect.negated:
-                delete_effects.append(effect_str)
-            else:
-                add_effects.append(effect_str)
-
-        # Handle Not effects
-        elif hasattr(effect, "argument"):
-            # This is a Not object
-            effect_str = self._ground_formula(effect.argument, param_substitution, param_names)[0]
-            delete_effects.append(effect_str)
-
-        # Handle compound effects
-        elif hasattr(effect, "parts"):
-            for part in effect.parts:
+        # Handle conjunctions (And) represented via parts or operands
+        if hasattr(effect, "parts") or hasattr(effect, "operands"):
+            parts = getattr(effect, "parts", []) or getattr(effect, "operands", [])
+            for part in parts:
                 part_add, part_delete = self._ground_effects(part, param_substitution, param_names)
                 add_effects.extend(part_add)
                 delete_effects.extend(part_delete)
+            return add_effects, delete_effects
 
-        # Handle And/Or effects
-        elif hasattr(effect, "operands"):
-            for operand in effect.operands:
-                part_add, part_delete = self._ground_effects(
-                    operand, param_substitution, param_names
-                )
-                add_effects.extend(part_add)
-                delete_effects.extend(part_delete)
+        # Handle negation (Not)
+        if hasattr(effect, "argument"):
+            grounded = self._ground_formula(effect.argument, param_substitution, param_names)
+            if grounded:
+                delete_effects.append(grounded[0])
+            return add_effects, delete_effects
 
-        # Handle Predicate effects (positive literals)
-        elif hasattr(effect, "name") and hasattr(effect, "terms"):
-            effect_str = self._ground_formula(effect, param_substitution, param_names)[0]
-            add_effects.append(effect_str)
+        # Handle atomic positive literals
+        if hasattr(effect, "name") and hasattr(effect, "terms"):
+            grounded = self._ground_formula(effect, param_substitution, param_names)
+            if grounded:
+                add_effects.append(grounded[0])
+            return add_effects, delete_effects
 
         return add_effects, delete_effects
 
@@ -509,7 +493,8 @@ class PDDL(Puzzle):
 
             @property
             def unpacked(self):
-                return State(atoms=from_uint8(self.atoms, (num_atoms,), 1))
+                # Keep structural contract; boolean view is provided by `unpacked_atoms`.
+                return self
 
             @property
             def unpacked_atoms(self):
@@ -553,6 +538,8 @@ class PDDL(Puzzle):
 
         # Compute next states: s_next[i] = (s & ~del_mask[i]) | add_mask[i]
         s_next = jnp.logical_or(jnp.logical_and(s[None, :], ~self.del_mask), self.add_mask)
+        # If action is inapplicable, keep original state (spec compliance)
+        s_next = jnp.where(app[:, None], s_next, s[None, :])
 
         # Pack next states
         def pack_state(atoms_bool):
