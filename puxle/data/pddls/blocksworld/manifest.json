@@ -2,26 +2,15 @@
   "domain": "blocksworld",
   "requirements": [":strips", ":typing"],
   "scales": {
-    "S": {"blocks": 4, "count": 3}
+    "S": {"blocks": 4, "count": 4},
+    "H": {"blocks": 8, "count": 1}
   },
   "problems": [
     {"name": "bw-S-01", "path": "problems/bw-S-01.pddl", "scale": "S"},
     {"name": "bw-S-02", "path": "problems/bw-S-02.pddl", "scale": "S"},
-    {"name": "bw-S-03", "path": "problems/bw-S-03.pddl", "scale": "S"}
-  ],
-  "notes": "Classic STRIPS BlocksWorld with positive preconditions and add/delete effects."
-}
-
-{
-  "domain": "blocksworld",
-  "requirements": [":strips", ":typing"],
-  "scales": {
-    "S": {"blocks": 4, "count": 3}
-  },
-  "problems": [
-    {"name": "bw-S-01", "path": "problems/bw-S-01.pddl", "scale": "S"},
-    {"name": "bw-S-02", "path": "problems/bw-S-02.pddl", "scale": "S"},
-    {"name": "bw-S-03", "path": "problems/bw-S-03.pddl", "scale": "S"}
+    {"name": "bw-S-03", "path": "problems/bw-S-03.pddl", "scale": "S"},
+    {"name": "bw-S-04", "path": "problems/bw-S-04.pddl", "scale": "S"},
+    {"name": "bw-H-01", "path": "problems/bw-H-01.pddl", "scale": "H"}
   ],
   "notes": "Classic STRIPS BlocksWorld with positive preconditions and add/delete effects."
 }

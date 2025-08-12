@@ -2,12 +2,15 @@
   "domain": "logistics",
   "requirements": [":strips", ":typing"],
   "scales": {
-    "S": {"cities": 2, "loc_per_city": 2, "vehicles": {"trucks": 1, "planes": 1}, "packages": [2,3,4], "count": 3}
+    "S": {"cities": 2, "loc_per_city": 2, "vehicles": {"trucks": 1, "planes": 1}, "packages": [2,3,4], "count": 4},
+    "H": {"cities": 3, "loc_per_city": 3, "vehicles": {"trucks": 2, "planes": 2}, "packages": [6], "count": 1}
   },
   "problems": [
     {"name": "lg-S-01", "path": "problems/lg-S-01.pddl", "scale": "S"},
     {"name": "lg-S-02", "path": "problems/lg-S-02.pddl", "scale": "S"},
-    {"name": "lg-S-03", "path": "problems/lg-S-03.pddl", "scale": "S"}
+    {"name": "lg-S-03", "path": "problems/lg-S-03.pddl", "scale": "S"},
+    {"name": "lg-S-04", "path": "problems/lg-S-04.pddl", "scale": "S"},
+    {"name": "lg-H-01", "path": "problems/lg-H-01.pddl", "scale": "H"}
   ],
   "notes": "Minimal STRIPS Logistics variant with typed objects, road and air connections, and load/unload/drive/fly actions."
 }

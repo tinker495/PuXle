@@ -2,26 +2,15 @@
   "domain": "gripper",
   "requirements": [":strips", ":typing"],
   "scales": {
-    "S": {"rooms": 2, "balls": [2, 3, 4], "grippers": 2, "count": 3}
+    "S": {"rooms": 2, "balls": [2, 3, 4, 5], "grippers": 2, "count": 4},
+    "H": {"rooms": 4, "balls": [8], "grippers": 2, "count": 1}
   },
   "problems": [
     {"name": "gr-S-01", "path": "problems/gr-S-01.pddl", "scale": "S"},
     {"name": "gr-S-02", "path": "problems/gr-S-02.pddl", "scale": "S"},
-    {"name": "gr-S-03", "path": "problems/gr-S-03.pddl", "scale": "S"}
+    {"name": "gr-S-03", "path": "problems/gr-S-03.pddl", "scale": "S"},
+    {"name": "gr-S-04", "path": "problems/gr-S-04.pddl", "scale": "S"},
+    {"name": "gr-H-01", "path": "problems/gr-H-01.pddl", "scale": "H"}
   ],
-  "notes": "Classic STRIPS Gripper with two grippers and two rooms."
-}
-
-{
-  "domain": "gripper",
-  "requirements": [":strips", ":typing"],
-  "scales": {
-    "S": {"rooms": 2, "balls": [2, 3, 4], "grippers": 2, "count": 3}
-  },
-  "problems": [
-    {"name": "gr-S-01", "path": "problems/gr-S-01.pddl", "scale": "S"},
-    {"name": "gr-S-02", "path": "problems/gr-S-02.pddl", "scale": "S"},
-    {"name": "gr-S-03", "path": "problems/gr-S-03.pddl", "scale": "S"}
-  ],
-  "notes": "Classic STRIPS Gripper with two grippers and two rooms."
+  "notes": "Classic STRIPS Gripper with two grippers and multiple rooms."
 }

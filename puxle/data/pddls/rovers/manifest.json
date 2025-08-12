@@ -2,12 +2,15 @@
   "domain": "rovers",
   "requirements": [":strips", ":typing"],
   "scales": {
-    "S": {"waypoints": [2,3,4], "count": 3}
+    "S": {"waypoints": [2,3,4,5], "count": 4},
+    "H": {"waypoints": [6], "count": 1}
   },
   "problems": [
     {"name": "rv-S-01", "path": "problems/rv-S-01.pddl", "scale": "S"},
     {"name": "rv-S-02", "path": "problems/rv-S-02.pddl", "scale": "S"},
-    {"name": "rv-S-03", "path": "problems/rv-S-03.pddl", "scale": "S"}
+    {"name": "rv-S-03", "path": "problems/rv-S-03.pddl", "scale": "S"},
+    {"name": "rv-S-04", "path": "problems/rv-S-04.pddl", "scale": "S"},
+    {"name": "rv-H-01", "path": "problems/rv-H-01.pddl", "scale": "H"}
   ],
   "notes": "Minimal STRIPS Rovers variant with navigation, calibration, imaging, sampling, and communication."
 }
