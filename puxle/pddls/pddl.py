@@ -716,8 +716,23 @@ class PDDL(Puzzle):
 
             # Prepare human-friendly samples (from true atoms)
             max_show = int(kwargs.get("max_show", 12))
-            sample_indices = true_indices[:max_show]
+            # If a goal mask is available, prioritize goal atoms at the top
+            if goal_mask is not None:
+                try:
+                    goal_true = [i for i in true_indices if bool(goal_mask[i])]
+                    non_goal_true = [i for i in true_indices if not bool(goal_mask[i])]
+                except Exception:
+                    # Best-effort fallback
+                    gm = [bool(goal_mask[i]) for i in range(self.num_atoms)]
+                    goal_true = [i for i in true_indices if gm[i]]
+                    non_goal_true = [i for i in true_indices if not gm[i]]
+                ordered_true_indices = goal_true + non_goal_true
+            else:
+                ordered_true_indices = true_indices
+
+            sample_indices = ordered_true_indices[:max_show]
             sample_atoms = [self.grounded_atoms[i] for i in sample_indices]
+            truncated = true_count > len(sample_atoms)
             # Also prepare raw (with parentheses) for backward-compatibility checks in tests
             raw_sample_line = (
                 "Raw sample atoms: " + ", ".join(sample_atoms)
@@ -773,6 +788,10 @@ class PDDL(Puzzle):
                         text.append(" - " + ("✓" if satisfied else "✗"))
                     sample_table.add_row(str(row_idx), text)
 
+                # If truncated and not explicitly showing counts, add an ellipsis row
+                if truncated and not show_more:
+                    sample_table.add_row("", "...")
+
                 if sample_atoms:
                     if show_summary:
                         table.add_row("Sample true atoms", "")
@@ -822,6 +841,8 @@ class PDDL(Puzzle):
                     else:
                         annotated_atoms.append(atom_str)
                 pieces.append(", ".join(annotated_atoms) if annotated_atoms else "")
+                if truncated and not show_more:
+                    pieces.append("...")
                 if show_more:
                     remaining = max(0, true_count - len(sample_atoms))
                     if remaining > 0:
