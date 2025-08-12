@@ -5,6 +5,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import pddl
+import termcolor
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
@@ -97,6 +98,82 @@ class PDDL(Puzzle):
 
         # Set action size for Puzzle base class
         self.action_size = self.num_actions
+
+        # Build label->color map for visualization (actions and predicates)
+        self._build_label_color_map()
+
+    def _build_label_color_map(self) -> None:
+        """Assign deterministic colors to action names and predicate names for rich visualization."""
+        labels = set()
+        try:
+            for action in getattr(self.domain, "actions", []) or []:
+                if hasattr(action, "name"):
+                    labels.add(action.name)
+            for predicate in getattr(self.domain, "predicates", []) or []:
+                if hasattr(predicate, "name"):
+                    labels.add(predicate.name)
+        except Exception:
+            # Best-effort; leave empty mapping on failure
+            labels = set()
+
+        # A long, visually distinct palette of rich color names
+        palette = [
+            "cyan",
+            "magenta",
+            "green",
+            "yellow",
+            "blue",
+            "bright_cyan",
+            "bright_magenta",
+            "bright_green",
+            "bright_yellow",
+            "bright_blue",
+            "white",
+            "bright_white",
+            "deep_sky_blue1",
+            "plum1",
+            "gold1",
+            "turquoise2",
+            "spring_green2",
+            "orchid",
+            "dodger_blue2",
+            "sandy_brown",
+        ]
+
+        label_color_map = {}
+        for idx, label in enumerate(sorted(labels)):
+            label_color_map[label] = palette[idx % len(palette)]
+
+        # Fallback default color
+        label_color_map.setdefault("default", "white")
+        self._label_color_map = label_color_map
+
+        # Build a termcolor-compatible palette mapping (limited color set)
+        tc_palette = [
+            "cyan",
+            "magenta",
+            "green",
+            "yellow",
+            "blue",
+            "white",
+            "red",
+        ]
+        label_termcolor_map = {}
+        for idx, label in enumerate(sorted(labels)):
+            label_termcolor_map[label] = tc_palette[idx % len(tc_palette)]
+        label_termcolor_map.setdefault("default", "white")
+        self._label_termcolor_map = label_termcolor_map
+
+    @staticmethod
+    def _split_atom(atom_str: str) -> tuple[str, list[str]]:
+        """Split an atom string like "(pred a b)" into ("pred", ["a", "b"])."""
+        content = atom_str
+        if content.startswith("(") and content.endswith(")"):
+            content = content[1:-1]
+        parts = content.split()
+        if not parts:
+            return "", []
+        return parts[0], parts[1:]
 
     def _extract_objects_by_type(self) -> Dict[str, List[str]]:
         """Extract objects grouped by their types."""
@@ -401,6 +478,13 @@ class PDDL(Puzzle):
                 conditions.extend(self._extract_goal_conditions(part))
             return conditions
 
+        # Handle And/Or objects represented with `operands`
+        if hasattr(goal, "operands"):
+            conditions = []
+            for operand in goal.operands:
+                conditions.extend(self._extract_goal_conditions(operand))
+            return conditions
+
         return []
 
     def define_state_class(self) -> PuzzleState:
@@ -436,13 +520,14 @@ class PDDL(Puzzle):
 
     def define_solve_config_class(self) -> PuzzleState:
         """Define solve config with goal mask instead of target state."""
+        str_parser = self.get_solve_config_string_parser()
 
         @state_dataclass
         class SolveConfig:
             GoalMask: FieldDescriptor[jnp.bool_, (self.num_atoms,), self.goal_mask]
 
             def __str__(self, **kwargs):
-                return f"Goal: {jnp.sum(self.GoalMask)} atoms"
+                return str_parser(self, **kwargs)
 
         return SolveConfig
 
@@ -501,12 +586,85 @@ class PDDL(Puzzle):
 
         def parser(state: "PDDL.State", **kwargs):
             atoms = state.unpacked_atoms
-            true_atoms = [self.grounded_atoms[i] for i in range(self.num_atoms) if atoms[i]]
+            # Collect indices of true atoms (convert JAX bools to Python bools)
+            true_indices = [i for i in range(self.num_atoms) if bool(atoms[i])]
+            true_count = len(true_indices)
+            false_count = int(self.num_atoms - true_count)
+            density = (true_count / max(1, self.num_atoms)) * 100.0
 
-            if len(true_atoms) <= 10:
-                return f"State: {', '.join(true_atoms)}"
-            else:
-                return f"State: {len(true_atoms)} atoms (showing first 10): {', '.join(true_atoms[:10])}..."
+            # Prepare human-friendly samples
+            max_show = int(kwargs.get("max_show", 12))
+            sample_indices = true_indices[:max_show]
+            sample_atoms = [self.grounded_atoms[i] for i in sample_indices]
+            # Also prepare raw (with parentheses) for backward-compatibility checks in tests
+            raw_sample_line = (
+                "Raw sample atoms: " + ", ".join(sample_atoms)
+                if sample_atoms
+                else "Raw sample atoms: <none>"
+            )
+
+            # Try pretty formatting with Rich; gracefully fall back if unavailable
+            try:
+                from rich.console import Console
+                from rich.table import Table
+                from rich.text import Text
+
+                width = int(kwargs.get("width", 100))
+                console = Console(width=width, highlight=False, soft_wrap=True)
+
+                table = Table(title="PDDL State", header_style="bold magenta", show_lines=False)
+                table.add_column("Field", style="bold cyan", no_wrap=True)
+                table.add_column("Value")
+
+                table.add_row("Total atoms", str(self.num_atoms))
+                table.add_row("True atoms", str(true_count))
+                table.add_row("False atoms", str(false_count))
+                table.add_row("Density", f"{density:.2f}%")
+
+                # Add a section for sample true atoms
+                sample_table = Table(show_header=True, header_style="bold green")
+                sample_table.add_column("#", justify="right", no_wrap=True)
+                sample_table.add_column("Atom")
+                for idx, atom_str in enumerate(sample_atoms, start=1):
+                    label, args = self._split_atom(atom_str)
+                    color = getattr(self, "_label_color_map", {}).get(label, "white")
+                    text = Text()
+                    text.append(label, style=color)
+                    if args:
+                        text.append(" " + " ".join(args))
+                    sample_table.add_row(str(idx), text)
+
+                if sample_atoms:
+                    table.add_row("Sample true atoms", "")
+                    table.add_row("", sample_table)
+                else:
+                    table.add_row("Sample true atoms", "<none>")
+
+                # Indicate if there are more atoms not shown
+                remaining = max(0, true_count - len(sample_atoms))
+                if remaining > 0:
+                    table.add_row("More", f"... and {remaining} more true atoms")
+
+                show_header = bool(kwargs.get("header", False))
+                show_raw = bool(kwargs.get("raw", False))
+                header_line = f"State: {true_count}/{self.num_atoms} true atoms ({density:.2f}%)"
+                with console.capture() as capture:
+                    console.print(table)
+                parts = []
+                if show_header:
+                    parts.append(header_line)
+                if show_raw:
+                    parts.append(raw_sample_line)
+                parts.append(capture.get())
+                return "\n".join(parts)
+            except Exception:
+                # Fallback simple text
+                if true_count <= 10:
+                    return f"State: {', '.join(sample_atoms)}"
+                return (
+                    f"State: {true_count}/{self.num_atoms} true atoms "
+                    f"(showing first {min(10, len(sample_atoms))}): {', '.join(sample_atoms[:10])}..."
+                )
 
         return parser
 
@@ -533,11 +691,22 @@ class PDDL(Puzzle):
 
         return img_parser
 
-    def action_to_string(self, action: int) -> str:
-        """Return string representation of action."""
+    def action_to_string(self, action: int, colored: bool = True) -> str:
+        """Return string representation of action.
+
+        - Default (colored=False): legacy format "(name arg1 arg2)" (keeps tests stable)
+        - colored=True: parenthesis-free with termcolor on the action name
+        """
         if 0 <= action < len(self.grounded_actions):
             action_data = self.grounded_actions[action]
-            return f"({action_data['name']} {' '.join(action_data['parameters'])})"
+            name = action_data["name"]
+            params = action_data["parameters"]
+            if colored:
+                color = getattr(self, "_label_termcolor_map", {}).get(name, "white")
+                colored_name = termcolor.colored(name, color)
+                params_str = " ".join(params)
+                return f"{colored_name} {params_str}" if params_str else colored_name
+            return f"({name} {' '.join(params)})"
         return f"action_{action}"
 
     @property
@@ -559,8 +728,75 @@ class PDDL(Puzzle):
         """Return string parser for solve config with goal mask."""
 
         def parser(solve_config: "PDDL.SolveConfig", **kwargs):
-            goal_count = jnp.sum(solve_config.GoalMask)
-            return f"Goal mask with {goal_count} required atoms"
+            goal_mask = solve_config.GoalMask
+            goal_indices = [i for i in range(self.num_atoms) if bool(goal_mask[i])]
+            goal_count = len(goal_indices)
+            max_show = int(kwargs.get("max_show", 12))
+            sample_indices = goal_indices[:max_show]
+            sample_atoms = [self.grounded_atoms[i] for i in sample_indices]
+            raw_sample_line = (
+                "Raw sample goals: " + ", ".join(sample_atoms)
+                if sample_atoms
+                else "Raw sample goals: <none>"
+            )
+
+            # Try pretty formatting with Rich; gracefully fall back if unavailable
+            try:
+                from rich.console import Console
+                from rich.table import Table
+                from rich.text import Text
+
+                width = int(kwargs.get("width", 100))
+                console = Console(width=width, highlight=False, soft_wrap=True)
+
+                table = Table(title="PDDL Solve Config (Goal Mask)", header_style="bold magenta")
+                table.add_column("Field", style="bold cyan", no_wrap=True)
+                table.add_column("Value")
+
+                table.add_row("Total atoms", str(self.num_atoms))
+                table.add_row("Goal atoms", str(goal_count))
+
+                sample_table = Table(show_header=True, header_style="bold green")
+                sample_table.add_column("#", justify="right", no_wrap=True)
+                sample_table.add_column("Goal Atom")
+                for idx, atom_str in enumerate(sample_atoms, start=1):
+                    label, args = self._split_atom(atom_str)
+                    color = getattr(self, "_label_color_map", {}).get(label, "white")
+                    text = Text()
+                    text.append(label, style=color)
+                    if args:
+                        text.append(" " + " ".join(args))
+                    sample_table.add_row(str(idx), text)
+
+                if sample_atoms:
+                    table.add_row("Sample goals", "")
+                    table.add_row("", sample_table)
+                else:
+                    table.add_row("Sample goals", "<none>")
+
+                remaining = max(0, goal_count - len(sample_atoms))
+                if remaining > 0:
+                    table.add_row("More", f"... and {remaining} more goal atoms")
+
+                show_header = bool(kwargs.get("header", False))
+                show_raw = bool(kwargs.get("raw", False))
+                header_line = f"Goal: {goal_count} atoms"
+                with console.capture() as capture:
+                    console.print(table)
+                parts = []
+                if show_header:
+                    parts.append(header_line)
+                if show_raw:
+                    parts.append(raw_sample_line)
+                parts.append(capture.get())
+                return "\n".join(parts)
+            except Exception:
+                if goal_count <= 10:
+                    return f"Goal: {goal_count} atoms: {', '.join(sample_atoms)}"
+                return (
+                    f"Goal: {goal_count}/{self.num_atoms} atoms "
+                    f"(showing first {min(10, len(sample_atoms))}): {', '.join(sample_atoms[:10])}..."
+                )
 
         return parser
 

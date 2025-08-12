@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from puxle.pddls.pddl import PDDL
+from puxle.utils.util import to_uint8
 
 
 def _hash_state(state) -> bytes:
@@ -117,3 +118,75 @@ def test_presets_jit_and_batch(domain, problem):
     assert batched_neighbors is not None and batched_costs is not None
     assert batched_costs.shape[0] == env.action_size
     assert batched_costs.shape[1] == 4
+
+
+@pytest.mark.parametrize(
+    "domain, problem",
+    [
+        ("blocksworld", "bw-S-01"),
+        ("blocksworld", "bw-S-02"),
+        ("blocksworld", "bw-S-03"),
+        ("blocksworld", "bw-S-04"),
+        ("gripper", "gr-S-01"),
+        ("gripper", "gr-S-02"),
+        ("gripper", "gr-S-03"),
+        ("gripper", "gr-S-04"),
+        ("logistics", "lg-S-01"),
+        ("logistics", "lg-S-02"),
+        ("logistics", "lg-S-03"),
+        ("logistics", "lg-S-04"),
+        ("rovers", "rv-S-01"),
+        ("rovers", "rv-S-02"),
+        ("rovers", "rv-S-03"),
+        ("rovers", "rv-S-04"),
+        ("satellite", "st-S-01"),
+        ("satellite", "st-S-02"),
+        ("satellite", "st-S-03"),
+        ("satellite", "st-S-04"),
+    ],
+)
+def test_initial_state_not_solved(domain, problem):
+    env = PDDL.from_preset(domain=domain, problem_basename=problem)
+    solve_config, initial_state = env.get_inits(jax.random.PRNGKey(0))
+
+    assert not bool(
+        env.is_solved(solve_config, initial_state)
+    ), f"Preset {domain}/{problem} should not be solved at the initial state"
+
+
+@pytest.mark.parametrize(
+    "domain, problem",
+    [
+        ("blocksworld", "bw-S-01"),
+        ("gripper", "gr-S-01"),
+        ("logistics", "lg-S-01"),
+        ("rovers", "rv-S-01"),
+        ("satellite", "st-S-01"),
+    ],
+)
+def test_random_states_not_mostly_solved(domain, problem):
+    env = PDDL.from_preset(domain=domain, problem_basename=problem)
+    solve_config = env.get_solve_config()
+
+    # Goals should be non-empty; otherwise any state would be trivially solved
+    assert (
+        int(jnp.sum(solve_config.GoalMask)) > 0
+    ), f"Preset {domain}/{problem} has empty goal mask; any state would be solved"
+
+    # Sample random boolean states and ensure the majority are NOT solved
+    rng = jax.random.PRNGKey(123)
+    batch_size = 64
+    rand_bits = jax.random.bernoulli(rng, p=0.5, shape=(batch_size, env.num_atoms))
+
+    def to_state(bits):
+        return env.State(atoms=to_uint8(bits, 1))
+
+    states = jax.vmap(to_state)(rand_bits)
+    solved_mask = jax.vmap(lambda st: env.is_solved(solve_config, st))(states)
+    proportion_solved = jnp.mean(solved_mask.astype(jnp.float32))
+
+    # Guardrail: not more than 95% of random states should be solved
+    assert float(proportion_solved) < 0.95, (
+        f"Preset {domain}/{problem} appears trivially solved for most random states: "
+        f"{float(proportion_solved):.2%} solved"
+    )

@@ -24,6 +24,12 @@
     (air l2 a2)
     (air a2 l2)
 
+    ; cross-city air links to enable inter-city transport
+    (air l1 a2)
+    (air a2 l1)
+    (air l2 a1)
+    (air a1 l2)
+
     (is-truck t1)
     (is-plane p1)
 
