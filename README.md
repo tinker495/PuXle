@@ -165,6 +165,17 @@ true_atoms = pddl_env.state_to_atom_set(initial_state)
 print(f"True atoms in state: {true_atoms}")
 ```
 
+### Procedural Domain Generation
+```bash
+# Fuse two base domains into a generated planning task
+python -m puxle.pddls.fusion \
+  --domain-a path/to/domainA.pddl --problem-a path/to/problemA.pddl \
+  --domain-b path/to/domainB.pddl --problem-b path/to/problemB.pddl \
+  --output-dir ./generated --name fused-example --seed 7 \
+  --prob-add-pre 0.3 --prob-add-eff 0.3 --prob-neg 0.2 \
+  --rollout-depth 4 --ensure-reversible --validate-depth 5
+```
+
 ### Custom Environment Creation
 ```python
 import jax.numpy as jnp

@@ -212,10 +212,12 @@ class PDDL(Puzzle):
 
     def _build_masks(self):
         """Build JAX arrays for precondition, add, and delete masks (delegated)."""
-        pre_mask, add_mask, del_mask = mk_build_masks(
+        pre_mask_pos, pre_mask_neg, add_mask, del_mask = mk_build_masks(
             self.grounded_actions, self.atom_to_idx, self.num_atoms
         )
-        self.pre_mask = pre_mask
+        self.pre_mask = pre_mask_pos  # Backward compatibility alias
+        self.pre_mask_pos = pre_mask_pos
+        self.pre_mask_neg = pre_mask_neg
         self.add_mask = add_mask
         self.del_mask = del_mask
 
@@ -265,7 +267,9 @@ class PDDL(Puzzle):
         s = state.unpacked_atoms
 
         # Compute applicability: app[i] = True if action i is applicable
-        app = jnp.all(jnp.logical_or(~self.pre_mask, s[None, :]), axis=1)
+        app_pos = jnp.all(jnp.logical_or(~self.pre_mask_pos, s[None, :]), axis=1)
+        app_neg = jnp.all(jnp.logical_or(~self.pre_mask_neg, ~s[None, :]), axis=1)
+        app = jnp.logical_and(app_pos, app_neg)
 
         # Compute next states: s_next[i] = (s & ~del_mask[i]) | add_mask[i]
         s_next = jnp.logical_or(jnp.logical_and(s[None, :], ~self.del_mask), self.add_mask)

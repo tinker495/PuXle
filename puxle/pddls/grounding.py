@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 from .type_system import select_most_specific_types
+
+
+@dataclass(frozen=True)
+class GroundLiteral:
+    """Representation of a grounded literal with polarity."""
+
+    atom: str
+    positive: bool = True
 
 
 def _get_type_combinations(param_types: List[object], objects_by_type: Dict[str, List[str]]) -> List[List[str]]:
@@ -70,8 +79,8 @@ def ground_predicates(domain, objects_by_type: Dict[str, List[str]], hierarchy) 
     return grounded_atoms, atom_to_idx
 
 
-def _ground_formula(formula, param_substitution: List[str], param_names: List[str]) -> List[str]:
-    """Ground a formula (precondition) with parameter substitution."""
+def _ground_formula(formula, param_substitution: List[str], param_names: List[str]) -> List[GroundLiteral]:
+    """Ground a (possibly compound) formula into signed literals."""
     if formula is None:
         return []
 
@@ -91,21 +100,27 @@ def _ground_formula(formula, param_substitution: List[str], param_names: List[st
             else:
                 substituted_args.append(arg)
 
-        return [f"({pred_name} {' '.join(substituted_args)})"]
+        literal = f"({pred_name} {' '.join(substituted_args)})"
+        return [GroundLiteral(atom=literal, positive=True)]
+
+    # Handle negation (Not)
+    if hasattr(formula, "argument"):
+        grounded_inner = _ground_formula(formula.argument, param_substitution, param_names)
+        return [GroundLiteral(atom=lit.atom, positive=not lit.positive) for lit in grounded_inner]
 
     # Handle compound formulas (AND, OR, etc.)
     if hasattr(formula, "parts"):
-        grounded_parts: List[str] = []
+        literals: List[GroundLiteral] = []
         for part in formula.parts:
-            grounded_parts.extend(_ground_formula(part, param_substitution, param_names))
-        return grounded_parts
+            literals.extend(_ground_formula(part, param_substitution, param_names))
+        return literals
 
     # Handle And/Or objects
     if hasattr(formula, "operands"):
-        grounded_parts: List[str] = []
+        literals = []
         for operand in formula.operands:
-            grounded_parts.extend(_ground_formula(operand, param_substitution, param_names))
-        return grounded_parts
+            literals.extend(_ground_formula(operand, param_substitution, param_names))
+        return literals
 
     return []
 
@@ -130,15 +145,18 @@ def _ground_effects(effect, param_substitution: List[str], param_names: List[str
     # Handle negation (Not)
     if hasattr(effect, "argument"):
         grounded = _ground_formula(effect.argument, param_substitution, param_names)
-        if grounded:
-            delete_effects.append(grounded[0])
+        for literal in grounded:
+            delete_effects.append(literal.atom)
         return add_effects, delete_effects
 
     # Handle atomic positive literals
     if hasattr(effect, "name") and hasattr(effect, "terms"):
         grounded = _ground_formula(effect, param_substitution, param_names)
-        if grounded:
-            add_effects.append(grounded[0])
+        for literal in grounded:
+            if literal.positive:
+                add_effects.append(literal.atom)
+            else:
+                delete_effects.append(literal.atom)
         return add_effects, delete_effects
 
     return add_effects, delete_effects
@@ -164,11 +182,18 @@ def ground_actions(domain, objects_by_type: Dict[str, List[str]], hierarchy) -> 
         for param_combo in param_combinations:
             param_names = [param.name for param in getattr(action, "parameters", []) or []]
 
+            pre_literals = _ground_formula(action.precondition, param_combo, param_names)
+            positive_pres = [lit.atom for lit in pre_literals if lit.positive]
+            negative_pres = [lit.atom for lit in pre_literals if not lit.positive]
+
+            add_effects, delete_effects = _ground_effects(action.effect, param_combo, param_names)
+
             grounded_action = {
                 "name": action_name,
                 "parameters": param_combo,
-                "preconditions": _ground_formula(action.precondition, param_combo, param_names),
-                "effects": _ground_effects(action.effect, param_combo, param_names),
+                "preconditions": positive_pres,
+                "preconditions_neg": negative_pres,
+                "effects": (add_effects, delete_effects),
             }
 
             action_str = f"({action_name} {' '.join(param_combo)})"

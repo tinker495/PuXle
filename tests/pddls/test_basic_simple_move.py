@@ -77,6 +77,7 @@ class TestPDDLWrapper:
             for action in puzzle.grounded_actions:
                 if action["name"] == "move" and action["parameters"] == expected_params:
                     found = True
+                    assert "preconditions_neg" in action
                     break
             assert found, f"Action move {expected_params} not found in grounded actions"
 
@@ -103,6 +104,7 @@ class TestPDDLWrapper:
         assert "(at loc1)" in delete_effects
         assert len(add_effects) == 1
         assert len(delete_effects) == 1
+        assert move_loc1_loc2.get("preconditions_neg") == []
 
     def test_initial_state_and_goal(self, puzzle, rng_key):
         """Test initial state and goal configuration."""

@@ -7,9 +7,10 @@ import jax.numpy as jnp
 
 def build_masks(
     grounded_actions: List[Dict], atom_to_idx: Dict[str, int], num_atoms: int
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Build JAX arrays for precondition, add, and delete masks."""
-    pre_mask = jnp.zeros((len(grounded_actions), num_atoms), dtype=jnp.bool_)
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Build JAX arrays for positive/negative preconditions, add, and delete masks."""
+    pre_mask_pos = jnp.zeros((len(grounded_actions), num_atoms), dtype=jnp.bool_)
+    pre_mask_neg = jnp.zeros((len(grounded_actions), num_atoms), dtype=jnp.bool_)
     add_mask = jnp.zeros((len(grounded_actions), num_atoms), dtype=jnp.bool_)
     del_mask = jnp.zeros((len(grounded_actions), num_atoms), dtype=jnp.bool_)
 
@@ -17,7 +18,11 @@ def build_masks(
         for precondition in action["preconditions"]:
             if precondition in atom_to_idx:
                 atom_idx = atom_to_idx[precondition]
-                pre_mask = pre_mask.at[action_idx, atom_idx].set(True)
+                pre_mask_pos = pre_mask_pos.at[action_idx, atom_idx].set(True)
+        for precondition in action.get("preconditions_neg", []):
+            if precondition in atom_to_idx:
+                atom_idx = atom_to_idx[precondition]
+                pre_mask_neg = pre_mask_neg.at[action_idx, atom_idx].set(True)
         for add_effect in action["effects"][0]:
             if add_effect in atom_to_idx:
                 atom_idx = atom_to_idx[add_effect]
@@ -27,7 +32,7 @@ def build_masks(
                 atom_idx = atom_to_idx[del_effect]
                 del_mask = del_mask.at[action_idx, atom_idx].set(True)
 
-    return pre_mask, add_mask, del_mask
+    return pre_mask_pos, pre_mask_neg, add_mask, del_mask
 
 
 def build_initial_state(problem, atom_to_idx: Dict[str, int], num_atoms: int) -> jnp.ndarray:
