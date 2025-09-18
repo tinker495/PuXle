@@ -36,9 +36,9 @@ from .state_defs import build_solve_config_class, build_state_class
 
 class PDDL(Puzzle):
     """
-    PDDL wrapper for PuXle that supports STRIPS subset:
-    - Positive preconditions only
-    - Add/delete effects (no conditional effects)
+    PDDL wrapper for PuXle that supports a typed STRIPS subset with signed literals:
+    - Positive and negative preconditions
+    - Add/delete effects (no conditional effects; negated effects become deletes)
     - Conjunctive positive goals
     - Typed objects
     """

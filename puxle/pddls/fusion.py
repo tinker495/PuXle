@@ -110,16 +110,23 @@ def _parameter_name(raw_name: str) -> str:
     return raw_name if raw_name.startswith("?") else f"?{raw_name}"
 
 
+def _coerce_type_tag(raw) -> Optional[str]:
+    if raw is None:
+        return None
+    if isinstance(raw, (list, tuple)):
+        return _coerce_type_tag(raw[0] if raw else None)
+    if isinstance(raw, (set, frozenset)):
+        return _coerce_type_tag(next(iter(raw)) if raw else None)
+    value = str(raw)
+    return value if value and value != "object" else None
+
+
 def _parameter_spec(item) -> ParameterSpec:
     name = getattr(item, "name", str(item))
     spec_name = _parameter_name(name)
     param_type: Optional[str] = None
     if hasattr(item, "type_tags") and item.type_tags:
-        tags = item.type_tags
-        if isinstance(tags, (list, tuple)) and tags:
-            param_type = str(tags[0])
-        else:
-            param_type = str(tags)
+        param_type = _coerce_type_tag(item.type_tags)
     return ParameterSpec(spec_name, param_type)
 
 
@@ -172,7 +179,7 @@ def _rename_actions(domain, existing: Dict[str, str], prefix: str) -> None:
         existing[action.name] = action.name
 
 
-def _extract_literals(formula) -> List[SchematicLiteral]:
+def _extract_literals(formula, parameterize: bool = True) -> List[SchematicLiteral]:
     if formula is None:
         return []
     literals: List[SchematicLiteral] = []
@@ -183,7 +190,9 @@ def _extract_literals(formula) -> List[SchematicLiteral]:
         if hasattr(node, "name") and hasattr(node, "terms"):
             args = []
             for term in getattr(node, "terms", []) or []:
-                args.append(_parameter_name(getattr(term, "name", str(term))))
+                raw_name = getattr(term, "name", str(term))
+                arg = _parameter_name(raw_name) if parameterize else str(raw_name)
+                args.append(arg)
             literals.append(SchematicLiteral(node.name, tuple(args), positive))
             return
         if hasattr(node, "argument"):
@@ -211,8 +220,8 @@ def _collect_actions(domain) -> List[ActionSchema]:
     actions: List[ActionSchema] = []
     for action in getattr(domain, "actions", []) or []:
         parameters = tuple(_parameter_spec(param) for param in getattr(action, "parameters", []) or [])
-        preconditions = _extract_literals(getattr(action, "precondition", None))
-        effects = _extract_literals(getattr(action, "effect", None))
+        preconditions = _extract_literals(getattr(action, "precondition", None), parameterize=True)
+        effects = _extract_literals(getattr(action, "effect", None), parameterize=True)
         actions.append(ActionSchema(action.name, parameters, preconditions, effects))
     return actions
 
@@ -347,7 +356,7 @@ def _collect_problem_atoms(problem) -> List[str]:
 
 
 def _collect_goal_atoms(problem) -> List[str]:
-    return [lit.to_pddl() for lit in _extract_literals(getattr(problem, "goal", None)) if lit.positive]
+    return [lit.to_pddl() for lit in _extract_literals(getattr(problem, "goal", None), parameterize=False) if lit.positive]
 
 
 def _parameter_names(parameters: Sequence[ParameterSpec | str]) -> List[str]:
@@ -579,6 +588,25 @@ def fuse_domains(config: FusionConfig, output_dir: Path) -> Tuple[Path, Path, Di
         "init_atoms": init_atoms,
         "goal_atoms": sorted(goal_atoms),
         "ensure_reversible": config.ensure_reversible,
+        "config": {
+            "domain_a": config.domain_a,
+            "problem_a": config.problem_a,
+            "domain_b": config.domain_b,
+            "problem_b": config.problem_b,
+            "probabilities": {
+                "prob_add_pre": config.prob_add_pre,
+                "prob_add_eff": config.prob_add_eff,
+                "prob_rem_pre": config.prob_rem_pre,
+                "prob_rem_eff": config.prob_rem_eff,
+                "prob_negate": config.prob_negate,
+            },
+            "ensure_reversible": config.ensure_reversible,
+            "num_objects": config.num_objects,
+            "rollout_depth": config.rollout_depth,
+            "goal_sample_size": config.goal_sample_size,
+            "seed": config.seed,
+            "validation_depth": config.validation_depth,
+        },
     }
     if config.validation_depth is not None and config.validation_depth >= 0:
         validation = bfs_validate(domain_path, problem_path, depth_limit=config.validation_depth)
