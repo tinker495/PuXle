@@ -12,6 +12,12 @@ from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclas
 from puxle.utils.util import from_uint8, to_uint8
 
 # Refactored helpers
+from .artifact_cache import (
+    CachedGrounding,
+    compute_cache_key,
+    load_grounding_cache,
+    store_grounding_cache,
+)
 from .type_system import (
     collect_type_hierarchy,
     extract_objects_by_type as ts_extract_objects_by_type,
@@ -107,6 +113,49 @@ class PDDL(Puzzle):
         # Extract objects by type
         self.objects_by_type = self._extract_objects_by_type()
 
+        cache_key = compute_cache_key(self.domain_file, self.problem_file)
+        cached: Optional[CachedGrounding] = load_grounding_cache(cache_key)
+
+        if cached is not None:
+            self._load_cached_grounding(cached)
+        else:
+            self._compute_grounding(cache_key)
+
+        self.action_size = self.num_actions
+
+        # Build label->color map for visualization (actions and predicates)
+        self._build_label_color_map()
+
+    @staticmethod
+    def _action_identifier(name: str, parameters: List[str]) -> str:
+        joined = " ".join(parameters)
+        return f"({name} {joined})"
+
+    def _rebuild_action_index(self) -> None:
+        self.action_to_idx = {}
+        for idx, action in enumerate(self.grounded_actions):
+            key = self._action_identifier(action["name"], list(action.get("parameters", [])))
+            self.action_to_idx[key] = idx
+        self.num_actions = len(self.grounded_actions)
+
+    def _load_cached_grounding(self, cached: CachedGrounding) -> None:
+        self.grounded_atoms = cached.grounded_atoms
+        self.atom_to_idx = cached.atom_to_idx
+        self.num_atoms = len(self.grounded_atoms)
+        self.grounded_actions = cached.grounded_actions
+        self._rebuild_action_index()
+
+        self.pre_mask_pos = jnp.asarray(cached.pre_mask_pos, dtype=jnp.bool_)
+        self.pre_mask = self.pre_mask_pos  # Backward compatibility alias
+        self.pre_mask_neg = jnp.asarray(cached.pre_mask_neg, dtype=jnp.bool_)
+        self.add_mask = jnp.asarray(cached.add_mask, dtype=jnp.bool_)
+        self.del_mask = jnp.asarray(cached.del_mask, dtype=jnp.bool_)
+
+        # Build initial state and goal mask (problem-dependent)
+        self.init_state = mk_build_initial_state(self.problem, self.atom_to_idx, self.num_atoms)
+        self.goal_mask = mk_build_goal_mask(self.problem, self.atom_to_idx, self.num_atoms)
+
+    def _compute_grounding(self, cache_key: str) -> None:
         # Ground predicates to atoms
         self.grounded_atoms, self.atom_to_idx = self._ground_predicates()
         self.num_atoms = len(self.grounded_atoms)
@@ -116,13 +165,30 @@ class PDDL(Puzzle):
         self.num_actions = len(self.grounded_actions)
 
         # Build masks for JAX operations
-        self._build_masks()
+        pre_mask_pos, pre_mask_neg, add_mask, del_mask = mk_build_masks(
+            self.grounded_actions, self.atom_to_idx, self.num_atoms
+        )
+        self.pre_mask = pre_mask_pos  # Backward compatibility alias
+        self.pre_mask_pos = pre_mask_pos
+        self.pre_mask_neg = pre_mask_neg
+        self.add_mask = add_mask
+        self.del_mask = del_mask
 
-        # Set action size for Puzzle base class
-        self.action_size = self.num_actions
+        # Build initial state and goal mask
+        self.init_state = mk_build_initial_state(self.problem, self.atom_to_idx, self.num_atoms)
+        self.goal_mask = mk_build_goal_mask(self.problem, self.atom_to_idx, self.num_atoms)
 
-        # Build label->color map for visualization (actions and predicates)
-        self._build_label_color_map()
+        # Persist artefacts for future runs (best effort)
+        store_grounding_cache(
+            cache_key,
+            grounded_atoms=self.grounded_atoms,
+            atom_to_idx=self.atom_to_idx,
+            grounded_actions=self.grounded_actions,
+            pre_mask_pos=self.pre_mask_pos,
+            pre_mask_neg=self.pre_mask_neg,
+            add_mask=self.add_mask,
+            del_mask=self.del_mask,
+        )
 
     def _build_label_color_map(self) -> None:
         """Assign deterministic colors to action and predicate names (delegated)."""
