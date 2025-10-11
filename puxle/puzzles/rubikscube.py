@@ -154,7 +154,7 @@ class RubiksCube(Puzzle):
 
             def get_face_string(face):
                 face_str = face_map[face]
-                display_tile_width = 1 if not as_color else self._token_width
+                display_tile_width = 1 if as_color else self._token_width
                 row_display_width = self.size * display_tile_width + (self.size - 1)
                 inner_width = row_display_width
                 string = f"┏━{face_str.center(inner_width, '━')}━┓\n"
