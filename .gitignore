@@ -196,3 +196,4 @@ cython_debug/
 # ignore data folder this is quite large
 puxle/world_model/data/
 puxle/world_model/.gitattributes
+images/visualizations/

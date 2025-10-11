@@ -3,6 +3,7 @@ from functools import partial
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 from tabulate import tabulate
 
 from puxle.core.puzzle_base import Puzzle
@@ -14,21 +15,36 @@ TYPE = jnp.uint8
 LINE_THICKNESS = 3
 
 UP = 0
-DOWN = 1
-LEFT = 2
-RIGHT = 3
-FRONT = 4
-BACK = 5
-rotate_face_map = {0: "l", 1: "d", 2: "f", 3: "r", 4: "b", 5: "u"}
-face_map_legend = {0: "up", 1: "down", 2: "left", 3: "right", 4: "front", 5: "back"}
-face_map = {0: "up━", 1: "down━", 2: "left━", 3: "right", 4: "front", 5: "back━"}
+FRONT = 1
+RIGHT = 2
+BACK = 3
+LEFT = 4
+DOWN = 5
+
+rotate_face_map = {UP: "u", FRONT: "f", RIGHT: "r", BACK: "b", LEFT: "l", DOWN: "d"}
+face_map_legend = {
+    UP: "up",
+    FRONT: "front",
+    RIGHT: "right",
+    BACK: "back",
+    LEFT: "left",
+    DOWN: "down",
+}
+face_map = {
+    UP: "up━",
+    FRONT: "front",
+    RIGHT: "right",
+    BACK: "back━",
+    LEFT: "left━",
+    DOWN: "down━",
+}
 rgb_map = {
-    0: (255, 255, 255),  # white
-    1: (255, 255, 0),  # yellow
-    2: (255, 128, 0),  # orange
-    3: (255, 0, 0),  # red
-    4: (0, 255, 0),  # green
-    5: (0, 0, 255),  # blue
+    UP: (255, 255, 255),  # white
+    FRONT: (0, 255, 0),  # green
+    RIGHT: (255, 0, 0),  # red
+    BACK: (0, 0, 255),  # blue
+    LEFT: (255, 128, 0),  # orange
+    DOWN: (255, 255, 0),  # yellow
 }
 
 
@@ -45,11 +61,20 @@ class RubiksCube(Puzzle):
     size: int
     index_grid: chex.Array
 
+    @property
+    def _active_bits(self) -> int:
+        return 3 if self.color_embedding else 8
+
+    @property
+    def _token_width(self) -> int:
+        return 1 if self.color_embedding else len(str(self._num_tiles - 1))
+
     def define_state_class(self) -> PuzzleState:
         str_parser = self.get_string_parser()
         raw_shape = (6, self.size * self.size)
-        raw = jnp.full(raw_shape, -1, dtype=TYPE)
-        packed_faces = to_uint8(raw, 3)
+        raw = jnp.zeros(raw_shape, dtype=TYPE)
+        active_bits = self._active_bits
+        packed_faces = to_uint8(raw, active_bits)
 
         @state_dataclass
         class State:
@@ -60,27 +85,63 @@ class RubiksCube(Puzzle):
 
             @property
             def packed(self):
-                return State(faces=to_uint8(self.faces, 3))
+                return State(faces=to_uint8(self.faces, active_bits))
 
             @property
             def unpacked(self):
-                return State(faces=from_uint8(self.faces, raw_shape, 3))
+                return State(faces=from_uint8(self.faces, raw_shape, active_bits))
 
         return State
 
-    def __init__(self, size: int = 3, initial_shuffle: int = 10, **kwargs):
+    def __init__(self, size: int = 3, initial_shuffle: int = 10, color_embedding: bool = True, **kwargs):
         self.size = size
         self.initial_shuffle = initial_shuffle
+        self.color_embedding = color_embedding
+        self._tile_count = self.size * self.size
+        self._num_tiles = 6 * self._tile_count
+        self._validate_tile_capacity()
         is_even = size % 2 == 0
         self.index_grid = jnp.asarray(
             [i for i in range(size) if is_even or not i == (size // 2)], dtype=jnp.uint8
         )
         super().__init__(**kwargs)
 
+    def _validate_tile_capacity(self):
+        if not self.color_embedding and self._num_tiles > 256:
+            raise ValueError(
+                "Tile-ID mode requires unique 8-bit identifiers; decrease cube size to keep tile count ≤ 256."
+            )
+
+    def _solved_faces(self) -> chex.Array:
+        if self.color_embedding:
+            return jnp.repeat(jnp.arange(6, dtype=TYPE)[:, None], self._tile_count, axis=1)
+        return jnp.arange(self._num_tiles, dtype=TYPE).reshape((6, self._tile_count))
+
+    def _color_index_from_value(self, value: int) -> int:
+        value_int = int(value)
+        if self.color_embedding:
+            return value_int
+        return value_int // self._tile_count
+
+    def _color_indices(self, stickers: np.ndarray | chex.Array) -> np.ndarray:
+        stickers_np = np.array(stickers)
+        if self.color_embedding:
+            return stickers_np
+        return stickers_np // self._tile_count
+
+    def _format_tile(self, value: int, *, as_color: bool) -> str:
+        color_idx = self._color_index_from_value(value)
+        if as_color:
+            token = "■"
+        else:
+            token = str(int(value)).rjust(self._token_width)
+        return coloring_str(token, rgb_map[color_idx])
+
     def get_string_parser(self):
-        def parser(state: "RubiksCube.State", **kwargs):
+        def parser(state: "RubiksCube.State", *, use_color_overlay: bool = False, **_):
             # Unpack the state faces before printing
             unpacked_faces = state.unpacked.faces
+            show_numbers = not use_color_overlay
 
             # Helper function to get face string
             def get_empty_face_string():
@@ -93,34 +154,31 @@ class RubiksCube(Puzzle):
 
             def get_face_string(face):
                 face_str = face_map[face]
-                string = f"┏━{face_str.center(self.size * 2 - 1, '━')}━┓\n"
+                display_tile_width = 1 if (self.color_embedding or not show_numbers) else self._token_width
+                row_display_width = self.size * display_tile_width + (self.size - 1)
+                inner_width = row_display_width
+                string = f"┏━{face_str.center(inner_width, '━')}━┓\n"
                 for j in range(self.size):
-                    string += (
-                        "┃ "
-                        + " ".join(
-                            [
-                                coloring_str(
-                                    "■", rgb_map[int(unpacked_faces[face, j * self.size + i])]
-                                )
-                                for i in range(self.size)
-                            ]
-                        )
-                        + " ┃\n"
-                    )
-                string += "┗━" + "━━" * (self.size - 1) + "━━┛\n"
+                    tokens = []
+                    for i in range(self.size):
+                        value = unpacked_faces[face, j * self.size + i]
+                        tokens.append(self._format_tile(value, as_color=not show_numbers))
+                    row = " ".join(tokens)
+                    string += f"┃ {row.ljust(row_display_width)} ┃\n"
+                string += f"┗━{'━' * inner_width}━┛\n"
                 return string
 
             # Create the cube string representation
             cube_str = tabulate(
                 [
-                    [color_legend(), (".\n" + get_face_string(0))],
+                    [color_legend(), (".\n" + get_face_string(UP))],
                     [
-                        get_face_string(2),
-                        get_face_string(4),
-                        get_face_string(3),
-                        get_face_string(5),
+                        get_face_string(LEFT),
+                        get_face_string(FRONT),
+                        get_face_string(RIGHT),
+                        get_face_string(BACK),
                     ],
-                    [get_empty_face_string(), get_face_string(1)],
+                    [get_empty_face_string(), get_face_string(DOWN)],
                 ],
                 tablefmt="plain",
                 rowalign="center",
@@ -137,9 +195,7 @@ class RubiksCube(Puzzle):
         )
 
     def get_target_state(self, key=None) -> "RubiksCube.State":
-        faces = jnp.repeat(jnp.arange(6)[:, None], self.size * self.size, axis=1).astype(
-            TYPE
-        )  # 6 faces, 3x3 each
+        faces = self._solved_faces()
         return self.State(faces=faces).packed
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
@@ -264,9 +320,9 @@ class RubiksCube(Puzzle):
 
         rotate_edge_map = jnp.array(
             [
-                [UP, FRONT, DOWN, BACK],  # x-axis
-                [LEFT, FRONT, RIGHT, BACK],  # y-axis
-                [UP, LEFT, DOWN, RIGHT],  # z-axis
+                [UP, FRONT, DOWN, BACK],  # x-axis (rotates around columns)
+                [LEFT, FRONT, RIGHT, BACK],  # y-axis (rotates around rows)
+                [UP, LEFT, DOWN, RIGHT],  # z-axis (rotates around depth)
             ]
         )
         rotate_edge_rot = jnp.array(
@@ -388,19 +444,45 @@ class RubiksCube(Puzzle):
                 u, v = project(x, y, z)
                 return int(u * scale + offset_x), int(v * scale + offset_y)
 
-            # Obtain the color data for each face and reshape them into grids
-            board = state.unpacked.faces
-            board = np.array(board)
-            face_colors = {}
-            face_colors[UP] = np.array(board[UP].reshape((self.size, self.size)))
-            face_colors[FRONT] = np.array(board[FRONT].reshape((self.size, self.size)))
-            face_colors[RIGHT] = np.array(board[RIGHT].reshape((self.size, self.size)))
+            # Obtain sticker data, colour mapping, and helper for drawing numbered tiles
+            stickers = np.array(state.unpacked.faces, dtype=np.int32).reshape((6, self.size, self.size))
+            color_faces = self._color_indices(stickers).reshape((6, self.size, self.size))
 
-            # If another_faces is True, get additional faces: DOWN, BACK, LEFT
-            if another_faces:
-                face_colors[DOWN] = np.array(board[DOWN].reshape((self.size, self.size)))
-                face_colors[BACK] = np.array(board[BACK].reshape((self.size, self.size)))
-                face_colors[LEFT] = np.array(board[LEFT].reshape((self.size, self.size)))
+            def draw_tile(img_target, pts, face_id, row, col):
+                color_idx = int(color_faces[face_id, row, col])
+                value = int(stickers[face_id, row, col])
+                color = rgb_map[color_idx]
+                cv2.fillPoly(img_target, [pts], color)
+                cv2.polylines(
+                    img_target,
+                    [pts],
+                    isClosed=True,
+                    color=(0, 0, 0),
+                    thickness=LINE_THICKNESS,
+                )
+
+                if not self.color_embedding:
+                    center = np.mean(pts[:, 0, :], axis=0)
+                    edge = np.linalg.norm(pts[0, 0, :] - pts[1, 0, :])
+                    font_scale = max(0.3, min(1.2, edge / 32.0))
+                    thickness = max(1, int(round(LINE_THICKNESS / 2)))
+                    text = str(value)
+                    (text_width, text_height), baseline = cv2.getTextSize(
+                        text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness
+                    )
+                    text_x = int(center[0] - text_width / 2)
+                    text_y = int(center[1] + text_height / 2)
+
+                    cv2.putText(
+                        img_target,
+                        text,
+                        (text_x, text_y),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        font_scale,
+                        (0, 0, 0),
+                        thickness,
+                        lineType=cv2.LINE_AA,
+                    )
 
             # Draw faces in correct order for proper depth.
             # 1. Draw the front face (FRONT)
@@ -414,12 +496,7 @@ class RubiksCube(Puzzle):
                     pts = np.array(
                         [transform(*p0), transform(*p1), transform(*p2), transform(*p3)], np.int32
                     ).reshape((-1, 1, 2))
-                    color_idx = int(face_colors[FRONT][i, j])
-                    color = rgb_map[color_idx]
-                    cv2.fillPoly(img, [pts], color)
-                    cv2.polylines(
-                        img, [pts], isClosed=True, color=(0, 0, 0), thickness=LINE_THICKNESS
-                    )
+                    draw_tile(img, pts, FRONT, i, j)
 
             # 2. Draw the right face (RIGHT)
             for i in range(self.size):
@@ -432,12 +509,7 @@ class RubiksCube(Puzzle):
                     pts = np.array(
                         [transform(*p0), transform(*p1), transform(*p2), transform(*p3)], np.int32
                     ).reshape((-1, 1, 2))
-                    color_idx = int(face_colors[RIGHT][i, j])
-                    color = rgb_map[color_idx]
-                    cv2.fillPoly(img, [pts], color)
-                    cv2.polylines(
-                        img, [pts], isClosed=True, color=(0, 0, 0), thickness=LINE_THICKNESS
-                    )
+                    draw_tile(img, pts, RIGHT, i, j)
 
             # 3. Draw the top face (UP) last so that it appears above the other faces
             for i in range(self.size):
@@ -450,12 +522,7 @@ class RubiksCube(Puzzle):
                         [transform(*p0), transform(*p1), transform(*p2), transform(*p3)], np.int32
                     ).reshape((-1, 1, 2))
                     # Note: for UP, flip the row order to match orientation
-                    color_idx = int(face_colors[UP][self.size - i - 1, j])
-                    color = rgb_map[color_idx]
-                    cv2.fillPoly(img, [pts], color)
-                    cv2.polylines(
-                        img, [pts], isClosed=True, color=(0, 0, 0), thickness=LINE_THICKNESS
-                    )
+                    draw_tile(img, pts, UP, self.size - i - 1, j)
 
             # If another_faces is True, draw additional faces (DOWN, BACK, LEFT) as flat squares
             if another_faces:
@@ -474,12 +541,7 @@ class RubiksCube(Puzzle):
                             [transform(*p0), transform(*p1), transform(*p2), transform(*p3)],
                             np.int32,
                         ).reshape((-1, 1, 2))
-                        color_idx = int(face_colors[BACK][i, j])
-                        color = rgb_map[color_idx]
-                        cv2.fillPoly(img2, [pts], color)
-                        cv2.polylines(
-                            img2, [pts], isClosed=True, color=(0, 0, 0), thickness=LINE_THICKNESS
-                        )
+                        draw_tile(img2, pts, BACK, i, j)
 
                 # 2. Draw the down face (DOWN)
                 for i in range(self.size):
@@ -493,12 +555,7 @@ class RubiksCube(Puzzle):
                             [transform(*p0), transform(*p1), transform(*p2), transform(*p3)],
                             np.int32,
                         ).reshape((-1, 1, 2))
-                        color_idx = int(face_colors[DOWN][self.size - j - 1, i])
-                        color = rgb_map[color_idx]
-                        cv2.fillPoly(img2, [pts], color)
-                        cv2.polylines(
-                            img2, [pts], isClosed=True, color=(0, 0, 0), thickness=LINE_THICKNESS
-                        )
+                        draw_tile(img2, pts, DOWN, self.size - j - 1, i)
 
                 # 3. Draw the left face (LEFT) last so that it appears above the other faces
                 for i in range(self.size):
@@ -512,12 +569,7 @@ class RubiksCube(Puzzle):
                             [transform(*p0), transform(*p1), transform(*p2), transform(*p3)],
                             np.int32,
                         ).reshape((-1, 1, 2))
-                        color_idx = int(face_colors[LEFT][i, j])
-                        color = rgb_map[color_idx]
-                        cv2.fillPoly(img2, [pts], color)
-                        cv2.polylines(
-                            img2, [pts], isClosed=True, color=(0, 0, 0), thickness=LINE_THICKNESS
-                        )
+                        draw_tile(img2, pts, LEFT, i, j)
 
                 img = np.concatenate([img, img2], axis=1)
 
