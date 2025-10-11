@@ -141,7 +141,7 @@ class RubiksCube(Puzzle):
         def parser(state: "RubiksCube.State", *, use_color_overlay: bool = False, **_):
             # Unpack the state faces before printing
             unpacked_faces = state.unpacked.faces
-            show_numbers = not use_color_overlay
+            as_color = self.color_embedding or use_color_overlay
 
             # Helper function to get face string
             def get_empty_face_string():
@@ -154,7 +154,7 @@ class RubiksCube(Puzzle):
 
             def get_face_string(face):
                 face_str = face_map[face]
-                display_tile_width = 1 if (self.color_embedding or not show_numbers) else self._token_width
+                display_tile_width = 1 if not as_color else self._token_width
                 row_display_width = self.size * display_tile_width + (self.size - 1)
                 inner_width = row_display_width
                 string = f"┏━{face_str.center(inner_width, '━')}━┓\n"
@@ -162,7 +162,7 @@ class RubiksCube(Puzzle):
                     tokens = []
                     for i in range(self.size):
                         value = unpacked_faces[face, j * self.size + i]
-                        tokens.append(self._format_tile(value, as_color=not show_numbers))
+                        tokens.append(self._format_tile(value, as_color=as_color))
                     row = " ".join(tokens)
                     string += f"┃ {row.ljust(row_display_width)} ┃\n"
                 string += f"┗━{'━' * inner_width}━┛\n"
