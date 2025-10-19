@@ -258,31 +258,35 @@ class RubiksCube(Puzzle):
         For cubes larger than 3x3x3, internal slice rotations are named
         with layer numbers (e.g., L2, R2 for 4x4x4 cube).
         """
-        # Decode action into components
+        # Decode action into components. The meshgrid in `get_neighbours` yields
+        # actions ordered as:
+        #   counterclockwise/clockwise (fastest) × axis (next) × slice index (slowest).
+        num_axes = 3
         num_indices = len(self.index_grid)
-        axis = action // (num_indices * 2)
-        index = (action // 2) % num_indices
-        clockwise = action % 2
+        action_limit = num_axes * num_indices * 2
+        if action < 0 or action >= action_limit:
+            raise ValueError(f"Action {action} is out of bounds for action space size {action_limit}.")
+
+        clockwise = bool(action % 2)
+        axis = int((action // 2) % num_axes)
+        index_idx = int(action // (2 * num_axes))
 
         # Map (axis, index) to face using the same logic as _rotate method
-        actual_index = self.index_grid[index]
+        actual_index = int(self.index_grid[index_idx])
 
         if self.size <= 3:
-            # For 3x3x3 and smaller cubes, use the original logic
-            is_edge = jnp.isin(actual_index, jnp.array([0, self.size - 1]))
-            switch_num = jnp.where(is_edge, 1 + 2 * axis + actual_index // (self.size - 1), 0)
-
-            # Map switch_num to face string
-            face_map = {
-                1: "left",  # axis=0, index=0
-                2: "right",  # axis=0, index=2 (for size=3)
-                3: "down",  # axis=1, index=0
-                4: "up",  # axis=1, index=2 (for size=3)
-                5: "front",  # axis=2, index=0
-                6: "back",  # axis=2, index=2 (for size=3)
+            edge_labels = {
+                (0, 0): "L",
+                (0, self.size - 1): "R",
+                (1, 0): "D",
+                (1, self.size - 1): "U",
+                (2, 0): "F",
+                (2, self.size - 1): "B",
             }
-
-            face_str = face_map.get(int(switch_num), "slice") if switch_num > 0 else "slice"
+            try:
+                face_str = edge_labels[(axis, actual_index)]
+            except KeyError as exc:
+                raise ValueError(f"Invalid edge rotation (axis={axis}, index={actual_index})") from exc
         else:
             # For cubes larger than 3x3x3, use layer-based naming
             # Define face name pairs for each axis: (negative_direction, positive_direction)
@@ -290,7 +294,7 @@ class RubiksCube(Puzzle):
             negative_face, positive_face = face_pairs[axis]
 
             # Determine which face this slice is closer to and calculate layer number
-            mid_point = self.size / 2
+            mid_point = (self.size - 1) / 2
             if actual_index < mid_point:
                 # Closer to negative direction face (L, D, F)
                 face_name = negative_face
@@ -303,8 +307,8 @@ class RubiksCube(Puzzle):
             # For layer 1, don't include the number
             face_str = face_name if layer_num == 1 else f"{face_name}{layer_num}"
 
-        direction = "cw" if clockwise else "ccw"
-        return f"{face_str}_{direction}"
+        suffix = "" if clockwise else "'"
+        return f"{face_str}{suffix}"
 
     @staticmethod
     def _rotate_face(shaped_faces: chex.Array, clockwise: bool, mul: int):
