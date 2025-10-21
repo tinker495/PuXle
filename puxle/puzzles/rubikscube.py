@@ -147,6 +147,22 @@ class RubiksCube(Puzzle):
             return stickers_np
         return stickers_np // self._tile_count
 
+    def convert_tile_to_color_embedding(
+        self, tile_faces: np.ndarray | chex.Array
+    ) -> jnp.ndarray:
+        """
+        Convert faces expressed with tile identifiers (0..6*tile_count-1) into
+        color embedding (0..5). Accepts shapes (6, tile_count), (6, size, size) or flat.
+        """
+        faces = jnp.asarray(tile_faces)
+        tile_count = self._tile_count
+        if faces.size != 6 * tile_count:
+            raise ValueError(
+                f"Expected {6 * tile_count} elements for tile faces, got {faces.size}"
+            )
+        color_faces = (faces.reshape(6, tile_count) // tile_count).astype(jnp.uint8)
+        return color_faces.reshape(faces.shape)
+
     def _format_tile(self, value: int, *, as_color: bool) -> str:
         color_idx = self._color_index_from_value(value)
         if as_color:
