@@ -71,7 +71,7 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
 
         state = self._convert_state(raw_state)
         solve_config = self._ensure_solve_config()
-        optimal_path = self._convert_solution(dataset["solutions"][index])
+        optimal_path = self._convert_solution(dataset["solutions"][index], state, solve_config)
 
         return BenchmarkSample(state=state, solve_config=solve_config, optimal_path=optimal_path)
 
@@ -89,19 +89,30 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         packed_faces = to_uint8(color_faces, puzzle._active_bits)
         return puzzle.State(faces=packed_faces)
 
-    def _convert_solution(self, moves: Sequence[Sequence[Any]]):
+    def _convert_solution(
+        self,
+        moves: Sequence[Sequence[Any]],
+        start_state,
+        solve_config,
+    ):
         notation_lookup = self._build_action_lookup()
-        actions: list[int] = []
+        puzzle = self.puzzle
+        current_state = start_state
+        states = []
         for face, direction in moves:
             if direction not in (-1, 1):
                 raise ValueError(f"Unsupported rotation direction {direction} for move {face}.")
             face_notation = str(face).upper()
             notation = face_notation if direction == 1 else f"{face_notation}'"
             try:
-                actions.append(notation_lookup[notation])
+                action = notation_lookup[notation]
             except KeyError as exc:
                 raise KeyError(f"Unknown move notation '{notation}' in solution path") from exc
-        return tuple(actions)
+            neighbours, _ = puzzle.get_neighbours(solve_config, current_state)
+            next_state = neighbours[action]
+            states.append(next_state)
+            current_state = next_state
+        return tuple(states)
 
     def _build_action_lookup(self) -> dict[str, int]:
         if self._notation_to_action is None:

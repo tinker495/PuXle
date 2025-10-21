@@ -19,7 +19,7 @@ class BenchmarkSample(Generic[StateT, SolveConfigT]):
 
     state: StateT
     solve_config: SolveConfigT
-    optimal_path: Sequence[Any]
+    optimal_path: Sequence[StateT]
 
 
 class Benchmark(ABC, Generic[StateT, SolveConfigT]):
