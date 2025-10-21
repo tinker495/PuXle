@@ -93,17 +93,35 @@ class RubiksCube(Puzzle):
 
         return State
 
-    def __init__(self, size: int = 3, initial_shuffle: int = 10, color_embedding: bool = True, **kwargs):
+    def __init__(
+        self,
+        size: int = 3,
+        initial_shuffle: int = 10,
+        color_embedding: bool = True,
+        metric: str = "QTM",
+        **kwargs,
+    ):
         self.size = size
         self.initial_shuffle = initial_shuffle
         self.color_embedding = color_embedding
+        metric_upper = metric.upper()
+        supported_metrics = {"QTM", "UQTM"}
+        if metric_upper not in supported_metrics:
+            raise ValueError(
+                f"Unsupported metric '{metric}'. Supported metrics: {', '.join(sorted(supported_metrics))}."
+            )
+        self.metric = metric_upper
         self._tile_count = self.size * self.size
         self._num_tiles = 6 * self._tile_count
         self._validate_tile_capacity()
         is_even = size % 2 == 0
-        self.index_grid = jnp.asarray(
-            [i for i in range(size) if is_even or not i == (size // 2)], dtype=jnp.uint8
-        )
+        center_index = size // 2
+        include_center = is_even or self.metric == "UQTM"
+        if include_center:
+            indices = list(range(size))
+        else:
+            indices = [i for i in range(size) if i != center_index]
+        self.index_grid = jnp.asarray(indices, dtype=jnp.uint8)
         super().__init__(**kwargs)
 
     def _validate_tile_capacity(self):
@@ -274,7 +292,16 @@ class RubiksCube(Puzzle):
         # Map (axis, index) to face using the same logic as _rotate method
         actual_index = int(self.index_grid[index_idx])
 
-        if self.size <= 3:
+        is_center_slice = (
+            self.metric == "UQTM" and self.size % 2 == 1 and actual_index == (self.size // 2)
+        )
+        if is_center_slice:
+            center_labels = {0: "M", 1: "E", 2: "S"}
+            try:
+                face_str = center_labels[axis]
+            except KeyError as exc:
+                raise ValueError(f"Invalid center rotation (axis={axis})") from exc
+        elif self.size <= 3:
             edge_labels = {
                 (0, 0): "L",
                 (0, self.size - 1): "R",
