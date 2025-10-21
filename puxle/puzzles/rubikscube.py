@@ -1,4 +1,6 @@
+from dataclasses import dataclass
 from functools import partial
+from typing import Literal
 
 import chex
 import jax
@@ -57,6 +59,16 @@ def rot90_traceable(m, k=1, axes=(0, 1)):
 # 0: x-axis(left), 1: y-axis(up), 2: z-axis(front)
 
 
+@dataclass(frozen=True)
+class _ActionSpec:
+    axis: int
+    index: int
+    clockwise: bool
+    turn_count: int
+    cost: float
+    kind: Literal["face", "cube"]
+
+
 class RubiksCube(Puzzle):
     size: int
     index_grid: chex.Array
@@ -93,10 +105,18 @@ class RubiksCube(Puzzle):
 
         return State
 
-    def __init__(self, size: int = 3, initial_shuffle: int = 10, color_embedding: bool = True, **kwargs):
+    def __init__(
+        self,
+        size: int = 3,
+        initial_shuffle: int = 10,
+        color_embedding: bool = True,
+        metric: str = "QTM",
+        **kwargs,
+    ):
         self.size = size
         self.initial_shuffle = initial_shuffle
         self.color_embedding = color_embedding
+        self.metric = metric.upper()
         self._tile_count = self.size * self.size
         self._num_tiles = 6 * self._tile_count
         self._validate_tile_capacity()
@@ -104,6 +124,7 @@ class RubiksCube(Puzzle):
         self.index_grid = jnp.asarray(
             [i for i in range(size) if is_even or not i == (size // 2)], dtype=jnp.uint8
         )
+        self._init_actions()
         super().__init__(**kwargs)
 
     def _validate_tile_capacity(self):
@@ -111,6 +132,72 @@ class RubiksCube(Puzzle):
             raise ValueError(
                 "Tile-ID mode requires unique 8-bit identifiers; decrease cube size to keep tile count ≤ 256."
             )
+
+    def _init_actions(self):
+        allowed_metrics = {"HTM", "QTM", "UQTM"}
+        if self.metric not in allowed_metrics:
+            raise ValueError(
+                f"Unsupported metric '{self.metric}'. Choose from {sorted(allowed_metrics)}."
+            )
+
+        specs: list[_ActionSpec] = []
+        inverse: list[int] = []
+
+        def add_spec(spec: _ActionSpec) -> int:
+            specs.append(spec)
+            inverse.append(-1)
+            return len(specs) - 1
+
+        valid_indices = set(map(int, self.index_grid.tolist()))
+        for axis in range(3):
+            for index in range(self.size):
+                if index not in valid_indices:
+                    continue
+                cw_idx = add_spec(
+                    _ActionSpec(axis=axis, index=index, clockwise=True, turn_count=1, cost=1.0, kind="face")
+                )
+                ccw_idx = add_spec(
+                    _ActionSpec(axis=axis, index=index, clockwise=False, turn_count=1, cost=1.0, kind="face")
+                )
+                inverse[cw_idx] = ccw_idx
+                inverse[ccw_idx] = cw_idx
+
+                if self.metric in {"HTM", "QTM"}:
+                    half_cost = 1.0 if self.metric == "HTM" else 2.0
+                    half_idx = add_spec(
+                        _ActionSpec(axis=axis, index=index, clockwise=True, turn_count=2, cost=half_cost, kind="face")
+                    )
+                    inverse[half_idx] = half_idx
+
+        if self.metric == "UQTM":
+            for axis in range(3):
+                cube_cw = add_spec(
+                    _ActionSpec(axis=axis, index=-1, clockwise=True, turn_count=1, cost=1.0, kind="cube")
+                )
+                cube_ccw = add_spec(
+                    _ActionSpec(axis=axis, index=-1, clockwise=False, turn_count=1, cost=1.0, kind="cube")
+                )
+                inverse[cube_cw] = cube_ccw
+                inverse[cube_ccw] = cube_cw
+
+        self._action_specs = specs
+        if specs:
+            kind_to_int = {"face": 0, "cube": 1}
+            self._action_axes = jnp.asarray([spec.axis for spec in specs], dtype=jnp.int32)
+            self._action_indices = jnp.asarray([spec.index for spec in specs], dtype=jnp.int32)
+            self._action_clockwise = jnp.asarray([spec.clockwise for spec in specs], dtype=bool)
+            self._action_turn_counts = jnp.asarray([spec.turn_count for spec in specs], dtype=jnp.int32)
+            self._action_costs = jnp.asarray([spec.cost for spec in specs], dtype=jnp.float32)
+            self._action_kinds = jnp.asarray([kind_to_int[spec.kind] for spec in specs], dtype=jnp.int32)
+            self._inverse_action_map = jnp.asarray(inverse, dtype=jnp.int32)
+        else:
+            self._action_axes = jnp.asarray([], dtype=jnp.int32)
+            self._action_indices = jnp.asarray([], dtype=jnp.int32)
+            self._action_clockwise = jnp.asarray([], dtype=bool)
+            self._action_turn_counts = jnp.asarray([], dtype=jnp.int32)
+            self._action_costs = jnp.asarray([], dtype=jnp.float32)
+            self._action_kinds = jnp.asarray([], dtype=jnp.int32)
+            self._inverse_action_map = None
 
     def _solved_faces(self) -> chex.Array:
         if self.color_embedding:
@@ -204,48 +291,34 @@ class RubiksCube(Puzzle):
     def get_neighbours(
         self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State", filled: bool = True
     ) -> tuple["RubiksCube.State", chex.Array]:
-        def map_fn(state, axis, index, clockwise):
-            return jax.lax.cond(
-                filled,
-                lambda: (self._rotate(state, axis, index, clockwise), 1.0),
-                lambda: (state, jnp.inf),
-            )
+        action_count = self._action_costs.shape[0]
 
-        axis_grid, index_grid, clockwise_grid = jnp.meshgrid(
-            jnp.arange(3), self.index_grid, jnp.arange(2)
-        )
-        axis_grid = axis_grid.reshape(-1)
-        index_grid = index_grid.reshape(-1)
-        clockwise_grid = clockwise_grid.reshape(-1)
-        new_states, costs = jax.vmap(map_fn, in_axes=(None, 0, 0, 0))(
-            state, axis_grid, index_grid, clockwise_grid
-        )
-        return new_states, costs
+        def filled_branch(_):
+            new_states = jax.vmap(self._apply_action, in_axes=(None, 0, 0, 0, 0, 0))(
+                state,
+                self._action_axes,
+                self._action_indices,
+                self._action_clockwise,
+                self._action_turn_counts,
+                self._action_kinds,
+            )
+            return new_states, self._action_costs
+
+        def empty_branch(_):
+            empty_state = jax.tree_util.tree_map(
+                lambda x: jnp.broadcast_to(x, (action_count,) + x.shape), state
+            )
+            empty_costs = jnp.full_like(self._action_costs, jnp.inf)
+            return empty_state, empty_costs
+
+        return jax.lax.cond(filled, filled_branch, empty_branch, operand=None)
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State") -> bool:
         return state == solve_config.TargetState
 
     @property
     def inverse_action_map(self) -> jnp.ndarray | None:
-        """
-        Defines the inverse action mapping for Rubik's Cube.
-        A rotation in one direction (e.g., clockwise) is inverted by a rotation
-        in the opposite direction (counter-clockwise) on the same axis and slice.
-
-        Actions are generated from a meshgrid of (axis, index, clockwise), with
-        clockwise being the fastest-changing dimension. This means actions are
-        interleaved as [cw, ccw, cw, ccw, ...]. The inverse of action `2k` (cw)
-        is `2k+1` (ccw), and vice versa.
-        """
-        num_actions = 3 * len(self.index_grid) * 2
-        actions = jnp.arange(num_actions)
-
-        # Reshape to pair up cw/ccw actions, flip them, and flatten back
-        inv_map = jnp.reshape(actions, (-1, 2))
-        inv_map = jnp.flip(inv_map, axis=1)
-        inv_map = jnp.reshape(inv_map, (-1,))
-
-        return inv_map
+        return self._inverse_action_map
 
     def action_to_string(self, action: int) -> str:
         """
@@ -258,21 +331,24 @@ class RubiksCube(Puzzle):
         For cubes larger than 3x3x3, internal slice rotations are named
         with layer numbers (e.g., L2, R2 for 4x4x4 cube).
         """
-        # Decode action into components. The meshgrid in `get_neighbours` yields
-        # actions ordered as:
-        #   counterclockwise/clockwise (fastest) × axis (next) × slice index (slowest).
-        num_axes = 3
-        num_indices = len(self.index_grid)
-        action_limit = num_axes * num_indices * 2
-        if action < 0 or action >= action_limit:
-            raise ValueError(f"Action {action} is out of bounds for action space size {action_limit}.")
+        if action < 0 or action >= len(self._action_specs):
+            raise ValueError(
+                f"Action {action} is out of bounds for action space size {len(self._action_specs)}."
+            )
 
-        clockwise = bool(action % 2)
-        axis = int((action // 2) % num_axes)
-        index_idx = int(action // (2 * num_axes))
+        spec = self._action_specs[action]
+        axis = int(spec.axis)
+        actual_index = int(spec.index)
+        clockwise = bool(spec.clockwise)
+        turn_count = int(spec.turn_count)
 
-        # Map (axis, index) to face using the same logic as _rotate method
-        actual_index = int(self.index_grid[index_idx])
+        if spec.kind == "cube":
+            axis_labels = {0: "x", 1: "y", 2: "z"}
+            face_str = axis_labels[axis]
+            suffix = "" if clockwise else "'"
+            if turn_count == 2:
+                suffix = "2"
+            return f"{face_str}{suffix}"
 
         if self.size <= 3:
             edge_labels = {
@@ -308,6 +384,8 @@ class RubiksCube(Puzzle):
             face_str = face_name if layer_num == 1 else f"{face_name}{layer_num}"
 
         suffix = "" if clockwise else "'"
+        if turn_count == 2:
+            suffix = "2"
         return f"{face_str}{suffix}"
 
     @staticmethod
@@ -385,6 +463,61 @@ class RubiksCube(Puzzle):
         )
         faces = jnp.reshape(shaped_faces, (6, self.size * self.size))
         return self.State(faces=faces).packed
+
+    def _apply_face_turn(
+        self,
+        state: "RubiksCube.State",
+        axis: int,
+        index: int,
+        clockwise: bool,
+        turn_count: int,
+    ) -> "RubiksCube.State":
+        def rotate_once(s):
+            return self._rotate(s, axis, index, clockwise)
+
+        def rotate_twice(s):
+            return rotate_once(rotate_once(s))
+
+        branches = (rotate_once, rotate_twice)
+        idx = jnp.clip(turn_count - 1, 0, len(branches) - 1)
+        return jax.lax.switch(idx, branches, state)
+
+    def _apply_cube_turn(
+        self,
+        state: "RubiksCube.State",
+        axis: int,
+        clockwise: bool,
+        turn_count: int,
+    ) -> "RubiksCube.State":
+        def rotate_once(s):
+            result = s
+            for idx in range(self.size):
+                result = self._rotate(result, axis, idx, clockwise)
+            return result
+
+        def rotate_twice(s):
+            return rotate_once(rotate_once(s))
+
+        branches = (rotate_once, rotate_twice)
+        idx = jnp.clip(turn_count - 1, 0, len(branches) - 1)
+        return jax.lax.switch(idx, branches, state)
+
+    def _apply_action(
+        self,
+        state: "RubiksCube.State",
+        axis: int,
+        index: int,
+        clockwise: bool,
+        turn_count: int,
+        kind: int,
+    ) -> "RubiksCube.State":
+        def face_turn(s):
+            return self._apply_face_turn(s, axis, index, clockwise, turn_count)
+
+        def cube_turn(s):
+            return self._apply_cube_turn(s, axis, clockwise, turn_count)
+
+        return jax.lax.switch(kind, (face_turn, cube_turn), state)
 
     def get_img_parser(self):
         """
