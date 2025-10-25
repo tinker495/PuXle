@@ -8,11 +8,20 @@ from typing import Any, Hashable, Iterable, Sequence
 import jax.numpy as jnp
 
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
-from puxle.utils.util import to_uint8
+from puxle.puzzles.rubikscube import RubiksCube
 
 DEFAULT_DATASET_NAME = "size3-deepcubeA.pkl"
 DATA_RELATIVE_PATH = Path("data") / "rubikscube" / DEFAULT_DATASET_NAME
 
+MAPPING_AXIS_TO_FACE = (0, 5, 2, 3, 4, 1)
+MAPPING_ACTION = {
+    "U": "U",
+    "D": "D",
+    "L": "L",
+    "R": "R",
+    "F": "F",
+    "B": "B",
+}
 
 class _DeepCubeUnpickler(pickle.Unpickler):
     """Unpickler that recreates missing DeepCube classes on the fly."""
@@ -67,52 +76,66 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
     def get_sample(self, sample_id: Hashable) -> BenchmarkSample:
         index = int(sample_id)
         dataset = self.dataset
-        raw_state = dataset["states"][index]
-
-        state = self._convert_state(raw_state)
+        state = self._convert_state(dataset["states"][index])
         solve_config = self._ensure_solve_config()
-        optimal_path = self._convert_solution(dataset["solutions"][index], state, solve_config)
+        optimal_action_sequence, optimal_path_costs = self._convert_solution(dataset["solutions"][index])
 
-        return BenchmarkSample(state=state, solve_config=solve_config, optimal_path=optimal_path)
+        return BenchmarkSample(
+            state=state,
+            solve_config=solve_config,
+            optimal_action_sequence=optimal_action_sequence,
+            optimal_path=None,
+            optimal_path_costs=optimal_path_costs,
+        )
+
+    def _convert_deepcubea_to_puxle(self, faces: jnp.ndarray, size: int) -> jnp.ndarray:
+        faces = jnp.reshape(faces, (6, size * size))[MAPPING_AXIS_TO_FACE, :]
+        new_faces = jnp.zeros_like(faces)
+        for frm, to in enumerate(MAPPING_AXIS_TO_FACE):
+            frm_n_start = frm * size * size
+            frm_n_end = (frm + 1) * size * size
+            inside_mask = jnp.logical_and(
+                jnp.greater_equal(faces, frm_n_start),
+                jnp.less(faces, frm_n_end),
+            )
+            additional_idxs = (to - frm) * size * size
+            new_faces = new_faces.at[inside_mask].set(additional_idxs + faces[inside_mask])
+        new_faces = jnp.reshape(new_faces, (6 * size * size, ))
+        return new_faces
 
     def _ensure_solve_config(self):
+        '''
         if self._solve_config_cache is None:
             self._solve_config_cache = self.puzzle.get_solve_config()
         return self._solve_config_cache
+        '''
+        puzzle : RubiksCube = self.puzzle
+        faces = jnp.arange(6 * puzzle.size * puzzle.size)
+        faces = self._convert_deepcubea_to_puxle(faces, puzzle.size)
+        faces = puzzle.convert_tile_to_color_embedding(faces)
+        return puzzle.SolveConfig(TargetState=puzzle.State(faces=faces).packed)
 
     def _convert_state(self, raw_state: Any):
         colors = getattr(raw_state, "colors", raw_state)
-        colors_array = jnp.asarray(colors, dtype=jnp.uint8)
-        puzzle = self.puzzle
-        tiles = colors_array.reshape(6, puzzle.size * puzzle.size)
-        color_faces = puzzle.convert_tile_to_color_embedding(tiles)
-        packed_faces = to_uint8(color_faces, puzzle._active_bits)
-        return puzzle.State(faces=packed_faces)
+        faces = jnp.asarray(colors, dtype=jnp.uint8)
+        puzzle : RubiksCube = self.puzzle
+        faces = self._convert_deepcubea_to_puxle(faces, puzzle.size)
+        faces = puzzle.convert_tile_to_color_embedding(faces)
+        return puzzle.State(faces=faces).packed
 
     def _convert_solution(
         self,
         moves: Sequence[Sequence[Any]],
-        start_state,
-        solve_config,
-    ):
-        notation_lookup = self._build_action_lookup()
-        puzzle = self.puzzle
-        current_state = start_state
-        states = []
+    ) -> tuple[tuple[str, ...], float]:
+        action_sequence: list[str] = []
         for face, direction in moves:
             if direction not in (-1, 1):
                 raise ValueError(f"Unsupported rotation direction {direction} for move {face}.")
-            face_notation = str(face).upper()
+            face_notation = MAPPING_ACTION[str(face).upper()]
             notation = face_notation if direction == 1 else f"{face_notation}'"
-            try:
-                action = notation_lookup[notation]
-            except KeyError as exc:
-                raise KeyError(f"Unknown move notation '{notation}' in solution path") from exc
-            neighbours, _ = puzzle.get_neighbours(solve_config, current_state)
-            next_state = neighbours[action]
-            states.append(next_state)
-            current_state = next_state
-        return tuple(states)
+            action_sequence.append(notation)
+        optimal_action_sequence = tuple(action_sequence)
+        return optimal_action_sequence, float(len(optimal_action_sequence))
 
     def _build_action_lookup(self) -> dict[str, int]:
         if self._notation_to_action is None:

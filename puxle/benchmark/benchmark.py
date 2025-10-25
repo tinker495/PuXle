@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Generic, Hashable, Iterable, Sequence, TypeVar
+from typing import Any, Generic, Hashable, Iterable, Optional, Sequence, TypeVar
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import PuzzleState
@@ -19,7 +19,9 @@ class BenchmarkSample(Generic[StateT, SolveConfigT]):
 
     state: StateT
     solve_config: SolveConfigT
-    optimal_path: Sequence[StateT]
+    optimal_action_sequence: Optional[None | Sequence[str]]
+    optimal_path: Optional[None | Sequence[StateT]]
+    optimal_path_costs: Optional[None | float]
 
 
 class Benchmark(ABC, Generic[StateT, SolveConfigT]):
@@ -57,4 +59,4 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
 
     @abstractmethod
     def get_sample(self, sample_id: Hashable) -> BenchmarkSample[StateT, SolveConfigT]:
-        """Fetch the state, solve configuration and optimal path for a sample."""
+        """Fetch the state, solve configuration and optimal action sequence for a sample."""

@@ -59,6 +59,7 @@ def _preview_samples(
         sample = benchmark.get_sample(sample_id)
         state = sample.state
         solve_config = sample.solve_config
+        optimal_action_sequence = sample.optimal_action_sequence
         optimal_path = sample.optimal_path
         print(f"Sample {sample_id}")
         print(f"  state faces shape: {state.faces.shape} dtype={state.faces.dtype}")
@@ -68,12 +69,14 @@ def _preview_samples(
         print(target)
         print(f"  optimal path length: {len(optimal_path)}")
         print(f"  optimal path states: \n{_stack_states(optimal_path)}")
+        print(f"  optimal action sequence: {optimal_action_sequence}")
+        solved = _validate_solution(benchmark, sample_id)
+        if not solved:
+            msg = f"Optimal path for sample {sample_id} does not reach the target state."
+            print("  validation: FAILED (check move convention mapping)")
+            raise RuntimeError(msg)
         if validate:
-            solved = _validate_solution(benchmark, sample_id)
-            if solved:
-                print("  validation: solved")
-            else:
-                print("  validation: FAILED (check move convention mapping)")
+            print("  validation: solved")
         print()
 
 
