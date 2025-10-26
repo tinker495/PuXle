@@ -5,8 +5,9 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
+import jax
 import jax.numpy as jnp
-
+from functools import partial
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.puzzles.rubikscube import RubiksCube
 
@@ -14,6 +15,7 @@ DEFAULT_DATASET_NAME = "size3-deepcubeA.pkl"
 DATA_RELATIVE_PATH = Path("data") / "rubikscube" / DEFAULT_DATASET_NAME
 
 MAPPING_AXIS_TO_FACE = (0, 5, 2, 3, 4, 1)
+MAPPING_SPIN_TO_FACE = (0, 1, 1, 1, 1, 0)
 MAPPING_ACTION = {
     "U": "U",
     "D": "D",
@@ -31,6 +33,9 @@ class _DeepCubeUnpickler(pickle.Unpickler):
             return globals().setdefault(name, type(name, (), {}))
         return super().find_class(module, name)
 
+def rot90_traceable(m, k=1, axes=(0, 1)):
+    k %= 4
+    return jax.lax.switch(k, [partial(jnp.rot90, m, k=i, axes=axes) for i in range(4)])
 
 class RubiksCubeDeepCubeABenchmark(Benchmark):
     """Benchmark exposing the DeepCubeA 3x3 Rubik's Cube dataset."""
@@ -44,7 +49,7 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
     def build_puzzle(self):
         from puxle.puzzles.rubikscube import RubiksCube
 
-        return RubiksCube(size=3)
+        return RubiksCube(size=3, initial_shuffle=100)
 
     def load_dataset(self) -> dict[str, Any]:
         if self._dataset_path is not None:
@@ -89,7 +94,7 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         )
 
     def _convert_deepcubea_to_puxle(self, faces: jnp.ndarray, size: int) -> jnp.ndarray:
-        faces = jnp.reshape(faces, (6, size * size))[MAPPING_AXIS_TO_FACE, :]
+        faces = jnp.reshape(faces, (6, size * size))
         new_faces = jnp.zeros_like(faces)
         for frm, to in enumerate(MAPPING_AXIS_TO_FACE):
             frm_n_start = frm * size * size
@@ -100,20 +105,19 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
             )
             additional_idxs = (to - frm) * size * size
             new_faces = new_faces.at[inside_mask].set(additional_idxs + faces[inside_mask])
+        for i in range(6):
+            rotated_face = rot90_traceable(
+                jnp.reshape(new_faces[i, :], (size, size)),
+                MAPPING_SPIN_TO_FACE[i],
+            )
+            new_faces = new_faces.at[i, :].set(jnp.reshape(rotated_face, (size * size,)))
         new_faces = jnp.reshape(new_faces, (6 * size * size, ))
         return new_faces
 
     def _ensure_solve_config(self):
-        '''
         if self._solve_config_cache is None:
             self._solve_config_cache = self.puzzle.get_solve_config()
         return self._solve_config_cache
-        '''
-        puzzle : RubiksCube = self.puzzle
-        faces = jnp.arange(6 * puzzle.size * puzzle.size)
-        faces = self._convert_deepcubea_to_puxle(faces, puzzle.size)
-        faces = puzzle.convert_tile_to_color_embedding(faces)
-        return puzzle.SolveConfig(TargetState=puzzle.State(faces=faces).packed)
 
     def _convert_state(self, raw_state: Any):
         colors = getattr(raw_state, "colors", raw_state)
