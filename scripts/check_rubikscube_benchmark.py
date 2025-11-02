@@ -13,20 +13,55 @@ import xtructure.numpy as xnp
 
 from puxle.benchmark.rubikscube_deepcubea import RubiksCubeDeepCubeABenchmark
 
+
+def _reconstruct_optimal_path(
+    benchmark: RubiksCubeDeepCubeABenchmark,
+    sample,
+) -> tuple[PuzzleState, ...]:
+    if sample.optimal_path:
+        return tuple(sample.optimal_path)
+
+    action_sequence = sample.optimal_action_sequence
+    if not action_sequence:
+        return tuple()
+
+    action_lookup = benchmark._build_action_lookup()
+    puzzle = benchmark.puzzle
+    solve_config = sample.solve_config
+    current_state = sample.state
+    path: list[PuzzleState] = []
+
+    for step, notation in enumerate(action_sequence, start=1):
+        try:
+            action_idx = action_lookup[notation]
+        except KeyError as exc:  # pragma: no cover - defensive guard
+            raise KeyError(f"Unknown action notation '{notation}' at step {step}") from exc
+
+        neighbours, _ = puzzle.get_neighbours(solve_config, current_state, filled=True)
+        next_state = neighbours[action_idx]
+        path.append(next_state)
+        current_state = next_state
+
+    return tuple(path)
+
 def _stack_states(states: Sequence[PuzzleState]) -> str:
     return xnp.concatenate(states, axis=0)
 
 
-def _validate_solution(benchmark: RubiksCubeDeepCubeABenchmark, sample_id: int) -> bool:
-    sample = benchmark.get_sample(sample_id)
+def _validate_solution(
+    benchmark: RubiksCubeDeepCubeABenchmark,
+    sample,
+    *,
+    optimal_path: Sequence[PuzzleState] | None = None,
+) -> bool:
     puzzle = benchmark.puzzle
     solve_config = sample.solve_config
-    state = sample.state
-    if not sample.optimal_path:
-        return puzzle.is_solved(solve_config, state)
-    for next_state in sample.optimal_path:
-        state = next_state
-    return puzzle.is_solved(solve_config, state)
+
+    if optimal_path is None:
+        optimal_path = _reconstruct_optimal_path(benchmark, sample)
+
+    final_state = optimal_path[-1] if optimal_path else sample.state
+    return puzzle.is_solved(solve_config, final_state)
 
 
 def _summarize_dataset(benchmark: RubiksCubeDeepCubeABenchmark) -> None:
@@ -60,22 +95,32 @@ def _preview_samples(
         state = sample.state
         solve_config = sample.solve_config
         optimal_action_sequence = sample.optimal_action_sequence
-        optimal_path = sample.optimal_path
+
+        try:
+            optimal_path = _reconstruct_optimal_path(benchmark, sample)
+        except KeyError as exc:
+            print(f"  optimal path reconstruction error: {exc}")
+            optimal_path = tuple()
         print(f"Sample {sample_id}")
         print(f"  state faces shape: {state.faces.shape} dtype={state.faces.dtype}")
         print(state)
         target = solve_config.TargetState
         print(f"  target faces shape: {target.faces.shape} dtype={target.faces.dtype}")
         print(target)
-        print(f"  optimal path length: {len(optimal_path)}")
-        print(f"  optimal path states: \n{_stack_states(optimal_path)}")
+        if optimal_path:
+            print(f"  optimal path length: {len(optimal_path)}")
+            print(f"  optimal path states: \n{_stack_states(optimal_path)}")
+        else:
+            print("  optimal path length: 0 (no path provided)")
+            print("  optimal path states: <not available>")
         print(f"  optimal action sequence: {optimal_action_sequence}")
-        solved = _validate_solution(benchmark, sample_id)
+        solved = _validate_solution(benchmark, sample, optimal_path=optimal_path)
         if not solved:
             msg = f"Optimal path for sample {sample_id} does not reach the target state."
             print("  validation: FAILED (check move convention mapping)")
-            raise RuntimeError(msg)
-        if validate:
+            if validate:
+                raise RuntimeError(msg)
+        elif validate:
             print("  validation: solved")
         print()
 

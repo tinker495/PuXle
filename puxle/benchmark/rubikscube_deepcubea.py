@@ -30,14 +30,6 @@ ID_MAP = (
     33, 30, 27, 34, 31, 28, 35, 32, 29, # B
     15, 12,  9, 16, 13, 10, 17, 14, 11, # F
 )
-MAPPING_ACTION = {
-    "U": "U",
-    "D": "D",
-    "L": "L",
-    "R": "R",
-    "F": "F",
-    "B": "B",
-}
 
 class _DeepCubeUnpickler(pickle.Unpickler):
     """Unpickler that recreates missing DeepCube classes on the fly."""
@@ -55,7 +47,7 @@ def rot90_traceable(m, k=1, axes=(0, 1)):
 class RubiksCubeDeepCubeABenchmark(Benchmark):
     """Benchmark exposing the DeepCubeA 3x3 Rubik's Cube dataset."""
 
-    def __init__(self, dataset_path: str | Path | None = None, use_color_embedding: bool = False) -> None:
+    def __init__(self, dataset_path: str | Path | None = None, use_color_embedding: bool = True) -> None:
         super().__init__()
         self._dataset_path = Path(dataset_path).expanduser().resolve() if dataset_path else None
         self._solve_config_cache = None
