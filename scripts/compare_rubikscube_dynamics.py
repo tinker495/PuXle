@@ -93,7 +93,7 @@ def main() -> None:
     print("Initial solved-states")
     print(xnp.stack([rubiks.State(faces=conv_goal).packed, target_state]))
 
-    for action in range(cube3.get_num_moves())[:2]:
+    for action in range(cube3.get_num_moves()):
         str_action = cube3_str_actions[action]
         rc_action = rubiks_actions[str_action]
         next_states, _ = cube3.next_state([cube3_goal_state], action)
@@ -102,8 +102,11 @@ def main() -> None:
         converted_next_state = converter._convert_deepcubea_to_puxle(flattened_next_state, rubiks.size)
         to_rubiks = rubiks.State(faces=converted_next_state).packed
         rc_state = neighbours[rc_action]
+        if to_rubiks == rc_state:
+            continue
         print(str_action)
         print(xnp.stack([to_rubiks, rc_state]))
+        break
 
 
 if __name__ == "__main__":

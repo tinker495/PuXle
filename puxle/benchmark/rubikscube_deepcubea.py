@@ -14,8 +14,22 @@ from puxle.puzzles.rubikscube import RubiksCube
 DEFAULT_DATASET_NAME = "size3-deepcubeA.pkl"
 DATA_RELATIVE_PATH = Path("data") / "rubikscube" / DEFAULT_DATASET_NAME
 
-MAPPING_AXIS_TO_FACE = (0, 5, 2, 3, 4, 1)
-MAPPING_SPIN_TO_FACE = (0, 1, 1, 1, 1, 0)
+POS_MAP = (
+    6,  3,  0,  7,  4,  1,  8,  5,  2, # U
+    51, 48, 45, 52, 49, 46, 53, 50, 47, # D
+    42, 39, 36, 43, 40, 37, 44, 41, 38, # L
+    24, 21, 18, 25, 22, 19, 26, 23, 20, # R
+    33, 30, 27, 34, 31, 28, 35, 32, 29, # B
+    15, 12,  9, 16, 13, 10, 17, 14, 11, # F
+)
+ID_MAP = (
+    6,  3,  0,  7,  4,  1,  8,  5,  2, # U
+    51, 48, 45, 52, 49, 46, 53, 50, 47, # D
+    42, 39, 36, 43, 40, 37, 44, 41, 38, # L
+    24, 21, 18, 25, 22, 19, 26, 23, 20, # R
+    33, 30, 27, 34, 31, 28, 35, 32, 29, # B
+    15, 12,  9, 16, 13, 10, 17, 14, 11, # F
+)
 MAPPING_ACTION = {
     "U": "U",
     "D": "D",
@@ -37,19 +51,21 @@ def rot90_traceable(m, k=1, axes=(0, 1)):
     k %= 4
     return jax.lax.switch(k, [partial(jnp.rot90, m, k=i, axes=axes) for i in range(4)])
 
+
 class RubiksCubeDeepCubeABenchmark(Benchmark):
     """Benchmark exposing the DeepCubeA 3x3 Rubik's Cube dataset."""
 
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
+    def __init__(self, dataset_path: str | Path | None = None, use_color_embedding: bool = False) -> None:
         super().__init__()
         self._dataset_path = Path(dataset_path).expanduser().resolve() if dataset_path else None
         self._solve_config_cache = None
         self._notation_to_action: dict[str, int] | None = None
+        self._use_color_embedding = use_color_embedding
 
     def build_puzzle(self):
         from puxle.puzzles.rubikscube import RubiksCube
 
-        return RubiksCube(size=3, initial_shuffle=100)
+        return RubiksCube(size=3, initial_shuffle=100, color_embedding=self._use_color_embedding)
 
     def load_dataset(self) -> dict[str, Any]:
         if self._dataset_path is not None:
@@ -94,25 +110,21 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         )
 
     def _convert_deepcubea_to_puxle(self, faces: jnp.ndarray, size: int) -> jnp.ndarray:
-        faces = jnp.reshape(faces, (6, size * size))
-        new_faces = jnp.zeros_like(faces)
-        for frm, to in enumerate(MAPPING_AXIS_TO_FACE):
-            frm_n_start = frm * size * size
-            frm_n_end = (frm + 1) * size * size
-            inside_mask = jnp.logical_and(
-                jnp.greater_equal(faces, frm_n_start),
-                jnp.less(faces, frm_n_end),
+        faces = jnp.asarray(faces, dtype=jnp.int32)
+
+        total_tiles = 6 * size * size
+        if faces.size != total_tiles:
+            raise ValueError(
+                f"Expected {total_tiles} tiles for a size-{size} cube, received {faces.size}."
             )
-            additional_idxs = (to - frm) * size * size
-            new_faces = new_faces.at[inside_mask].set(additional_idxs + faces[inside_mask])
-        for i in range(6):
-            rotated_face = rot90_traceable(
-                jnp.reshape(new_faces[i, :], (size, size)),
-                MAPPING_SPIN_TO_FACE[i],
-            )
-            new_faces = new_faces.at[i, :].set(jnp.reshape(rotated_face, (size * size,)))
-        new_faces = jnp.reshape(new_faces, (6 * size * size, ))
-        return new_faces
+
+        pos_map = jnp.asarray(POS_MAP, dtype=jnp.int32)
+        faces = jnp.zeros_like(faces).at[pos_map].set(faces)
+
+        id_map = jnp.asarray(ID_MAP, dtype=jnp.int32)
+        faces = jnp.take(id_map, faces)
+
+        return faces
 
     def _ensure_solve_config(self):
         if self._solve_config_cache is None:
@@ -135,8 +147,7 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         for face, direction in moves:
             if direction not in (-1, 1):
                 raise ValueError(f"Unsupported rotation direction {direction} for move {face}.")
-            face_notation = MAPPING_ACTION[str(face).upper()]
-            notation = face_notation if direction == 1 else f"{face_notation}'"
+            notation = face if direction == 1 else f"{face}'"
             action_sequence.append(notation)
         optimal_action_sequence = tuple(action_sequence)
         return optimal_action_sequence, float(len(optimal_action_sequence))

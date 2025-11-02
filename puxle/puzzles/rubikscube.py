@@ -350,7 +350,10 @@ class RubiksCube(Puzzle):
             # For layer 1, don't include the number
             face_str = face_name if layer_num == 1 else f"{face_name}{layer_num}"
 
-        suffix = "" if clockwise else "'"
+        if face_str in {"U", "R", "F"}:
+            suffix = "" if not clockwise else "'"
+        else:
+            suffix = "" if clockwise else "'"
         return f"{face_str}{suffix}"
 
     @staticmethod
