@@ -25,6 +25,10 @@ def _reconstruct_optimal_path(
     if not action_sequence:
         return tuple()
 
+    build_fn = getattr(benchmark, "_build_optimal_path", None)
+    if callable(build_fn):
+        return build_fn(sample.state, sample.solve_config, action_sequence)
+
     action_lookup = benchmark._build_action_lookup()
     puzzle = benchmark.puzzle
     solve_config = sample.solve_config

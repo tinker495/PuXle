@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import pickle
+from functools import partial
 from importlib.resources import files
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
 import jax
 import jax.numpy as jnp
-from functools import partial
+from puxle.core.puzzle_state import PuzzleState
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.puzzles.rubikscube import RubiksCube
 
@@ -92,12 +93,13 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         state = self._convert_state(dataset["states"][index])
         solve_config = self._ensure_solve_config()
         optimal_action_sequence, optimal_path_costs = self._convert_solution(dataset["solutions"][index])
+        optimal_path = self._build_optimal_path(state, solve_config, optimal_action_sequence)
 
         return BenchmarkSample(
             state=state,
             solve_config=solve_config,
             optimal_action_sequence=optimal_action_sequence,
-            optimal_path=None,
+            optimal_path=optimal_path,
             optimal_path_costs=optimal_path_costs,
         )
 
@@ -151,3 +153,30 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
                 for action in range(self.puzzle.action_size)
             }
         return self._notation_to_action
+
+    def _build_optimal_path(
+        self,
+        initial_state: PuzzleState,
+        solve_config: RubiksCube.SolveConfig,
+        action_sequence: Sequence[str],
+    ) -> tuple[PuzzleState, ...]:
+        if not action_sequence:
+            return tuple()
+
+        action_lookup = self._build_action_lookup()
+        puzzle = self.puzzle
+        current_state = initial_state
+        path: list[PuzzleState] = []
+
+        for step, notation in enumerate(action_sequence, start=1):
+            try:
+                action_idx = action_lookup[notation]
+            except KeyError as exc:
+                raise KeyError(f"Unknown action notation '{notation}' at step {step}") from exc
+
+            neighbours, _ = puzzle.get_neighbours(solve_config, current_state, filled=True)
+            next_state = neighbours[action_idx]
+            path.append(next_state)
+            current_state = next_state
+
+        return tuple(path)
