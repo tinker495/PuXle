@@ -148,9 +148,10 @@ def visualize_puzzle(
         click.echo(f"Saved initial state image -> {init_path}")
 
         for idx in range(puzzle.action_size):
+            action_label = action_labels[idx]
             neighbour_state = _select_state(puzzle, neighbours, idx)
-            neighbour_path = _save_image(img_parser(neighbour_state), img_root / f"neighbour_{idx:02d}.png")
-            click.echo(f"Saved neighbour {idx:02d} image -> {neighbour_path}")
+            neighbour_path = _save_image(img_parser(neighbour_state), img_root / f"{action_label}.png")
+            click.echo(f"Saved neighbour {action_label} image -> {neighbour_path}")
 
 
 if __name__ == "__main__":
