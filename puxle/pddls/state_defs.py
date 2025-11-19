@@ -12,7 +12,7 @@ def build_state_class(env, num_atoms: int, init_state: jnp.ndarray, string_parse
 
     @state_dataclass
     class State:
-        atoms: FieldDescriptor[jnp.uint8, (packed_size,), packed_atoms]
+        atoms: FieldDescriptor.tensor(dtype=jnp.uint8, shape=(packed_size,))
 
         def __str__(self, **kwargs):
             return string_parser(self, **kwargs)
@@ -35,7 +35,7 @@ def build_state_class(env, num_atoms: int, init_state: jnp.ndarray, string_parse
 def build_solve_config_class(env, goal_mask: jnp.ndarray, string_parser: Callable) -> PuzzleState:
     @state_dataclass
     class SolveConfig:
-        GoalMask: FieldDescriptor[jnp.bool_, (env.num_atoms,), goal_mask]
+        GoalMask: FieldDescriptor.tensor(dtype=jnp.bool_, shape=(env.num_atoms,))
 
         def __str__(self, **kwargs):
             return string_parser(self, **kwargs)

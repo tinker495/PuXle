@@ -30,7 +30,7 @@ class TopSpin(Puzzle):
 
         @state_dataclass
         class State:
-            permutation: FieldDescriptor[TYPE, (self.n_discs,)]
+            permutation: FieldDescriptor.tensor(dtype=TYPE, shape=(self.n_discs,))
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

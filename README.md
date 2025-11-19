@@ -177,7 +177,7 @@ class CustomPuzzle(Puzzle):
     def define_state_class(self):
         @state_dataclass
         class State:
-            position: FieldDescriptor[jnp.ndarray]  # Current position
+            position: FieldDescriptor.scalar(dtype=jnp.int32, shape=(2,))  # Current position
 
         return State
 

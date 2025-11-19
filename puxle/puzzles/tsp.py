@@ -24,8 +24,8 @@ class TSP(Puzzle):
 
         @state_dataclass
         class State:
-            mask: FieldDescriptor[jnp.uint8, packed_mask.shape, packed_mask]
-            point: FieldDescriptor[TYPE]
+            mask: FieldDescriptor.tensor(dtype=jnp.uint8, shape=packed_mask.shape)
+            point: FieldDescriptor.scalar(dtype=TYPE)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -48,9 +48,9 @@ class TSP(Puzzle):
 
         @state_dataclass
         class SolveConfig:
-            points: FieldDescriptor[jnp.float32, (self.size, 2)]
-            distance_matrix: FieldDescriptor[jnp.float32, (self.size, self.size)]
-            start: FieldDescriptor[TYPE]
+            points: FieldDescriptor.tensor(dtype=jnp.float32, shape=(self.size, 2))
+            distance_matrix: FieldDescriptor.tensor(dtype=jnp.float32, shape=(self.size, self.size))
+            start: FieldDescriptor.scalar(dtype=TYPE)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

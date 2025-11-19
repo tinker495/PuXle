@@ -42,7 +42,7 @@ class Sokoban(Puzzle):
 
         @state_dataclass
         class State:
-            board: FieldDescriptor[TYPE, packed_board.shape, packed_board]
+            board: FieldDescriptor.tensor(dtype=TYPE, shape=packed_board.shape)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

@@ -33,7 +33,7 @@ class PancakeSorting(Puzzle):
 
         @state_dataclass
         class State:
-            stack: FieldDescriptor[TYPE, (self.size,)]
+            stack: FieldDescriptor.tensor(dtype=TYPE, shape=(self.size,))
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

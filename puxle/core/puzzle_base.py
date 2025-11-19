@@ -50,7 +50,7 @@ class Puzzle(ABC):
     def define_solve_config_class(self) -> PuzzleState:
         @state_dataclass
         class SolveConfig:
-            TargetState: FieldDescriptor[self.State]
+            TargetState: FieldDescriptor.scalar(dtype=self.State)
 
             def __str__(self, **kwargs):
                 return self.TargetState.str(**kwargs)

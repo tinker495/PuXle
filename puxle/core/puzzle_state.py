@@ -4,10 +4,7 @@ from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 T = TypeVar("T")
 
-
-class FieldDescriptor(FieldDescriptor):
-    pass
-
+FieldDescriptor = FieldDescriptor
 
 class PuzzleState(Xtructurable):
     @property

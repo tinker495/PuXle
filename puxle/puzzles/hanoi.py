@@ -35,7 +35,7 @@ class TowerOfHanoi(Puzzle):
 
         @state_dataclass
         class State:
-            pegs: FieldDescriptor[TYPE, default_pegs_val.shape, default_pegs_val]
+            pegs: FieldDescriptor.tensor(dtype=TYPE, shape=default_pegs_val.shape)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

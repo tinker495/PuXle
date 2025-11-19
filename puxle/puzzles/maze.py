@@ -22,8 +22,8 @@ class Maze(Puzzle):
 
         @state_dataclass
         class SolveConfig:
-            TargetState: FieldDescriptor[self.State]
-            Maze: FieldDescriptor[jnp.uint8, (dummy_maze.shape[0],), dummy_maze]
+            TargetState: FieldDescriptor.scalar(dtype=self.State)
+            Maze: FieldDescriptor.tensor(dtype=jnp.uint8, shape=(dummy_maze.shape[0],))
 
             def __str__(self, **kwargs):
                 return self.TargetState.str(solve_config=self, **kwargs)
@@ -46,7 +46,7 @@ class Maze(Puzzle):
 
         @state_dataclass
         class State:
-            pos: FieldDescriptor[TYPE, (2,)]
+            pos: FieldDescriptor.tensor(dtype=TYPE, shape=(2,))
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

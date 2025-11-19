@@ -78,7 +78,7 @@ class RubiksCube(Puzzle):
 
         @state_dataclass
         class State:
-            faces: FieldDescriptor[TYPE, packed_faces.shape]
+            faces: FieldDescriptor.tensor(dtype=TYPE, shape=packed_faces.shape)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

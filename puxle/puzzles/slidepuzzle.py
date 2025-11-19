@@ -27,7 +27,7 @@ class SlidePuzzle(Puzzle):
 
         @state_dataclass
         class State:
-            board: FieldDescriptor[TYPE, shape]
+            board: FieldDescriptor.tensor(dtype=TYPE, shape=shape)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
