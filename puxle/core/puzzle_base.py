@@ -204,13 +204,16 @@ class Puzzle(ABC):
         solve_config = self.get_solve_config(solveconfigkey, data)
         return solve_config, self.get_initial_state(solve_config, initkey, data)
 
-    def batched_get_actions(self, solve_configs: SolveConfig, states: State, actions: chex.Array, filleds: bool = True, multi_solve_config: bool = False) -> chex.Array:
+    def batched_get_actions(self, solve_configs: SolveConfig, states: State, actions: chex.Array, filleds: bool = True, multi_solve_config: bool = False) -> tuple[State, chex.Array]:
+        """
+        This function should return a state and the cost of the move.
+        """
         if multi_solve_config:
-            return jax.vmap(self.get_actions, in_axes=(0, 0, 0, None), out_axes=(1, 1))(
+            return jax.vmap(self.get_actions, in_axes=(0, 0, 0, 0))(
                 solve_configs, states, actions, filleds
             )
         else:
-            return jax.vmap(self.get_actions, in_axes=(None, 0, 0, None), out_axes=(1, 1))(
+            return jax.vmap(self.get_actions, in_axes=(None, 0, 0, 0))(
                 solve_configs, states, actions, filleds
             )
 
