@@ -51,6 +51,7 @@ class TowerOfHanoi(Puzzle):
         """
         self.num_disks = size
         self.max_disk_value = size
+        self.action_size = self.num_pegs * (self.num_pegs - 1)
         super().__init__(**kwargs)
 
     def get_string_parser(self):
@@ -248,27 +249,32 @@ class TowerOfHanoi(Puzzle):
 
         return self.SolveConfig(TargetState=self.State(pegs=pegs))
 
-    def get_neighbours(
+    def get_actions(
         self,
         solve_config: "TowerOfHanoi.SolveConfig",
         state: "TowerOfHanoi.State",
+        action: chex.Array,
         filled: bool = True,
     ) -> tuple["TowerOfHanoi.State", chex.Array]:
         """
-        Get all neighboring states by moving a disk from one peg to another
-
-        Returns:
-            tuple: (neighboring states, costs of moves)
+        Get the next state by performing the action (moving a disk).
         """
         pegs = state.pegs
 
         # Generate all possible moves: (from_peg, to_peg)
-        possible_moves = [
-            (from_peg, to_peg)
+        # This needs to be consistent with action_to_string and inverse map if any
+        # Since num_pegs is small (default 3), we can generate this array.
+        # We need to index into it using 'action'.
+        
+        possible_moves = jnp.array([
+            [from_peg, to_peg]
             for from_peg in range(self.num_pegs)
             for to_peg in range(self.num_pegs)
             if from_peg != to_peg
-        ]
+        ])
+        
+        move = possible_moves[action]
+        from_peg, to_peg = move[0], move[1]
 
         def is_valid_move(pegs, from_peg, to_peg):
             # Check if the from_peg has disks
@@ -304,7 +310,7 @@ class TowerOfHanoi(Puzzle):
             from_top_disk = pegs[from_peg, 1]
 
             # Create a copy of the pegs array
-            new_pegs = pegs.copy()
+            new_pegs = pegs  # JAX arrays are immutable, ops return new array
 
             # Remove the top disk from from_peg
             # Shift all disks up (disk at position n moves to position n-1)
@@ -327,35 +333,24 @@ class TowerOfHanoi(Puzzle):
 
             return new_pegs
 
-        # Function to apply to each possible move
-        def map_fn(move, filled):
-            from_peg, to_peg = move
+        def move_disk():
+            # Check if the move is valid
+            valid = is_valid_move(pegs, from_peg, to_peg)
 
-            def move_disk():
-                # Check if the move is valid
-                valid = is_valid_move(pegs, from_peg, to_peg)
+            # If valid, make the move; otherwise, keep the original pegs
+            new_pegs = jax.lax.cond(
+                valid, lambda: make_move(pegs, from_peg, to_peg), lambda: pegs
+            )
 
-                # If valid, make the move; otherwise, keep the original pegs
-                new_pegs = jax.lax.cond(
-                    valid, lambda: make_move(pegs, from_peg, to_peg), lambda: pegs
-                )
+            # Cost is 1 if valid, infinity if invalid
+            cost = jax.lax.cond(valid, lambda: jnp.array(1.0), lambda: jnp.array(jnp.inf))
 
-                # Cost is 1 if valid, infinity if invalid
-                cost = jax.lax.cond(valid, lambda: jnp.array(1.0), lambda: jnp.array(jnp.inf))
+            return self.State(pegs=new_pegs), cost
 
-                return self.State(pegs=new_pegs), cost
+        def no_move():
+            return self.State(pegs=pegs), jnp.inf
 
-            def no_move():
-                return self.State(pegs=pegs), jnp.inf
-
-            return jax.lax.cond(filled, move_disk, no_move)
-
-        # Apply the mapping function to all possible moves
-        # Convert moves to JAX array for vmap
-        moves = jnp.array(possible_moves)
-        next_states, costs = jax.vmap(map_fn, in_axes=(0, None))(moves, filled)
-
-        return next_states, costs
+        return jax.lax.cond(filled, move_disk, no_move)
 
     def is_solved(
         self, solve_config: "TowerOfHanoi.SolveConfig", state: "TowerOfHanoi.State"

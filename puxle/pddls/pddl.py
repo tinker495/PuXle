@@ -257,39 +257,41 @@ class PDDL(Puzzle):
         """Return solve config with goal mask."""
         return self.SolveConfig(GoalMask=self.goal_mask)
 
-    def get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "PDDL.State", filled: bool = True
+    def get_actions(
+        self,
+        solve_config: Puzzle.SolveConfig,
+        state: "PDDL.State",
+        action: chex.Array,
+        filled: bool = True,
     ) -> tuple["PDDL.State", chex.Array]:
-        """Get all possible next states and costs using JAX vectorization."""
+        """
+        Get the next state and cost for a given action using JAX.
+        """
         # Unpack state to boolean array
         s = state.unpacked_atoms
 
-        # Compute applicability: app[i] = True if action i is applicable
-        app = jnp.all(jnp.logical_or(~self.pre_mask, s[None, :]), axis=1)
+        # Get masks for this action
+        pre = self.pre_mask[action]
+        add = self.add_mask[action]
+        dele = self.del_mask[action]
 
-        # Compute next states: s_next[i] = (s & ~del_mask[i]) | add_mask[i]
-        s_next = jnp.logical_or(jnp.logical_and(s[None, :], ~self.del_mask), self.add_mask)
-        # If action is inapplicable, keep original state (spec compliance)
-        s_next = jnp.where(app[:, None], s_next, s[None, :])
+        # Check applicability: pre -> s  <==>  ~pre | s
+        applicable = jnp.all(jnp.logical_or(~pre, s))
 
-        # Pack next states
-        def pack_state(atoms_bool):
-            return self.State(atoms=to_uint8(atoms_bool, 1))
+        # Compute next state: (s & ~del) | add
+        s_next = jnp.logical_or(jnp.logical_and(s, ~dele), add)
 
-        next_states = jax.vmap(pack_state)(s_next)
+        # If action is inapplicable, keep original state
+        s_next = jnp.where(applicable, s_next, s)
 
-        # Set costs: 1.0 for applicable actions, inf for non-applicable
-        costs = jnp.where(app, 1.0, jnp.inf)
+        # Pack next state
+        next_state = self.State(atoms=to_uint8(s_next, 1))
 
-        # If filled=False, return all costs as inf (contract with other puzzles)
-        # Use jax.lax.cond to handle the conditional in JAX-traceable way
-        costs = jax.lax.cond(
-            filled,
-            lambda: costs,  # If filled=True, keep original costs
-            lambda: jnp.full_like(costs, jnp.inf),  # If filled=False, all inf
-        )
+        # Cost: 1.0 for applicable, inf otherwise
+        cost = jnp.where(applicable, 1.0, jnp.inf)
+        cost = jnp.where(filled, cost, jnp.inf)
 
-        return next_states, costs
+        return next_state, cost
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "PDDL.State") -> bool:
         """Check if state satisfies goal conditions."""

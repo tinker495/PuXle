@@ -59,6 +59,7 @@ class LightsOut(Puzzle):
     def __init__(self, size: int = 7, initial_shuffle: int = 8, **kwargs):
         self.size = size
         self.initial_shuffle = initial_shuffle
+        self.action_size = self.size * self.size
         super().__init__(**kwargs)
 
     def get_string_parser(self):
@@ -85,35 +86,35 @@ class LightsOut(Puzzle):
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         return self.SolveConfig(TargetState=self.get_target_state(key))
 
-    def get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State", filled: bool = True
+    def get_actions(
+        self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State", action: chex.Array, filled: bool = True
     ) -> tuple["LightsOut.State", chex.Array]:
         """
-        This function should return a neighbours, and the cost of the move.
-        if impossible to move in a direction cost should be inf and State should be same as input state.
+        This function returns the next state and cost for a given action.
         """
         board = state.unpacked.board
-        # actions - combinations of range(size) with 2 elements
-        actions = jnp.stack(
-            jnp.meshgrid(jnp.arange(self.size), jnp.arange(self.size), indexing="ij"), axis=-1
-        ).reshape(-1, 2)
-
-        def flip(board, action):
-            x, y = action
+        
+        # Decode action to (x, y)
+        # action is in range [0, size*size - 1]
+        # x = action // size
+        # y = action % size
+        # Or better: use unravel_index but that works on shapes.
+        # Since size is scalar, we can compute directly.
+        
+        x = action // self.size
+        y = action % self.size
+        
+        def flip(board, x, y):
             xs = jnp.clip(jnp.array([x, x, x + 1, x - 1, x]), 0, self.size - 1)
             ys = jnp.clip(jnp.array([y, y + 1, y, y, y - 1]), 0, self.size - 1)
             idxs = xs * self.size + ys
             return board.at[idxs].set(jnp.logical_not(board[idxs]))
 
-        def map_fn(action, filled):
-            next_board, cost = jax.lax.cond(
-                filled, lambda: (flip(board, action), 1.0), lambda: (board, jnp.inf)
-            )
-            next_state = self.State(board=next_board).packed
-            return next_state, cost
-
-        next_states, costs = jax.vmap(map_fn, in_axes=(0, None))(actions, filled)
-        return next_states, costs
+        next_board, cost = jax.lax.cond(
+            filled, lambda: (flip(board, x, y), 1.0), lambda: (board, jnp.inf)
+        )
+        next_state = self.State(board=next_board).packed
+        return next_state, cost
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State") -> bool:
         return state == solve_config.TargetState

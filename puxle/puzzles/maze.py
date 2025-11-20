@@ -56,6 +56,7 @@ class Maze(Puzzle):
     def __init__(self, size: int = 23, **kwargs):
         # Parameter p is no longer used for maze generation
         self.size = size
+        self.action_size = 4
         super().__init__(**kwargs)
 
     def get_solve_config_string_parser(self):
@@ -260,40 +261,34 @@ class Maze(Puzzle):
 
         return maze  # Return the boolean maze grid
 
-    def get_neighbours(
-        self, solve_config: "Maze.SolveConfig", state: "Maze.State", filled: bool = True
+    def get_actions(
+        self, solve_config: "Maze.SolveConfig", state: "Maze.State", action: chex.Array, filled: bool = True
     ) -> tuple["Maze.State", chex.Array]:
         """
-        This function should return neighbours, and the cost of the move.
-        If impossible to move in a direction, cost should be inf and State should be same as input state.
+        Returns the next state and cost for a given action.
         """
         # Define possible moves: up, down, left, right
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
         bool_maze = solve_config.unpacked.Maze.reshape((self.size, self.size))
+        
+        move_vec = moves[action]
+        new_pos = (state.pos + move_vec).astype(TYPE)
 
-        def move(state, move):
-            new_pos = (state.pos + move).astype(TYPE)
+        # Check if the new position is within the maze bounds and not a wall (True)
+        valid_move = (
+            (new_pos >= 0).all()
+            & (new_pos < self.size).all()
+            & (~bool_maze[new_pos[0], new_pos[1]])  # Check against False (path)
+            & filled
+        )
 
-            # Check if the new position is within the maze bounds and not a wall (True)
-            valid_move = (
-                (new_pos >= 0).all()
-                & (new_pos < self.size).all()
-                & (~bool_maze[new_pos[0], new_pos[1]])  # Check against False (path)
-                & filled
-            )
+        # If the move is valid, update the position. Otherwise, keep the old position.
+        new_state = self.State(pos=jnp.where(valid_move, new_pos, state.pos))
 
-            # If the move is valid, update the position. Otherwise, keep the old position.
-            new_state = self.State(pos=jnp.where(valid_move, new_pos, state.pos))
+        # Cost is 1 for valid moves, inf for invalid moves
+        cost = jnp.where(valid_move, 1.0, jnp.inf)
 
-            # Cost is 1 for valid moves, inf for invalid moves
-            cost = jnp.where(valid_move, 1.0, jnp.inf)
-
-            return new_state, cost
-
-        # Apply the move function to all possible moves
-        new_states, costs = jax.vmap(lambda m: move(state, m))(moves)
-
-        return new_states, costs
+        return new_state, cost
 
     def is_solved(self, solve_config: "Maze.SolveConfig", state: "Maze.State") -> bool:
         return state == solve_config.TargetState

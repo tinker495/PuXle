@@ -104,7 +104,9 @@ class Puzzle(ABC):
         self.batched_is_solved = jax.jit(self.batched_is_solved, static_argnums=(2,))
 
         if self.action_size is None:
-            self.action_size = self._get_action_size()
+            raise ValueError(
+                f"{self.__class__.__name__} must define `action_size` before calling Puzzle.__init__"
+            )
 
         inv_map = self.inverse_action_map
         if inv_map is not None:
@@ -121,15 +123,6 @@ class Puzzle(ABC):
         If the puzzle need to load dataset, this function should be filled.
         """
         pass
-
-    def _get_action_size(self) -> int:
-        """
-        This function should return the size of the action.
-        """
-        dummy_solve_config = self.SolveConfig.default()
-        dummy_state = self.State.default()
-        _, costs = self.get_neighbours(dummy_solve_config, dummy_state)
-        return costs.shape[0]
 
     def get_solve_config_string_parser(self) -> callable:
         """
@@ -211,6 +204,23 @@ class Puzzle(ABC):
         solve_config = self.get_solve_config(solveconfigkey, data)
         return solve_config, self.get_initial_state(solve_config, initkey, data)
 
+    def batched_get_actions(self, solve_configs: SolveConfig, states: State, actions: chex.Array, filleds: bool = True, multi_solve_config: bool = False) -> chex.Array:
+        if multi_solve_config:
+            return jax.vmap(self.get_actions, in_axes=(0, 0, 0, None), out_axes=(1, 1))(
+                solve_configs, states, actions, filleds
+            )
+        else:
+            return jax.vmap(self.get_actions, in_axes=(None, 0, 0, None), out_axes=(1, 1))(
+                solve_configs, states, actions, filleds
+            )
+
+    @abstractmethod
+    def get_actions(self, solve_config: SolveConfig, state: State, actions: chex.Array, filled: bool = True) -> tuple[State, chex.Array]:
+        """
+        This function should return a state and the cost of the move.
+        """
+        pass
+
     def batched_get_neighbours(
         self,
         solve_configs: SolveConfig,
@@ -230,7 +240,6 @@ class Puzzle(ABC):
                 solve_configs, states, filleds
             )
 
-    @abstractmethod
     def get_neighbours(
         self, solve_config: SolveConfig, state: State, filled: bool = True
     ) -> tuple[State, chex.Array]:
@@ -238,7 +247,11 @@ class Puzzle(ABC):
         This function should return a neighbours, and the cost of the move.
         if impossible to move in a direction cost should be inf and State should be same as input state.
         """
-        pass
+        actions = jnp.arange(self.action_size)
+        states, costs = jax.vmap(self.get_actions, in_axes=(None, None, 0, None), out_axes=(0, 0))(
+            solve_config, state, actions, filled
+        )
+        return states, costs
 
     def batched_is_solved(
         self, solve_configs: SolveConfig, states: State, multi_solve_config: bool = False

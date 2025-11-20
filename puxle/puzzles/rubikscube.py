@@ -122,6 +122,7 @@ class RubiksCube(Puzzle):
         else:
             indices = [i for i in range(size) if i != center_index]
         self.index_grid = jnp.asarray(indices, dtype=jnp.uint8)
+        self.action_size = 3 * len(self.index_grid) * 2
         super().__init__(**kwargs)
 
     def _validate_tile_capacity(self):
@@ -235,26 +236,26 @@ class RubiksCube(Puzzle):
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         return self.SolveConfig(TargetState=self.get_target_state(key))
 
-    def get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State", filled: bool = True
+    def get_actions(
+        self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State", action: chex.Array, filled: bool = True
     ) -> tuple["RubiksCube.State", chex.Array]:
-        def map_fn(state, axis, index, clockwise):
-            return jax.lax.cond(
-                filled,
-                lambda: (self._rotate(state, axis, index, clockwise), 1.0),
-                lambda: (state, jnp.inf),
-            )
+        """
+        Returns the next state and cost for a given action.
+        Action decoding:
+        - clockwise: action % 2
+        - axis: (action // 2) % 3
+        - index: index_grid[action // 6]
+        """
+        clockwise = action % 2
+        axis = (action // 2) % 3
+        index_idx = action // 6
+        index = self.index_grid[index_idx]
 
-        axis_grid, index_grid, clockwise_grid = jnp.meshgrid(
-            jnp.arange(3), self.index_grid, jnp.arange(2)
+        return jax.lax.cond(
+            filled,
+            lambda: (self._rotate(state, axis, index, clockwise), 1.0),
+            lambda: (state, jnp.inf),
         )
-        axis_grid = axis_grid.reshape(-1)
-        index_grid = index_grid.reshape(-1)
-        clockwise_grid = clockwise_grid.reshape(-1)
-        new_states, costs = jax.vmap(map_fn, in_axes=(None, 0, 0, 0))(
-            state, axis_grid, index_grid, clockwise_grid
-        )
-        return new_states, costs
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State") -> bool:
         return state == solve_config.TargetState

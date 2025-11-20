@@ -59,6 +59,7 @@ class TSP(Puzzle):
 
     def __init__(self, size: int = 16, **kwargs):
         self.size = size
+        self.action_size = self.size
         super().__init__(**kwargs)
 
     def get_solve_config_string_parser(self) -> callable:
@@ -103,35 +104,31 @@ class TSP(Puzzle):
         start = jax.random.randint(key_start, shape=(), minval=0, maxval=self.size, dtype=TYPE)
         return self.SolveConfig(points=points, distance_matrix=distance_matrix, start=start)
 
-    def get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: Puzzle.State, filled: bool = True
+    def get_actions(
+        self, solve_config: Puzzle.SolveConfig, state: Puzzle.State, action: chex.Array, filled: bool = True
     ) -> tuple[Puzzle.State, chex.Array]:
         """
-        This function returns neighbours and the cost of the move.
+        This function returns the next state and cost for a given action (next point index).
         If moving to a point already visited, the cost is infinity.
         """
         mask = state.unpacked.mask
         point = state.point
+        idx = action
 
-        def move(idx):
-            masked = mask[idx] & filled
-            new_mask = mask.at[idx].set(True)
-            all_visited = jnp.all(new_mask)
-            cost = solve_config.distance_matrix[point, idx]
-            cost = jnp.where(masked, jnp.inf, cost) + jnp.where(
-                all_visited,
-                jnp.linalg.norm(
-                    solve_config.points[solve_config.start] - solve_config.points[idx], axis=-1
-                ),
-                0,
-            )
-            new_state = self.State(mask=new_mask, point=idx).packed
-            return new_state, cost
-
-        # Apply the move function to all possible moves
-        new_states, costs = jax.vmap(move)(jnp.arange(self.size, dtype=TYPE))
-        costs = jnp.where(filled, costs, jnp.inf)
-        return new_states, costs
+        masked = mask[idx] & filled
+        new_mask = mask.at[idx].set(True)
+        all_visited = jnp.all(new_mask)
+        cost = solve_config.distance_matrix[point, idx]
+        cost = jnp.where(masked, jnp.inf, cost) + jnp.where(
+            all_visited,
+            jnp.linalg.norm(
+                solve_config.points[solve_config.start] - solve_config.points[idx], axis=-1
+            ),
+            0,
+        )
+        new_state = self.State(mask=new_mask, point=idx).packed
+        cost = jnp.where(filled, cost, jnp.inf)
+        return new_state, cost
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: Puzzle.State) -> bool:
         """

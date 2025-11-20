@@ -48,6 +48,7 @@ class PancakeSorting(Puzzle):
             size: The number of pancakes in the stack
         """
         self.size = size
+        self.action_size = max(self.size - 1, 0)
         super().__init__(**kwargs)
 
     def get_string_parser(self):
@@ -190,25 +191,19 @@ class PancakeSorting(Puzzle):
         target_stack = jnp.arange(1, self.size + 1, dtype=TYPE)
         return self.SolveConfig(TargetState=self.State(stack=target_stack))
 
-    def get_neighbours(
+    def get_actions(
         self,
         solve_config: "PancakeSorting.SolveConfig",
         state: "PancakeSorting.State",
+        action: chex.Array,
         filled: bool = True,
     ) -> tuple["PancakeSorting.State", chex.Array]:
         """
-        Get all neighboring states by flipping pancakes at different positions
-
-        Returns:
-            tuple: (neighboring states, costs of moves)
+        Get the next state by flipping pancakes at the position determined by action.
+        flip_pos = action + 1
         """
         stack = state.stack
-
-        # Generate all possible flip positions (we can flip at positions 0 to size-2)
-        # Position i means flip pancakes from index 0 to index i
-        possible_flips = (
-            jnp.arange(self.size - 1) + 1
-        )  # +1 because we flip at positions 1 to size-1
+        flip_pos = action + 1
 
         def flip_stack(stack, flip_pos):
             """Flip the pancakes from index 0 to flip_pos (inclusive)"""
@@ -237,16 +232,12 @@ class PancakeSorting(Puzzle):
 
             return new_stack
 
-        def map_fn(flip_pos, filled):
-            next_stack, cost = jax.lax.cond(
-                filled,
-                lambda: (flip_stack(stack, flip_pos), 1.0),
-                lambda: (stack, jnp.inf),
-            )
-            return next_stack, cost
-
-        next_stacks, costs = jax.vmap(map_fn, in_axes=(0, None))(possible_flips, filled)
-        return self.State(stack=next_stacks), costs
+        next_stack, cost = jax.lax.cond(
+            filled,
+            lambda: (flip_stack(stack, flip_pos), 1.0),
+            lambda: (stack, jnp.inf),
+        )
+        return self.State(stack=next_stack), cost
 
     def is_solved(
         self, solve_config: "PancakeSorting.SolveConfig", state: "PancakeSorting.State"

@@ -50,6 +50,7 @@ class SlidePuzzle(Puzzle):
 
     def __init__(self, size: int = 4, **kwargs):
         self.size = size
+        self.action_size = 4
         super().__init__(**kwargs)
 
     def get_string_parser(self):
@@ -79,18 +80,22 @@ class SlidePuzzle(Puzzle):
             ).packed
         )
 
-    def get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State", filled: bool = True
+    def get_actions(
+        self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State", action: chex.Array, filled: bool = True
     ) -> tuple["SlidePuzzle.State", chex.Array]:
         """
-        This function should return a neighbours, and the cost of the move.
-        if impossible to move in a direction cost should be inf and State should be same as input state.
+        This function should return a state and the cost of the move.
         """
-        state = state.unpacked
-        x, y = self._getBlankPosition(state)
+        state_unpacked = state.unpacked
+        x, y = self._getBlankPosition(state_unpacked)
         pos = jnp.asarray((x, y))
-        next_pos = pos + jnp.array([[0, 1], [0, -1], [1, 0], [-1, 0]])
-        board = state.board
+        
+        # Action mapping: 0: Left, 1: Right, 2: Up, 3: Down
+        moves = jnp.array([[0, 1], [0, -1], [1, 0], [-1, 0]])
+        move_delta = moves[action]
+        
+        next_pos = pos + move_delta
+        board = state_unpacked.board
 
         def is_valid(x, y):
             return jnp.logical_and(
@@ -104,17 +109,13 @@ class SlidePuzzle(Puzzle):
             board = board.at[next_flat_index].set(board[flat_index])
             return board.at[flat_index].set(old_board[next_flat_index])
 
-        def map_fn(next_pos, filled):
-            next_x, next_y = next_pos
-            next_board, cost = jax.lax.cond(
-                jnp.logical_and(is_valid(next_x, next_y), filled),
-                lambda: (swap(board, x, y, next_x, next_y), 1.0),
-                lambda: (board, jnp.inf),
-            )
-            return self.State(board=next_board).packed, cost
-
-        next_boards, costs = jax.vmap(map_fn, in_axes=(0, None))(next_pos, filled)
-        return next_boards, costs
+        next_x, next_y = next_pos
+        next_board, cost = jax.lax.cond(
+            jnp.logical_and(is_valid(next_x, next_y), filled),
+            lambda: (swap(board, x, y, next_x, next_y), 1.0),
+            lambda: (board, jnp.inf),
+        )
+        return self.State(board=next_board).packed, cost
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State") -> bool:
         return state == solve_config.TargetState

@@ -66,6 +66,7 @@ class Sokoban(Puzzle):
         self.size = size
         self.solve_condition = solve_condition
         assert size == 10, "Boxoban dataset only supports size 10"
+        self.action_size = 4
         super().__init__(**kwargs)
 
     @property
@@ -218,18 +219,19 @@ class Sokoban(Puzzle):
 
         return parser
 
-    def get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State", filled: bool = True
+    def get_actions(
+        self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State", action: chex.Array, filled: bool = True
     ) -> tuple["Sokoban.State", chex.Array]:
         """
-        Returns neighbour states along with the cost for each move.
-        If a move isn't possible, it returns the original state with an infinite cost.
+        Returns the next state and cost for a given action.
         """
         # Unpack the board so that we work on a flat representation.
         board = state.unpacked.board
         x, y = self._getPlayerPosition(state)
         current_pos = jnp.array([x, y])
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
+        
+        direction = moves[action]
 
         # Helper: convert (row, col) to flat index
         def flat_idx(i, j):
@@ -243,63 +245,60 @@ class Sokoban(Puzzle):
                 jnp.logical_and(i >= 0, i < self.size), jnp.logical_and(j >= 0, j < self.size)
             )
 
-        def move(direction):
-            new_pos = (current_pos + direction).astype(current_pos.dtype)
-            new_x, new_y = new_pos[0], new_pos[1]
-            valid_move = is_valid_pos(new_x, new_y)
+        new_pos = (current_pos + direction).astype(current_pos.dtype)
+        new_x, new_y = new_pos[0], new_pos[1]
+        valid_move = is_valid_pos(new_x, new_y)
 
-            def invalid_case():
-                return state, 1.0
+        def invalid_case():
+            return state, jnp.inf
 
-            def process_move():
-                target = board[flat_idx(new_x, new_y)]
-                # Case when target cell is empty: simply move the player.
+        def process_move():
+            target = board[flat_idx(new_x, new_y)]
+            # Case when target cell is empty: simply move the player.
 
-                def move_empty():
+            def move_empty():
+                new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
+                    Sokoban.Object.EMPTY.value
+                )
+                new_board = new_board.at[flat_idx(new_x, new_y)].set(
+                    Sokoban.Object.PLAYER.value
+                )
+                return self.State(board=new_board).packed, 1.0
+
+            # Case when target cell contains a box: attempt to push it.
+            def push_box():
+                push_pos = (new_pos + direction).astype(current_pos.dtype)
+                push_x, push_y = push_pos[0], push_pos[1]
+                valid_push = jnp.logical_and(
+                    is_valid_pos(push_x, push_y), is_empty(push_x, push_y)
+                )
+                valid_push = jnp.logical_and(valid_push, filled)
+
+                def do_push():
                     new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
                         Sokoban.Object.EMPTY.value
                     )
                     new_board = new_board.at[flat_idx(new_x, new_y)].set(
                         Sokoban.Object.PLAYER.value
                     )
+                    new_board = new_board.at[flat_idx(push_x, push_y)].set(
+                        Sokoban.Object.BOX.value
+                    )
                     return self.State(board=new_board).packed, 1.0
 
-                # Case when target cell contains a box: attempt to push it.
-                def push_box():
-                    push_pos = (new_pos + direction).astype(current_pos.dtype)
-                    push_x, push_y = push_pos[0], push_pos[1]
-                    valid_push = jnp.logical_and(
-                        is_valid_pos(push_x, push_y), is_empty(push_x, push_y)
-                    )
-                    valid_push = jnp.logical_and(valid_push, filled)
+                return jax.lax.cond(valid_push, do_push, invalid_case)
 
-                    def do_push():
-                        new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
-                            Sokoban.Object.EMPTY.value
-                        )
-                        new_board = new_board.at[flat_idx(new_x, new_y)].set(
-                            Sokoban.Object.PLAYER.value
-                        )
-                        new_board = new_board.at[flat_idx(push_x, push_y)].set(
-                            Sokoban.Object.BOX.value
-                        )
-                        return self.State(board=new_board).packed, 1.0
+            return jax.lax.cond(
+                jnp.equal(target, Sokoban.Object.EMPTY.value),
+                move_empty,
+                lambda: jax.lax.cond(
+                    jnp.equal(target, Sokoban.Object.BOX.value), push_box, invalid_case
+                ),
+            )
 
-                    return jax.lax.cond(valid_push, do_push, invalid_case)
-
-                return jax.lax.cond(
-                    jnp.equal(target, Sokoban.Object.EMPTY.value),
-                    move_empty,
-                    lambda: jax.lax.cond(
-                        jnp.equal(target, Sokoban.Object.BOX.value), push_box, invalid_case
-                    ),
-                )
-
-            return jax.lax.cond(valid_move, process_move, invalid_case)
-
-        new_states, costs = jax.vmap(move)(moves)
-        costs = jnp.where(filled, costs, jnp.inf)
-        return new_states, costs
+        next_state, cost = jax.lax.cond(valid_move, process_move, invalid_case)
+        cost = jnp.where(filled, cost, jnp.inf)
+        return next_state, cost
 
     def _get_visualize_format(self):
         size = self.size

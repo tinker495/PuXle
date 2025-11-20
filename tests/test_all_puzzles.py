@@ -152,6 +152,62 @@ class TestPuzzleValidation:
             except Exception as e:
                 pytest.fail(f"Neighbor generation failed for {puzzle_class.__name__}: {e}")
 
+    def test_action_transitions(self, puzzle_configs, rng_key):
+        """Ensure get_actions produces results consistent with get_neighbours"""
+        for puzzle_class in puzzle_configs:
+            try:
+                puzzle = puzzle_class()
+                solve_config = puzzle.get_solve_config(key=rng_key)
+                initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
+
+                neighbours_filled, costs_filled = puzzle.get_neighbours(
+                    solve_config, initial_state, filled=True
+                )
+                neighbours_blocked, costs_blocked = puzzle.get_neighbours(
+                    solve_config, initial_state, filled=False
+                )
+
+                actions_to_test = min(puzzle.action_size, 3)
+                for action_idx in range(actions_to_test):
+                    action = jnp.asarray(action_idx)
+
+                    # Filled=True should match neighbour generation
+                    next_state, action_cost = puzzle.get_actions(
+                        solve_config, initial_state, action, filled=True
+                    )
+                    expected_state = jax.tree_util.tree_map(
+                        lambda x: x[action_idx], neighbours_filled
+                    )
+
+                    assert (
+                        next_state == expected_state
+                    ), f"{puzzle_class.__name__} get_actions state mismatch at action {action_idx}"
+                    assert jnp.allclose(
+                        action_cost, costs_filled[action_idx]
+                    ), f"{puzzle_class.__name__} get_actions cost mismatch at action {action_idx}"
+
+                    # Filled=False should block all moves
+                    blocked_state, blocked_cost = puzzle.get_actions(
+                        solve_config, initial_state, action, filled=False
+                    )
+                    expected_blocked_state = jax.tree_util.tree_map(
+                        lambda x: x[action_idx], neighbours_blocked
+                    )
+                    assert (
+                        blocked_state == expected_blocked_state
+                    ), f"{puzzle_class.__name__} filled=False state mismatch at action {action_idx}"
+                    assert jnp.allclose(
+                        blocked_cost, costs_blocked[action_idx]
+                    ), f"{puzzle_class.__name__} filled=False cost mismatch at action {action_idx}"
+                    assert jnp.isinf(
+                        costs_blocked[action_idx]
+                    ), f"{puzzle_class.__name__} filled=False neighbours should be inf"
+
+                print(f"✓ {puzzle_class.__name__} action transitions align with neighbours")
+
+            except Exception as e:
+                pytest.fail(f"Action transition test failed for {puzzle_class.__name__}: {e}")
+
     def test_solution_checking(self, puzzle_configs, rng_key):
         """Test solution checking functionality"""
         for puzzle_class in puzzle_configs:

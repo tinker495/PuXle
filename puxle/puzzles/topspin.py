@@ -42,6 +42,7 @@ class TopSpin(Puzzle):
             raise ValueError("Turnstile size cannot be larger than the number of discs.")
         self.n_discs = size
         self.turnstile_size = turnstile_size
+        self.action_size = 3
         super().__init__(**kwargs)
 
     def get_string_parser(self) -> callable:
@@ -91,17 +92,31 @@ class TopSpin(Puzzle):
 
         return all_states, costs
 
-    def get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State", filled: bool = True
+    def get_actions(
+        self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State", action: chex.Array, filled: bool = True
     ) -> tuple["TopSpin.State", chex.Array]:
         """
-        Returns neighbour states and costs for the 3 possible moves.
-        If filled is False, costs are infinity.
+        Returns the next state and cost for a given action.
         """
-        all_states, costs = self._get_neighbors_internal(state)
-        final_costs = jnp.where(filled, costs, jnp.inf)
+        p = state.permutation
 
-        return all_states, final_costs
+        def get_next_state(action):
+            return jax.lax.switch(
+                action,
+                [
+                    lambda: self.State(permutation=jnp.roll(p, -1)),
+                    lambda: self.State(permutation=jnp.roll(p, 1)),
+                    lambda: self.State(
+                        permutation=p.at[: self.turnstile_size].set(jnp.flip(p[: self.turnstile_size]))
+                    ),
+                ],
+            )
+
+        next_state = get_next_state(action)
+        cost = jnp.where(filled, 1.0, jnp.inf)
+        
+        return next_state, cost
+
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State") -> bool:
         return state == solve_config.TargetState

@@ -55,6 +55,7 @@ class DotKnot(Puzzle):
         assert size >= 4, "Size must be at least 4 for packing"
         self.size = size
         self.color_num = color_num
+        self.action_size = 4
         super().__init__(**kwargs)
 
     def get_solve_config_string_parser(self):
@@ -92,12 +93,11 @@ class DotKnot(Puzzle):
     def get_solve_config(self, key=jax.random.PRNGKey(128), data=None) -> "DotKnot.SolveConfig":
         return self.SolveConfig()
 
-    def get_neighbours(
-        self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State", filled: bool = True
+    def get_actions(
+        self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State", action: chex.Array, filled: bool = True
     ) -> tuple["DotKnot.State", chex.Array]:
         """
-        This function returns neighbours and the cost of each move.
-        If impossible to move in a direction, cost should be inf and State should be same as input state.
+        This function returns the next state and cost for a given action.
         """
         # Unpack the board for processing.
         unpacked_board = state.unpacked.board
@@ -111,6 +111,8 @@ class DotKnot(Puzzle):
         selected_color = jnp.min(jnp.where(available_mask, colors, self.color_num + 1))
         # Define the 4 directional moves: up, down, left, right.
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
+        
+        move_vector = moves[action]
 
         def is_valid(new_pos, color_idx):
             index = new_pos[0] * self.size + new_pos[1]
@@ -136,24 +138,20 @@ class DotKnot(Puzzle):
             )
             return board.at[flat_index].set(color_idx + 2 * self.color_num + 1)
 
-        def move(state, move_vector):
-            point_idx = selected_color
-            color_idx = (point_idx - 1) % self.color_num
-            available, pos = self._getBlankPosition(state, point_idx)
-            new_pos = (pos + move_vector).astype(TYPE)
-            is_merge, valid_move = is_valid(new_pos, color_idx)
-            valid_move = valid_move & available
-            new_board = jax.lax.cond(
-                valid_move,
-                lambda: point_move(unpacked_board, pos, new_pos, point_idx, color_idx, is_merge),
-                lambda: unpacked_board,
-            )
-            new_state = self.State(board=new_board).packed
-            cost = jnp.where(valid_move, 1.0, jnp.inf)
-            return new_state, cost
-
-        new_states, costs = jax.vmap(move, in_axes=(None, 0))(state, moves)
-        return new_states, costs
+        point_idx = selected_color
+        color_idx = (point_idx - 1) % self.color_num
+        available, pos = self._getBlankPosition(state, point_idx)
+        new_pos = (pos + move_vector).astype(TYPE)
+        is_merge, valid_move = is_valid(new_pos, color_idx)
+        valid_move = valid_move & available
+        new_board = jax.lax.cond(
+            valid_move,
+            lambda: point_move(unpacked_board, pos, new_pos, point_idx, color_idx, is_merge),
+            lambda: unpacked_board,
+        )
+        new_state = self.State(board=new_board).packed
+        cost = jnp.where(valid_move, 1.0, jnp.inf)
+        return new_state, cost
 
     def is_solved(self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State") -> bool:
         unpacked = state.unpacked.board
