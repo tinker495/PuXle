@@ -98,6 +98,8 @@ class Puzzle(ABC):
         self.get_initial_state = jax.jit(self.get_initial_state)
         self.get_solve_config = jax.jit(self.get_solve_config)
         self.get_inits = jax.jit(self.get_inits)
+        self.get_actions = jax.jit(self.get_actions)
+        self.batched_get_actions = jax.jit(self.batched_get_actions, static_argnums=(4,))
         self.get_neighbours = jax.jit(self.get_neighbours)
         self.batched_get_neighbours = jax.jit(self.batched_get_neighbours, static_argnums=(3,))
         self.is_solved = jax.jit(self.is_solved)

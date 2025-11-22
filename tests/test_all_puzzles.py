@@ -208,6 +208,76 @@ class TestPuzzleValidation:
             except Exception as e:
                 pytest.fail(f"Action transition test failed for {puzzle_class.__name__}: {e}")
 
+    def test_get_neighbours_matches_get_actions(self, puzzle_configs, rng_key):
+        """Cross-check get_neighbours outputs against per-action get_actions calls"""
+        for puzzle_class in puzzle_configs:
+            try:
+                puzzle = puzzle_class()
+                solve_config = puzzle.get_solve_config(key=rng_key)
+                initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
+
+                neighbours_filled, costs_filled = puzzle.get_neighbours(
+                    solve_config, initial_state, filled=True
+                )
+                neighbours_blocked, costs_blocked = puzzle.get_neighbours(
+                    solve_config, initial_state, filled=False
+                )
+
+                manual_states = []
+                manual_costs = []
+                manual_states_blocked = []
+                manual_costs_blocked = []
+
+                for action_idx in range(puzzle.action_size):
+                    action = jnp.asarray(action_idx)
+                    next_state, next_cost = puzzle.get_actions(
+                        solve_config, initial_state, action, filled=True
+                    )
+                    manual_states.append(next_state)
+                    manual_costs.append(next_cost)
+
+                    blocked_state, blocked_cost = puzzle.get_actions(
+                        solve_config, initial_state, action, filled=False
+                    )
+                    manual_states_blocked.append(blocked_state)
+                    manual_costs_blocked.append(blocked_cost)
+
+                stacked_states = jax.tree_util.tree_map(
+                    lambda *xs: jnp.stack(xs, axis=0), *manual_states
+                )
+                stacked_states_blocked = jax.tree_util.tree_map(
+                    lambda *xs: jnp.stack(xs, axis=0), *manual_states_blocked
+                )
+                stacked_costs = jnp.stack(manual_costs)
+                stacked_costs_blocked = jnp.stack(manual_costs_blocked)
+
+                def trees_equal(tree_a, tree_b):
+                    comparisons = jax.tree_util.tree_map(
+                        lambda x, y: jnp.array_equal(x, y), tree_a, tree_b
+                    )
+                    return all(bool(v) for v in jax.tree_util.tree_leaves(comparisons))
+
+                assert trees_equal(
+                    neighbours_filled, stacked_states
+                ), f"{puzzle_class.__name__} neighbours vs get_actions mismatch (filled=True)"
+                assert jnp.allclose(
+                    costs_filled, stacked_costs
+                ), f"{puzzle_class.__name__} neighbour costs mismatch (filled=True)"
+
+                assert trees_equal(
+                    neighbours_blocked, stacked_states_blocked
+                ), f"{puzzle_class.__name__} neighbours vs get_actions mismatch (filled=False)"
+                assert jnp.allclose(
+                    costs_blocked, stacked_costs_blocked
+                ), f"{puzzle_class.__name__} neighbour costs mismatch (filled=False)"
+
+                print(f"✓ {puzzle_class.__name__} neighbours align with get_actions for all moves")
+
+            except Exception as e:
+                pytest.fail(
+                    f"Neighbours/get_actions parity test failed for {puzzle_class.__name__}: {e}"
+                )
+
     def test_solution_checking(self, puzzle_configs, rng_key):
         """Test solution checking functionality"""
         for puzzle_class in puzzle_configs:
