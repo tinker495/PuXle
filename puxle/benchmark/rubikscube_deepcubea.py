@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pickle
 from functools import partial
 from importlib.resources import files
 from pathlib import Path
@@ -9,6 +8,7 @@ from typing import Any, Hashable, Iterable, Sequence
 import jax
 import jax.numpy as jnp
 from puxle.core.puzzle_state import PuzzleState
+from puxle.benchmark._deepcubea import load_deepcubea
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.puzzles.rubikscube import RubiksCube
 
@@ -31,14 +31,6 @@ ID_MAP = (
     33, 30, 27, 34, 31, 28, 35, 32, 29, # B
     15, 12,  9, 16, 13, 10, 17, 14, 11, # F
 )
-
-class _DeepCubeUnpickler(pickle.Unpickler):
-    """Unpickler that recreates missing DeepCube classes on the fly."""
-
-    def find_class(self, module: str, name: str) -> Any:
-        if module == "environments.cube3":
-            return globals().setdefault(name, type(name, (), {}))
-        return super().find_class(module, name)
 
 def rot90_traceable(m, k=1, axes=(0, 1)):
     k %= 4
@@ -67,12 +59,12 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
                     f"DeepCubeA dataset not found at {self._dataset_path}"
                 )
             with self._dataset_path.open("rb") as handle:
-                return _DeepCubeUnpickler(handle).load()
+                return load_deepcubea(handle)
 
         try:
             resource = files("puxle.data.rubikscube") / DEFAULT_DATASET_NAME
             with resource.open("rb") as handle:
-                return _DeepCubeUnpickler(handle).load()
+                return load_deepcubea(handle)
         except (ModuleNotFoundError, FileNotFoundError):
             pass
 
@@ -82,7 +74,7 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
                 f"Unable to locate {DEFAULT_DATASET_NAME} under package resources or at {fallback}"
             )
         with fallback.open("rb") as handle:
-            return _DeepCubeUnpickler(handle).load()
+            return load_deepcubea(handle)
 
     def sample_ids(self) -> Iterable[Hashable]:
         return range(len(self.dataset["states"]))
