@@ -83,10 +83,51 @@ def _assert_sample_valid(benchmark: Benchmark, sample_id: int) -> None:
         )
 
 
-@pytest.mark.parametrize("benchmark_cls", discover_benchmark_classes())
-def test_benchmarks_produce_sane_samples(benchmark_cls: Type[Benchmark]) -> None:
+def _benchmark_cases():
+    cases = []
+    for cls in discover_benchmark_classes():
+        instance = cls()
+        ids = _sample_ids(instance, limit=1)
+        first_sample = instance.get_sample(ids[0])
+        has_optimal = bool(first_sample.optimal_action_sequence)
+        label = "optimal" if has_optimal else "state-only"
+        cases.append(pytest.param(cls, has_optimal, id=f"{cls.__name__}[{label}]"))
+    return cases
+
+
+def _assert_sample_valid(benchmark: Benchmark, sample_id: int) -> bool:
+    sample = benchmark.get_sample(sample_id)
+    puzzle = benchmark.puzzle
+
+    assert isinstance(sample.state, puzzle.State)
+    assert sample.solve_config is not None
+
+    if sample.optimal_action_sequence:
+        path = _reconstruct_optimal_path(benchmark, sample)
+        final_state = path[-1] if path else sample.state
+        assert puzzle.is_solved(sample.solve_config, final_state), (
+            f"{benchmark.__class__.__name__} sample {sample_id} did not reach solved state."
+        )
+        return True
+
+    assert not sample.optimal_path, (
+        f"{benchmark.__class__.__name__} provided optimal_path without action sequence."
+    )
+    return False
+
+
+@pytest.mark.parametrize("benchmark_cls,has_optimal_paths", _benchmark_cases())
+def test_benchmarks_produce_sane_samples(
+    benchmark_cls: Type[Benchmark], has_optimal_paths: bool
+) -> None:
     benchmark = benchmark_cls()
     ids = _sample_ids(benchmark)
+    validated = False
     for sample_id in ids:
-        _assert_sample_valid(benchmark, sample_id)
+        validated = _assert_sample_valid(benchmark, sample_id) or validated
+
+    if has_optimal_paths:
+        assert validated, (
+            f"{benchmark_cls.__name__} was expected to contain optimal paths but none were validated."
+        )
 
