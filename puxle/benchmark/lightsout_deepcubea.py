@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Hashable, Iterable
+from typing import Any, Hashable, Iterable, Sequence
 
 import jax.numpy as jnp
 import numpy as np
@@ -95,6 +95,24 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         if self._solve_config_cache is None:
             self._solve_config_cache = self.puzzle.get_solve_config()
         return self._solve_config_cache
+
+    def verify_solution(
+        self,
+        sample: BenchmarkSample,
+        states: Sequence[PuzzleState] | None = None,
+        action_sequence: Sequence[str] | None = None,
+    ) -> bool:
+        """
+        Verify that a solution is valid for the given sample.
+        For 7x7 Lights Out, any solution without duplicate moves is considered optimal.
+        """
+        # If action_sequence is provided, check for duplicates (theorem condition)
+        if action_sequence is not None:
+            if len(set(action_sequence)) != len(action_sequence):
+                # Duplicate moves found, so it might not be optimal (or is trivially redundant)
+                return False
+
+        return super().verify_solution(sample, states, action_sequence)
 
     @staticmethod
     def _extract_tiles(raw_state: Any):
