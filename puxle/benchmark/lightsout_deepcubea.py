@@ -101,7 +101,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         sample: BenchmarkSample,
         states: Sequence[PuzzleState] | None = None,
         action_sequence: Sequence[str] | None = None,
-    ) -> bool:
+    ) -> bool | None:
         """
         Verify that a solution is valid for the given sample.
         For 7x7 Lights Out, any solution without duplicate moves is considered optimal.
@@ -112,7 +112,15 @@ class LightsOutDeepCubeABenchmark(Benchmark):
                 # Duplicate moves found, so it might not be optimal (or is trivially redundant)
                 return False
 
-        return super().verify_solution(sample, states, action_sequence)
+        result = super().verify_solution(sample, states, action_sequence)
+
+        # If base class returns None, it means solved but no ground truth to compare.
+        # Since we passed the duplicate check (which is our optimality condition),
+        # we can confirm it is optimal.
+        if result is None:
+            return True
+            
+        return result
 
     @staticmethod
     def _extract_tiles(raw_state: Any):

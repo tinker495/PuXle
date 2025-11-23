@@ -66,17 +66,17 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         sample: BenchmarkSample[StateT, SolveConfigT],
         states: Sequence[StateT] | None = None,
         action_sequence: Sequence[str] | None = None,
-    ) -> bool:
+    ) -> bool | None:
         """
         Verify that a solution is valid and optimal for the given sample.
 
         If `action_sequence` or `states` are provided, they are treated as the candidate solution.
         Otherwise, verifies `sample.optimal_action_sequence`.
 
-        Checks:
-        1. The sequence of actions leads to a solved state.
-        2. If `sample.optimal_path_costs` is known and we are verifying a candidate solution,
-           checks if the candidate length is <= optimal cost.
+        Returns:
+            - True: if valid (solved) and length matches optimal (<= optimal cost).
+            - False: if invalid (not solved) or suboptimal (> optimal cost).
+            - None: if valid (solved) but sample has no optimal info to compare against.
         """
         target_sequence = action_sequence if action_sequence is not None else sample.optimal_action_sequence
         target_path = states if states is not None else sample.optimal_path
@@ -86,7 +86,10 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
                 # Only raise if we are validating the sample itself and it's inconsistent
                 if sample.optimal_path and not sample.optimal_action_sequence:
                     raise ValueError("Sample has optimal_path but no optimal_action_sequence.")
-            return True
+            # If no sequence provided and sample has none, we can't verify steps.
+            # But if path provided, we can check validity.
+            if target_path is None:
+                return None
 
         final_state: StateT
         # Use path if available to avoid simulation
@@ -111,11 +114,24 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         if not self.puzzle.is_solved(sample.solve_config, final_state):
             return False
 
-        # 2. Check optimality (if checking a candidate against known optimal cost)
-        if action_sequence is not None and sample.optimal_path_costs is not None:
-            # We use loose comparison to account for potential float costs,
-            # though usually length is integer.
-            if len(action_sequence) > sample.optimal_path_costs:
-                return False
+        # 2. Check optimality
+        if sample.optimal_action_sequence is None:
+            return None
+
+        optimal_cost = sample.optimal_path_costs
+        if optimal_cost is None:
+            optimal_cost = len(sample.optimal_action_sequence)
+        
+        candidate_cost = 0
+        if action_sequence is not None:
+            candidate_cost = len(action_sequence)
+        elif states is not None:
+            candidate_cost = max(0, len(states) - 1)
+        else:
+            # Verifying sample against itself
+            candidate_cost = len(sample.optimal_action_sequence)
+
+        if candidate_cost > optimal_cost:
+            return False
 
         return True
