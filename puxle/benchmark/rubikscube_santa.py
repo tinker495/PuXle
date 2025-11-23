@@ -144,6 +144,10 @@ class RubiksCubeSantaBenchmark(Benchmark):
         if initial_str.startswith("N") or solution_str.startswith("N"):
             return None
         
+        # Filter out puzzles with wildcards
+        if row.get('num_wildcards', 0) > 0:
+            return None
+        
         initial_raw = np.array(initial_str.split(';'))
         solution_raw = np.array(solution_str.split(';'))
         
@@ -206,6 +210,10 @@ class RubiksCubeSantaRandomBenchmark(RubiksCubeSantaBenchmark):
         solution_str = row['solution_state']
         
         if initial_str.startswith("N") or solution_str.startswith("N"):
+            return None
+        
+        # Filter out puzzles with wildcards
+        if row.get('num_wildcards', 0) > 0:
             return None
         
         initial_raw = np.array(initial_str.split(';'))
