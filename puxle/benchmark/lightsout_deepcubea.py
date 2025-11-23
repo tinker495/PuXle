@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Hashable, Iterable
 
 import jax.numpy as jnp
+import numpy as np
 from puxle.benchmark._deepcubea import load_deepcubea
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_state import PuzzleState
@@ -100,9 +101,16 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         return getattr(raw_state, "tiles", raw_state)
 
     def _convert_state(self, raw_state: Any) -> PuzzleState:
-        tiles = jnp.asarray(self._extract_tiles(raw_state), dtype=jnp.bool_)
+        tiles = self._extract_tiles(raw_state)
         puzzle: LightsOut = self.puzzle
-        return puzzle.State(board=tiles).packed
+        board = np.asarray(tiles, dtype=np.bool_)
+        if not puzzle.board_is_solvable(board, puzzle.size):
+            raise ValueError(
+                "Encountered unsolvable LightsOut state in DeepCubeA dataset. "
+                f"State: {board.astype(int).tolist()}"
+            )
+        faces = jnp.asarray(board, dtype=jnp.bool_)
+        return puzzle.State(board=faces).packed
 
 
 __all__ = ["LightsOutDeepCubeABenchmark"]

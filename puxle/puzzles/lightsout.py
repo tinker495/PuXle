@@ -1,6 +1,7 @@
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 from termcolor import colored
 
 from puxle.core.puzzle_base import Puzzle
@@ -9,6 +10,7 @@ from puxle.utils.annotate import IMG_SIZE
 from puxle.utils.util import from_uint8, to_uint8
 
 TYPE = jnp.uint8
+_MOVE_MATRIX_CACHE: dict[int, np.ndarray] = {}
 
 
 def action_to_char(action: int) -> str:
@@ -105,10 +107,17 @@ class LightsOut(Puzzle):
         y = action % self.size
         
         def flip(board, x, y):
-            xs = jnp.clip(jnp.array([x, x, x + 1, x - 1, x]), 0, self.size - 1)
-            ys = jnp.clip(jnp.array([y, y + 1, y, y, y - 1]), 0, self.size - 1)
-            idxs = xs * self.size + ys
-            return board.at[idxs].set(jnp.logical_not(board[idxs]))
+            # Create coordinate grids
+            i, j = jnp.meshgrid(jnp.arange(self.size), jnp.arange(self.size), indexing="ij")
+            
+            # Manhattan distance from center (x,y)
+            dist = jnp.abs(i - x) + jnp.abs(j - y)
+            
+            # Mask includes center (dist=0) and immediate neighbors (dist=1)
+            mask = (dist <= 1).reshape(-1)
+            
+            # XOR flip where mask is true
+            return jnp.where(mask, jnp.logical_not(board), board)
 
         next_board, cost = jax.lax.cond(
             filled, lambda: (flip(board, x, y), 1.0), lambda: (board, jnp.inf)
@@ -132,6 +141,60 @@ class LightsOut(Puzzle):
         Each action (flipping a tile) is its own inverse.
         """
         return jnp.arange(self.action_size)
+
+    @classmethod
+    def _move_matrix(cls, size: int) -> np.ndarray:
+        matrix = _MOVE_MATRIX_CACHE.get(size)
+        if matrix is not None:
+            return matrix
+
+        total = size * size
+        matrix = np.zeros((total, total), dtype=np.uint8)
+        for idx in range(total):
+            x, y = divmod(idx, size)
+            affected = (
+                (x, y),
+                (x, y + 1),
+                (x, y - 1),
+                (x + 1, y),
+                (x - 1, y),
+            )
+            for ax, ay in affected:
+                if 0 <= ax < size and 0 <= ay < size:
+                    matrix[idx, ax * size + ay] = 1
+        _MOVE_MATRIX_CACHE[size] = matrix
+        return matrix
+
+    @classmethod
+    def board_is_solvable(cls, board: np.ndarray, size: int) -> bool:
+        board = np.asarray(board, dtype=np.uint8).reshape(size * size)
+        matrix = cls._move_matrix(size)
+        augmented = np.concatenate([matrix.copy(), board[:, None]], axis=1)
+        rows, cols = augmented.shape
+        num_vars = cols - 1
+        rank = 0
+        for col in range(num_vars):
+            pivot = None
+            for r in range(rank, rows):
+                if augmented[r, col]:
+                    pivot = r
+                    break
+            if pivot is None:
+                continue
+            if pivot != rank:
+                augmented[[rank, pivot]] = augmented[[pivot, rank]]
+            for r in range(rows):
+                if r != rank and augmented[r, col]:
+                    augmented[r] ^= augmented[rank]
+            rank += 1
+        inconsistent = np.logical_and(
+            np.all(augmented[:, :-1] == 0, axis=1), augmented[:, -1] == 1
+        )
+        return not bool(np.any(inconsistent))
+
+    def is_state_solvable(self, state: "LightsOut.State") -> bool:
+        board = np.array(state.unpacked.board, dtype=np.uint8)
+        return self.board_is_solvable(board, self.size)
 
     def _get_visualize_format(self):
         size = self.size
