@@ -32,6 +32,10 @@ ID_MAP = (
     15, 12,  9, 16, 13, 10, 17, 14, 11, # F
 )
 
+HARD_26_STATES = [
+    [0, 1, 0, 2, 0, 4, 0, 3, 0, 3, 0, 3, 2, 1, 4, 3, 5, 3, 4, 0, 4, 3, 2, 1, 4, 5, 4, 1, 0, 1, 4, 3, 2, 1, 5, 1, 2, 0, 2, 1, 4, 3, 2, 5, 2, 5, 3, 5, 2, 5, 4, 5, 1, 5],
+]
+
 def rot90_traceable(m, k=1, axes=(0, 1)):
     k %= 4
     return jax.lax.switch(k, [partial(jnp.rot90, m, k=i, axes=axes) for i in range(4)])
@@ -40,12 +44,18 @@ def rot90_traceable(m, k=1, axes=(0, 1)):
 class RubiksCubeDeepCubeABenchmark(Benchmark):
     """Benchmark exposing the DeepCubeA 3x3 Rubik's Cube dataset."""
 
-    def __init__(self, dataset_path: str | Path | None = None, use_color_embedding: bool = True) -> None:
+    def __init__(
+        self,
+        dataset_path: str | Path | None = None,
+        use_color_embedding: bool = True,
+        states: Sequence[Any] | None = None
+    ) -> None:
         super().__init__()
         self._dataset_path = Path(dataset_path).expanduser().resolve() if dataset_path else None
         self._solve_config_cache = None
         self._notation_to_action: dict[str, int] | None = None
         self._use_color_embedding = use_color_embedding
+        self._explicit_states = states
 
     def build_puzzle(self):
         from puxle.puzzles.rubikscube import RubiksCube
@@ -53,6 +63,9 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         return RubiksCube(size=3, initial_shuffle=100, color_embedding=self._use_color_embedding)
 
     def load_dataset(self) -> dict[str, Any]:
+        if self._explicit_states is not None:
+            return {"states": self._explicit_states, "solutions": None}
+
         if self._dataset_path is not None:
             if not self._dataset_path.is_file():
                 raise FileNotFoundError(
@@ -82,10 +95,19 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
     def get_sample(self, sample_id: Hashable) -> BenchmarkSample:
         index = int(sample_id)
         dataset = self.dataset
-        state = self._convert_state(dataset["states"][index])
+        
+        state_data = dataset["states"][index]
+        state = self._convert_state(state_data)
+        
         solve_config = self._ensure_solve_config()
-        optimal_action_sequence, optimal_path_costs = self._convert_solution(dataset["solutions"][index])
-        optimal_path = self._build_optimal_path(state, solve_config, optimal_action_sequence)
+        
+        optimal_action_sequence = None
+        optimal_path_costs = None
+        optimal_path = None
+
+        if dataset.get("solutions") is not None:
+            optimal_action_sequence, optimal_path_costs = self._convert_solution(dataset["solutions"][index])
+            optimal_path = self._build_optimal_path(state, solve_config, optimal_action_sequence)
 
         return BenchmarkSample(
             state=state,
@@ -172,3 +194,16 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
             current_state = next_state
 
         return tuple(path)
+
+
+class RubiksCubeDeepCubeAHardBenchmark(RubiksCubeDeepCubeABenchmark):
+    """Benchmark exposing the DeepCubeA 3x3 Rubik's Cube hard cases (26 moves)."""
+    
+    def __init__(self, dataset_path: str | Path | None = None, use_color_embedding: bool = True) -> None:
+        super().__init__(dataset_path, use_color_embedding, states=HARD_26_STATES)
+        
+    def _convert_state(self, raw_state: Any):
+        # States are already in Puxle format
+        faces = jnp.asarray(raw_state, dtype=jnp.uint8)
+        puzzle = self.puzzle
+        return puzzle.State(faces=faces).packed
