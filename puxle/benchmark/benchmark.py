@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Generic, Hashable, Iterable, Optional, Sequence, TypeVar
@@ -131,7 +132,10 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
             # Verifying sample against itself
             candidate_cost = len(sample.optimal_action_sequence)
 
+        # Allow for floating point inaccuracies if costs are floats
         if candidate_cost > optimal_cost:
+            if math.isclose(candidate_cost, optimal_cost):
+                return True
             return False
 
         return True
