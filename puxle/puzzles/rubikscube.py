@@ -53,6 +53,102 @@ def rot90_traceable(m, k=1, axes=(0, 1)):
     return jax.lax.switch(k, [partial(jnp.rot90, m, k=i, axes=axes) for i in range(4)])
 
 
+# --- Global cube rotation symmetries (24) ---
+# We represent a global rotation as (perm, k) with:
+#   out_face[i] = rot90(in_face[perm[i]], k[i])
+# where i indexes faces in {UP, FRONT, RIGHT, BACK, LEFT, DOWN}.
+#
+# For performance, we precompute the 24 (perm, k) pairs as constants so that
+# `state_symmetries` becomes a single gather + rot90, without runtime composition.
+_AXIS_PERM_CW = np.array(
+    [
+        # axis 0 (x) CW: new->(old,k) = [(3,2),(0,0),(2,1),(5,2),(4,3),(1,0)]
+        [3, 0, 2, 5, 4, 1],
+        # axis 1 (y) CW: [(0,1),(4,0),(1,0),(2,0),(3,0),(5,3)]
+        [0, 4, 1, 2, 3, 5],
+        # axis 2 (z) CW: [(2,1),(1,1),(5,1),(3,3),(0,1),(4,1)]
+        [2, 1, 5, 3, 0, 4],
+    ],
+    dtype=np.int32,
+)
+_AXIS_K_CW = np.array(
+    [
+        [2, 0, 1, 2, 3, 0],  # x
+        [1, 0, 0, 0, 0, 3],  # y
+        [1, 1, 1, 3, 1, 1],  # z
+    ],
+    dtype=np.int32,
+)
+
+
+def _compose_global_map(
+    perm1: np.ndarray, k1: np.ndarray, perm2: np.ndarray, k2: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Compose two global rotations T2 ∘ T1, where each is (perm, k) with:
+        T(in)[i] = rot90(in[perm[i]], k[i])
+
+    Returns the composed (perm, k).
+    """
+    perm = perm1[perm2]
+    k = (k1[perm2] + k2) % 4
+    return perm.astype(np.int32), k.astype(np.int32)
+
+
+def _pow_axis_cw(axis: int, k: int) -> tuple[np.ndarray, np.ndarray]:
+    """Return (perm,k) for applying the CW 90° rotation about `axis` k times (mod 4)."""
+    k = int(k) % 4
+    perm = np.arange(6, dtype=np.int32)
+    kk = np.zeros((6,), dtype=np.int32)
+    if k == 0:
+        return perm, kk
+    perm1 = _AXIS_PERM_CW[axis]
+    k1 = _AXIS_K_CW[axis]
+    for _ in range(k):
+        perm, kk = _compose_global_map(perm, kk, perm1, k1)
+    return perm, kk
+
+
+def _build_symmetry_maps_24() -> tuple[jnp.ndarray, jnp.ndarray]:
+    """
+    Build constant (perm24, k24) arrays of shape (24, 6).
+
+    Enumeration matches the previous implementation:
+      bases = [I, x, x^2, x^3, z, z^3], and for each base we append 4 y-spins.
+    """
+    # Base orientations.
+    base_specs: list[tuple[int, int]] = [
+        (0, 0),  # I  (axis ignored)
+        (0, 1),  # x
+        (0, 2),  # x^2
+        (0, 3),  # x^3
+        (2, 1),  # z
+        (2, 3),  # z^3
+    ]
+    y0 = _pow_axis_cw(1, 0)
+    y1 = _pow_axis_cw(1, 1)
+    y2 = _pow_axis_cw(1, 2)
+    y3 = _pow_axis_cw(1, 3)
+    y_pows = [y0, y1, y2, y3]
+
+    perms: list[np.ndarray] = []
+    ks: list[np.ndarray] = []
+    for axis, power in base_specs:
+        b_perm, b_k = _pow_axis_cw(axis, power)
+        for y_perm, y_k in y_pows:
+            # Apply base first, then y-spin: Y^t ∘ B
+            p, kk = _compose_global_map(b_perm, b_k, y_perm, y_k)
+            perms.append(p)
+            ks.append(kk)
+
+    perm24 = jnp.asarray(np.stack(perms, axis=0), dtype=jnp.int32)
+    k24 = jnp.asarray(np.stack(ks, axis=0), dtype=jnp.int32)
+    return perm24, k24
+
+
+_SYM_PERM24, _SYM_K24 = _build_symmetry_maps_24()
+
+
 # (rolled_faces, rotate_axis_for_rolled_faces)
 # 0: x-axis(left), 1: y-axis(up), 2: z-axis(front)
 
@@ -257,49 +353,6 @@ class RubiksCube(Puzzle):
             lambda: (state, jnp.inf),
         )
 
-    @staticmethod
-    def _global_axis_rotation_maps_cw() -> tuple[jnp.ndarray, jnp.ndarray]:
-        """
-        Precomputed face-permutation + per-face rot90(k) maps for global *clockwise* 90° rotations.
-
-        Derived to exactly match PuXle's slice semantics (i.e., applying `_rotate`
-        to every slice index for a given axis).
-
-        Returns:
-            perms: (3, 6) int32, perms[axis][new_face] = old_face
-            ks:    (3, 6) int32, ks[axis][new_face] = rot90_k applied to that old_face
-        """
-        # axis 0 (x): [(3,2),(0,0),(2,1),(5,2),(4,3),(1,0)]
-        # axis 1 (y): [(0,1),(4,0),(1,0),(2,0),(3,0),(5,3)]
-        # axis 2 (z): [(2,1),(1,1),(5,1),(3,3),(0,1),(4,1)]
-        perms = jnp.array(
-            [
-                [3, 0, 2, 5, 4, 1],
-                [0, 4, 1, 2, 3, 5],
-                [2, 1, 5, 3, 0, 4],
-            ],
-            dtype=jnp.int32,
-        )
-        ks = jnp.array(
-            [
-                [2, 0, 1, 2, 3, 0],
-                [1, 0, 0, 0, 0, 3],
-                [1, 1, 1, 3, 1, 1],
-            ],
-            dtype=jnp.int32,
-        )
-        return perms, ks
-
-    @staticmethod
-    def _apply_global_axis_rotation_faces_cw(shaped_faces: chex.Array, axis: chex.Array) -> chex.Array:
-        """Apply a global *clockwise* 90° cube rotation to faces shaped (6, n, n)."""
-        axis = jnp.asarray(axis, dtype=jnp.int32)
-        perms_cw, ks_cw = RubiksCube._global_axis_rotation_maps_cw()
-        perm = perms_cw[axis]  # (6,)
-        k = ks_cw[axis]  # (6,)
-        faces = shaped_faces[perm]
-        return jax.vmap(lambda face, kk: rot90_traceable(face, kk))(faces, k)
-
     def state_symmetries(self, state: "RubiksCube.State") -> "RubiksCube.State":
         """
         Return all 24 global rotational symmetries of a cube `state`.
@@ -308,46 +361,14 @@ class RubiksCube(Puzzle):
         This is useful for symmetry-aware hashing / canonicalization or data augmentation.
         """
         # Work in unpacked (6, n, n) to apply precomputed axis rotations, then repack.
-        shaped = state.unpacked.faces.reshape((6, self.size, self.size))
+        shaped = state.unpacked.faces.reshape((6, self.size, self.size))  # (6, n, n)
 
-        # Enumerate 24 rotations as: 6 base orientations × 4 spins about y-axis.
-        bases = jnp.array([0, 0, 0, 0, 2, 2], dtype=jnp.int32)  # axis for base op (x or z)
-        base_ks = jnp.array([0, 1, 2, 3, 1, 3], dtype=jnp.int32)  # power for that axis
-        y_ks = jnp.arange(4, dtype=jnp.int32)  # 0..3
-
-        def apply_k(faces: chex.Array, axis: chex.Array, k: chex.Array) -> chex.Array:
-            """
-            Apply axis rotation k times (mod 4), *lazily*.
-
-            Important for performance: do NOT eagerly compute R, R^2, R^3 for every call.
-            """
-            axis = jnp.asarray(axis, dtype=jnp.int32)
-            k = jnp.asarray(k, dtype=jnp.int32) % 4
-
-            def r(x):
-                return RubiksCube._apply_global_axis_rotation_faces_cw(x, axis)
-
-            return jax.lax.switch(
-                k,
-                [
-                    lambda: faces,
-                    lambda: r(faces),
-                    lambda: r(r(faces)),
-                    lambda: r(r(r(faces))),
-                ],
-            )
-
-        def one_sym(i: chex.Array) -> chex.Array:
-            base_idx = i // 4
-            yk = i % 4
-            axis0 = bases[base_idx]
-            k0 = base_ks[base_idx]
-            f0 = apply_k(shaped, axis0, k0)
-            f1 = apply_k(f0, jnp.int32(1), yk)  # y-axis spin
-            return f1.reshape((6, self._tile_count))
-
-        idx = jnp.arange(24, dtype=jnp.int32)
-        sym_flat = jax.vmap(one_sym)(idx)  # (24, 6, tile_count)
+        # Apply 24 global rotations via a single gather + per-face rot90.
+        faces_perm = shaped[_SYM_PERM24]  # (24, 6, n, n)
+        rotated = jax.vmap(
+            lambda faces6, ks6: jax.vmap(lambda f, kk: rot90_traceable(f, kk))(faces6, ks6)
+        )(faces_perm, _SYM_K24)  # (24, 6, n, n)
+        sym_flat = rotated.reshape((24, 6, self._tile_count))
         packed = jax.vmap(lambda x: to_uint8(x, self._active_bits))(sym_flat)
         return self.State(faces=packed)
 
