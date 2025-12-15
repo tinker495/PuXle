@@ -20,27 +20,90 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
 
     queue = deque([(initial_state, 0)])
     visited = {_hash_state(initial_state)}
+    
+    # Process states in batches to leverage vectorization and reduce JAX dispatch overhead
+    BATCH_SIZE = 512
 
     while queue:
-        state, depth = queue.popleft()
-        if depth >= max_depth:
-            continue
+        # Early exit if we reached the depth limit (BFS monotonic property)
+        if queue[0][1] >= max_depth:
+            return False
 
-        neighbors, costs = env.get_neighbours(solve_config, state, filled=True)
-        applicable = jnp.isfinite(costs)
-        if not jnp.any(applicable):
-            continue
+        # 1. Collect a batch of states
+        batch_states = []
+        batch_depths = []
+        
+        while len(batch_states) < BATCH_SIZE and queue:
+            if queue[0][1] >= max_depth:
+                break
+            s, d = queue.popleft()
+            batch_states.append(s)
+            batch_depths.append(d)
+        
+        if not batch_states:
+            return False
 
-        # Expand all applicable actions
-        action_indices = np.array(jnp.where(applicable)[0]).tolist()
-        for idx in action_indices:
-            next_state = jax.tree_util.tree_map(lambda x: x[idx], neighbors)
-            if bool(env.is_solved(solve_config, next_state)):
-                return True
-            key = _hash_state(next_state)
+        # Stack states (List[State] -> State(Batch...))
+        stacked_state = jax.tree_util.tree_map(lambda *xs: jnp.stack(xs), *batch_states)
+        
+        # Prepare filleds mask (required by batched_get_neighbours)
+        # We need to pass a boolean array of shape (batch_size,) because batched_get_neighbours vmaps over it
+        filleds_batch = jnp.full((len(batch_states),), True)
+
+        # 2. Get neighbors in batch
+        # env.batched_get_neighbours is pre-jitted in Puzzle.__init__
+        neighbors, costs = env.batched_get_neighbours(
+            solve_config, 
+            stacked_state, 
+            filleds=filleds_batch
+        )
+        
+        # 3. Check for solutions in batch
+        # Flatten neighbors to (Batch*Actions, ...) for solved check
+        flat_neighbors = jax.tree_util.tree_map(
+            lambda x: x.reshape((-1,) + x.shape[2:]), 
+            neighbors
+        )
+        
+        # env.batched_is_solved is pre-jitted
+        solved_mask = env.batched_is_solved(solve_config, flat_neighbors)
+
+        if jnp.any(solved_mask):
+            return True
+
+        # 4. Filter and process new states on CPU
+        # Bulk convert to numpy to avoid repeated device-host transfers
+        neighbors_atoms_np = np.array(flat_neighbors.atoms)
+        costs_np = np.array(costs).flatten()
+        
+        # Filter valid transitions (finite cost)
+        applicable_indices = np.where(np.isfinite(costs_np))[0]
+        
+        if len(applicable_indices) == 0:
+            continue
+            
+        # Calculate depths for new states
+        parent_indices = applicable_indices // env.action_size
+        new_depths = np.array(batch_depths)[parent_indices] + 1
+        
+        # Filter by max_depth
+        valid_mask = new_depths < max_depth
+        final_indices = applicable_indices[valid_mask]
+        final_depths = new_depths[valid_mask]
+        
+        if len(final_indices) == 0:
+            continue
+            
+        final_atoms = neighbors_atoms_np[final_indices]
+        
+        # Add to queue
+        for i, atom_row in enumerate(final_atoms):
+            key = atom_row.tobytes()
             if key not in visited:
                 visited.add(key)
-                queue.append((next_state, depth + 1))
+                # Store as State object
+                ns = env.State(atoms=atom_row)
+                queue.append((ns, int(final_depths[i])))
 
     return False
 
