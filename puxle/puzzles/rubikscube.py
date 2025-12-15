@@ -258,76 +258,45 @@ class RubiksCube(Puzzle):
         )
 
     @staticmethod
-    def _global_axis_rotation_maps(clockwise: bool = True) -> tuple[jnp.ndarray, jnp.ndarray]:
+    def _global_axis_rotation_maps_cw() -> tuple[jnp.ndarray, jnp.ndarray]:
         """
-        Precomputed face-permutation + per-face rot90(k) maps for global 90° rotations.
+        Precomputed face-permutation + per-face rot90(k) maps for global *clockwise* 90° rotations.
 
-        These were derived to exactly match PuXle's slice semantics (i.e., applying `_rotate`
+        Derived to exactly match PuXle's slice semantics (i.e., applying `_rotate`
         to every slice index for a given axis).
 
         Returns:
             perms: (3, 6) int32, perms[axis][new_face] = old_face
             ks:    (3, 6) int32, ks[axis][new_face] = rot90_k applied to that old_face
         """
-        if clockwise:
-            # axis 0 (x): [(3,2),(0,0),(2,1),(5,2),(4,3),(1,0)]
-            # axis 1 (y): [(0,1),(4,0),(1,0),(2,0),(3,0),(5,3)]
-            # axis 2 (z): [(2,1),(1,1),(5,1),(3,3),(0,1),(4,1)]
-            perms = jnp.array(
-                [
-                    [3, 0, 2, 5, 4, 1],
-                    [0, 4, 1, 2, 3, 5],
-                    [2, 1, 5, 3, 0, 4],
-                ],
-                dtype=jnp.int32,
-            )
-            ks = jnp.array(
-                [
-                    [2, 0, 1, 2, 3, 0],
-                    [1, 0, 0, 0, 0, 3],
-                    [1, 1, 1, 3, 1, 1],
-                ],
-                dtype=jnp.int32,
-            )
-        else:
-            # axis 0 (x): [(1,0),(5,0),(2,3),(0,2),(4,1),(3,2)]
-            # axis 1 (y): [(0,3),(2,0),(3,0),(4,0),(1,0),(5,1)]
-            # axis 2 (z): [(4,3),(1,3),(0,3),(3,1),(5,3),(2,3)]
-            perms = jnp.array(
-                [
-                    [1, 5, 2, 0, 4, 3],
-                    [0, 2, 3, 4, 1, 5],
-                    [4, 1, 0, 3, 5, 2],
-                ],
-                dtype=jnp.int32,
-            )
-            ks = jnp.array(
-                [
-                    [0, 0, 3, 2, 1, 2],
-                    [3, 0, 0, 0, 0, 1],
-                    [3, 3, 3, 1, 3, 3],
-                ],
-                dtype=jnp.int32,
-            )
+        # axis 0 (x): [(3,2),(0,0),(2,1),(5,2),(4,3),(1,0)]
+        # axis 1 (y): [(0,1),(4,0),(1,0),(2,0),(3,0),(5,3)]
+        # axis 2 (z): [(2,1),(1,1),(5,1),(3,3),(0,1),(4,1)]
+        perms = jnp.array(
+            [
+                [3, 0, 2, 5, 4, 1],
+                [0, 4, 1, 2, 3, 5],
+                [2, 1, 5, 3, 0, 4],
+            ],
+            dtype=jnp.int32,
+        )
+        ks = jnp.array(
+            [
+                [2, 0, 1, 2, 3, 0],
+                [1, 0, 0, 0, 0, 3],
+                [1, 1, 1, 3, 1, 1],
+            ],
+            dtype=jnp.int32,
+        )
         return perms, ks
 
     @staticmethod
-    def _apply_global_axis_rotation_faces(
-        shaped_faces: chex.Array, axis: chex.Array, clockwise: chex.Array
-    ) -> chex.Array:
-        """
-        Apply a global 90° cube rotation to faces shaped (6, n, n), without looping over slices.
-        """
+    def _apply_global_axis_rotation_faces_cw(shaped_faces: chex.Array, axis: chex.Array) -> chex.Array:
+        """Apply a global *clockwise* 90° cube rotation to faces shaped (6, n, n)."""
         axis = jnp.asarray(axis, dtype=jnp.int32)
-        clockwise = jnp.asarray(clockwise)
-
-        perms_cw, ks_cw = RubiksCube._global_axis_rotation_maps(clockwise=True)
-        perms_ccw, ks_ccw = RubiksCube._global_axis_rotation_maps(clockwise=False)
-        perms = jax.lax.select(clockwise, perms_cw, perms_ccw)
-        ks = jax.lax.select(clockwise, ks_cw, ks_ccw)
-
-        perm = perms[axis]  # (6,)
-        k = ks[axis]  # (6,)
+        perms_cw, ks_cw = RubiksCube._global_axis_rotation_maps_cw()
+        perm = perms_cw[axis]  # (6,)
+        k = ks_cw[axis]  # (6,)
         faces = shaped_faces[perm]
         return jax.vmap(lambda face, kk: rot90_traceable(face, kk))(faces, k)
 
@@ -347,14 +316,25 @@ class RubiksCube(Puzzle):
         y_ks = jnp.arange(4, dtype=jnp.int32)  # 0..3
 
         def apply_k(faces: chex.Array, axis: chex.Array, k: chex.Array) -> chex.Array:
-            # Apply axis rotation k times by selecting from {I, R, R^2, R^3} via composition.
-            # Composition is implemented with nested calls (constant depth), avoiding loops.
-            r1 = RubiksCube._apply_global_axis_rotation_faces(faces, axis, True)
-            r2 = RubiksCube._apply_global_axis_rotation_faces(r1, axis, True)
-            r3 = RubiksCube._apply_global_axis_rotation_faces(r2, axis, True)
+            """
+            Apply axis rotation k times (mod 4), *lazily*.
+
+            Important for performance: do NOT eagerly compute R, R^2, R^3 for every call.
+            """
+            axis = jnp.asarray(axis, dtype=jnp.int32)
+            k = jnp.asarray(k, dtype=jnp.int32) % 4
+
+            def r(x):
+                return RubiksCube._apply_global_axis_rotation_faces_cw(x, axis)
+
             return jax.lax.switch(
-                k % 4,
-                [lambda: faces, lambda: r1, lambda: r2, lambda: r3],
+                k,
+                [
+                    lambda: faces,
+                    lambda: r(faces),
+                    lambda: r(r(faces)),
+                    lambda: r(r(r(faces))),
+                ],
             )
 
         def one_sym(i: chex.Array) -> chex.Array:
@@ -363,7 +343,7 @@ class RubiksCube(Puzzle):
             axis0 = bases[base_idx]
             k0 = base_ks[base_idx]
             f0 = apply_k(shaped, axis0, k0)
-            f1 = apply_k(f0, 1, yk)  # y-axis spin
+            f1 = apply_k(f0, jnp.int32(1), yk)  # y-axis spin
             return f1.reshape((6, self._tile_count))
 
         idx = jnp.arange(24, dtype=jnp.int32)
