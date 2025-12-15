@@ -257,30 +257,79 @@ class RubiksCube(Puzzle):
             lambda: (state, jnp.inf),
         )
 
-    def _rotate_cube_axis(self, state: "RubiksCube.State", axis: int, clockwise: bool = True) -> "RubiksCube.State":
+    @staticmethod
+    def _global_axis_rotation_maps(clockwise: bool = True) -> tuple[jnp.ndarray, jnp.ndarray]:
         """
-        Rotate the whole cube by 90° about a given axis by rotating every slice once.
+        Precomputed face-permutation + per-face rot90(k) maps for global 90° rotations.
 
-        This intentionally uses :meth:`RubiksCube._rotate` to match PuXle's exact slice semantics.
+        These were derived to exactly match PuXle's slice semantics (i.e., applying `_rotate`
+        to every slice index for a given axis).
+
+        Returns:
+            perms: (3, 6) int32, perms[axis][new_face] = old_face
+            ks:    (3, 6) int32, ks[axis][new_face] = rot90_k applied to that old_face
         """
-        axis_arr = jnp.asarray(axis, dtype=jnp.int32)
-        clockwise_arr = jnp.asarray(clockwise)
+        if clockwise:
+            # axis 0 (x): [(3,2),(0,0),(2,1),(5,2),(4,3),(1,0)]
+            # axis 1 (y): [(0,1),(4,0),(1,0),(2,0),(3,0),(5,3)]
+            # axis 2 (z): [(2,1),(1,1),(5,1),(3,3),(0,1),(4,1)]
+            perms = jnp.array(
+                [
+                    [3, 0, 2, 5, 4, 1],
+                    [0, 4, 1, 2, 3, 5],
+                    [2, 1, 5, 3, 0, 4],
+                ],
+                dtype=jnp.int32,
+            )
+            ks = jnp.array(
+                [
+                    [2, 0, 1, 2, 3, 0],
+                    [1, 0, 0, 0, 0, 3],
+                    [1, 1, 1, 3, 1, 1],
+                ],
+                dtype=jnp.int32,
+            )
+        else:
+            # axis 0 (x): [(1,0),(5,0),(2,3),(0,2),(4,1),(3,2)]
+            # axis 1 (y): [(0,3),(2,0),(3,0),(4,0),(1,0),(5,1)]
+            # axis 2 (z): [(4,3),(1,3),(0,3),(3,1),(5,3),(2,3)]
+            perms = jnp.array(
+                [
+                    [1, 5, 2, 0, 4, 3],
+                    [0, 2, 3, 4, 1, 5],
+                    [4, 1, 0, 3, 5, 2],
+                ],
+                dtype=jnp.int32,
+            )
+            ks = jnp.array(
+                [
+                    [0, 0, 3, 2, 1, 2],
+                    [3, 0, 0, 0, 0, 1],
+                    [3, 3, 3, 1, 3, 3],
+                ],
+                dtype=jnp.int32,
+            )
+        return perms, ks
 
-        def body(i, s):
-            return self._rotate(s, axis_arr, i, clockwise_arr)
+    @staticmethod
+    def _apply_global_axis_rotation_faces(
+        shaped_faces: chex.Array, axis: chex.Array, clockwise: chex.Array
+    ) -> chex.Array:
+        """
+        Apply a global 90° cube rotation to faces shaped (6, n, n), without looping over slices.
+        """
+        axis = jnp.asarray(axis, dtype=jnp.int32)
+        clockwise = jnp.asarray(clockwise)
 
-        return jax.lax.fori_loop(0, self.size, body, state)
+        perms_cw, ks_cw = RubiksCube._global_axis_rotation_maps(clockwise=True)
+        perms_ccw, ks_ccw = RubiksCube._global_axis_rotation_maps(clockwise=False)
+        perms = jax.lax.select(clockwise, perms_cw, perms_ccw)
+        ks = jax.lax.select(clockwise, ks_cw, ks_ccw)
 
-    def _repeat_axis_rotation(
-        self, state: "RubiksCube.State", axis: int, k: int, clockwise: bool = True
-    ) -> "RubiksCube.State":
-        """Apply a whole-cube axis rotation `k` times (mod 4)."""
-        k = int(k) % 4
-
-        def body(_, s):
-            return self._rotate_cube_axis(s, axis, clockwise)
-
-        return jax.lax.fori_loop(0, k, body, state)
+        perm = perms[axis]  # (6,)
+        k = ks[axis]  # (6,)
+        faces = shaped_faces[perm]
+        return jax.vmap(lambda face, kk: rot90_traceable(face, kk))(faces, k)
 
     def state_symmetries(self, state: "RubiksCube.State") -> "RubiksCube.State":
         """
@@ -289,27 +338,38 @@ class RubiksCube(Puzzle):
         The result is a *batched* `State` whose leading dimension is 24.
         This is useful for symmetry-aware hashing / canonicalization or data augmentation.
         """
-        bases = [
-            [],  # I
-            [(0, 1)],  # x
-            [(0, 2)],  # x^2
-            [(0, 3)],  # x^3
-            [(2, 1)],  # z
-            [(2, 3)],  # z^3
-        ]
+        # Work in unpacked (6, n, n) to apply precomputed axis rotations, then repack.
+        shaped = state.unpacked.faces.reshape((6, self.size, self.size))
 
-        rotations_faces = []
-        for base in bases:
-            s_base = state
-            for axis, kk in base:
-                s_base = self._repeat_axis_rotation(s_base, axis, kk, True)
+        # Enumerate 24 rotations as: 6 base orientations × 4 spins about y-axis.
+        bases = jnp.array([0, 0, 0, 0, 2, 2], dtype=jnp.int32)  # axis for base op (x or z)
+        base_ks = jnp.array([0, 1, 2, 3, 1, 3], dtype=jnp.int32)  # power for that axis
+        y_ks = jnp.arange(4, dtype=jnp.int32)  # 0..3
 
-            s = s_base
-            for _ in range(4):
-                rotations_faces.append(s.faces)
-                s = self._repeat_axis_rotation(s, 1, 1, True)  # y
+        def apply_k(faces: chex.Array, axis: chex.Array, k: chex.Array) -> chex.Array:
+            # Apply axis rotation k times by selecting from {I, R, R^2, R^3} via composition.
+            # Composition is implemented with nested calls (constant depth), avoiding loops.
+            r1 = RubiksCube._apply_global_axis_rotation_faces(faces, axis, True)
+            r2 = RubiksCube._apply_global_axis_rotation_faces(r1, axis, True)
+            r3 = RubiksCube._apply_global_axis_rotation_faces(r2, axis, True)
+            return jax.lax.switch(
+                k % 4,
+                [lambda: faces, lambda: r1, lambda: r2, lambda: r3],
+            )
 
-        return self.State(faces=jnp.stack(rotations_faces, axis=0))
+        def one_sym(i: chex.Array) -> chex.Array:
+            base_idx = i // 4
+            yk = i % 4
+            axis0 = bases[base_idx]
+            k0 = base_ks[base_idx]
+            f0 = apply_k(shaped, axis0, k0)
+            f1 = apply_k(f0, 1, yk)  # y-axis spin
+            return f1.reshape((6, self._tile_count))
+
+        idx = jnp.arange(24, dtype=jnp.int32)
+        sym_flat = jax.vmap(one_sym)(idx)  # (24, 6, tile_count)
+        packed = jax.vmap(lambda x: to_uint8(x, self._active_bits))(sym_flat)
+        return self.State(faces=packed)
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State") -> bool:
         return state == solve_config.TargetState
