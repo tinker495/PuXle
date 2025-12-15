@@ -257,6 +257,60 @@ class RubiksCube(Puzzle):
             lambda: (state, jnp.inf),
         )
 
+    def _rotate_cube_axis(self, state: "RubiksCube.State", axis: int, clockwise: bool = True) -> "RubiksCube.State":
+        """
+        Rotate the whole cube by 90° about a given axis by rotating every slice once.
+
+        This intentionally uses :meth:`RubiksCube._rotate` to match PuXle's exact slice semantics.
+        """
+        axis_arr = jnp.asarray(axis, dtype=jnp.int32)
+        clockwise_arr = jnp.asarray(clockwise)
+
+        def body(i, s):
+            return self._rotate(s, axis_arr, i, clockwise_arr)
+
+        return jax.lax.fori_loop(0, self.size, body, state)
+
+    def _repeat_axis_rotation(
+        self, state: "RubiksCube.State", axis: int, k: int, clockwise: bool = True
+    ) -> "RubiksCube.State":
+        """Apply a whole-cube axis rotation `k` times (mod 4)."""
+        k = int(k) % 4
+
+        def body(_, s):
+            return self._rotate_cube_axis(s, axis, clockwise)
+
+        return jax.lax.fori_loop(0, k, body, state)
+
+    def state_symmetries(self, state: "RubiksCube.State") -> "RubiksCube.State":
+        """
+        Return all 24 global rotational symmetries of a cube `state`.
+
+        The result is a *batched* `State` whose leading dimension is 24.
+        This is useful for symmetry-aware hashing / canonicalization or data augmentation.
+        """
+        bases = [
+            [],  # I
+            [(0, 1)],  # x
+            [(0, 2)],  # x^2
+            [(0, 3)],  # x^3
+            [(2, 1)],  # z
+            [(2, 3)],  # z^3
+        ]
+
+        rotations_faces = []
+        for base in bases:
+            s_base = state
+            for axis, kk in base:
+                s_base = self._repeat_axis_rotation(s_base, axis, kk, True)
+
+            s = s_base
+            for _ in range(4):
+                rotations_faces.append(s.faces)
+                s = self._repeat_axis_rotation(s, 1, 1, True)  # y
+
+        return self.State(faces=jnp.stack(rotations_faces, axis=0))
+
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State") -> bool:
         return state == solve_config.TargetState
 
