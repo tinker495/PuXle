@@ -33,7 +33,7 @@ from cube3 import Cube3, Cube3State
 def flatten_rubiks_state(state: RubiksCube.State) -> np.ndarray:
     """Return the unpacked RubiksCube state as a flat numpy array."""
 
-    faces = np.array(state.unpacked.faces, dtype=np.int32)
+    faces = np.array(state.faces_unpacked, dtype=np.int32)
     return faces.reshape(-1)
 
 
@@ -52,7 +52,7 @@ def convert_cube3_to_rubiks_flat(
 
     tiles = jnp.asarray(state.colors, dtype=jnp.uint8)
     converted_tiles = converter._convert_deepcubea_to_puxle(tiles, puzzle.size)
-    converted_state = puzzle.State(faces=converted_tiles).packed
+    converted_state = puzzle.State.from_unpacked(faces=converted_tiles.reshape(6, -1))
     return flatten_rubiks_state(converted_state)
 
 
@@ -91,7 +91,7 @@ def main() -> None:
     cube3_str_actions = cube3.str_moves
 
     print("Initial solved-states")
-    print(xnp.stack([rubiks.State(faces=conv_goal).packed, target_state]))
+    print(xnp.stack([rubiks.State.from_unpacked(faces=conv_goal.reshape(6, -1)), target_state]))
 
     for action in range(cube3.get_num_moves()):
         str_action = cube3_str_actions[action]
@@ -100,7 +100,7 @@ def main() -> None:
         next_state = next_states[0]
         flattened_next_state = flatten_cube3_state(next_state)
         converted_next_state = converter._convert_deepcubea_to_puxle(flattened_next_state, rubiks.size)
-        to_rubiks = rubiks.State(faces=converted_next_state).packed
+        to_rubiks = rubiks.State.from_unpacked(faces=converted_next_state.reshape(6, -1))
         rc_state = neighbours[rc_action]
         if to_rubiks == rc_state:
             continue

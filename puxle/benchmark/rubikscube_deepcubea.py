@@ -145,7 +145,7 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         puzzle : RubiksCube = self.puzzle
         faces = self._convert_deepcubea_to_puxle(faces, puzzle.size)
         faces = puzzle.convert_tile_to_color_embedding(faces)
-        return puzzle.State(faces=faces).packed
+        return puzzle.State.from_unpacked(faces=faces.reshape(6, -1))
 
     def _convert_solution(
         self,
@@ -206,4 +206,4 @@ class RubiksCubeDeepCubeAHardBenchmark(RubiksCubeDeepCubeABenchmark):
         # States are already in Puxle format
         faces = jnp.asarray(raw_state, dtype=jnp.uint8)
         puzzle = self.puzzle
-        return puzzle.State(faces=faces).packed
+        return puzzle.State.from_unpacked(faces=faces.reshape(6, -1))

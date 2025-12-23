@@ -12,7 +12,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="puxle",
-    version="0.0.1",
+    version="0.0.2",
     author="tinker495",
     author_email="wjdrbtjr495@gmail.com",
     description="Parallelized Puzzles implementation based on Jax!",

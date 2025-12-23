@@ -1,4 +1,6 @@
-from typing import Type, TypeVar
+from __future__ import annotations
+
+from typing import Any, Type, TypeVar
 
 from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
@@ -6,47 +8,61 @@ T = TypeVar("T")
 
 FieldDescriptor = FieldDescriptor
 
+
 class PuzzleState(Xtructurable):
-    @property
-    def packed(self, **kwargs) -> "PuzzleState":
-        """
-        This function should return a bit packed array that represents
-        """
-        return self
-
-    @property
-    def unpacked(self, **kwargs) -> "PuzzleState":
-        """
-        This function should return a Xtructurable object that represents the state.
-        raw state is bit packed, so it is space efficient, but it is not good for observation & state transition.
-        """
-        return self
-
-
-def state_dataclass(cls: Type[T]) -> Type[T]:
     """
-    This decorator should be used to define a dataclass that represents the state.
+    Marker base-class for PuXle states.
+
+    Notes:
+    - PuXle state/solve-config classes are typically created via `@state_dataclass`.
+    - In-memory bitpacking is handled by xtructure (FieldDescriptor.packed_tensor / aggregate bitpack),
+      not by overriding this base class.
+    """
+    pass
+
+
+def state_dataclass(cls: Type[T] | None = None, **kwargs: Any):
+    """
+    Decorator used to define a JAX-compatible xtructure dataclass for PuXle state objects.
+
+    Default behavior:
+    - Enables xtructure bitpacking helpers via `bitpack="auto"` when supported.
+    - Preserves backwards compatibility by providing identity `.packed` / `.unpacked`
+      properties for non-bitpacked states.
     """
 
-    cls = xtructure_dataclass(cls)
+    def wrap(target_cls: Type[T]) -> Type[T]:
+        # Prefer enabling xtructure's built-in bitpacking helpers by default.
+        call_kwargs = dict(kwargs)
+        call_kwargs.setdefault("bitpack", "auto")
 
-    if not hasattr(cls, "packed") and not hasattr(cls, "unpacked"):
-        # if packing and unpacking are not implemented, return the state as is
-        def packed(self) -> cls:
-            return self
+        try:
+            dc_cls = xtructure_dataclass(target_cls, **call_kwargs)
+        except TypeError:
+            # Backwards-compatible fallback if the installed xtructure doesn't accept `bitpack=`.
+            call_kwargs.pop("bitpack", None)
+            dc_cls = xtructure_dataclass(target_cls, **call_kwargs)
 
-        setattr(cls, "packed", property(packed))
+        if not hasattr(dc_cls, "packed") and not hasattr(dc_cls, "unpacked"):
+            # Backwards compatibility: treat state as already packed/unpacked.
+            def packed(self) -> Any:
+                return self
 
-        def unpacked(self) -> cls:
-            return self
+            setattr(dc_cls, "packed", property(packed))
 
-        setattr(cls, "unpacked", property(unpacked))
+            def unpacked(self) -> Any:
+                return self
 
-    elif hasattr(cls, "packed") ^ hasattr(cls, "unpacked"):
-        # packing and unpacking must be implemented together
-        raise ValueError("State class must implement both packing and unpacking or neither")
-    else:
-        # packing and unpacking are implemented
-        pass
+            setattr(dc_cls, "unpacked", property(unpacked))
 
-    return cls
+        elif hasattr(dc_cls, "packed") ^ hasattr(dc_cls, "unpacked"):
+            # Packing and unpacking must be implemented together.
+            raise ValueError(
+                "State class must implement both packing and unpacking (or neither)."
+            )
+
+        return dc_cls
+
+    if cls is None:
+        return wrap
+    return wrap(cls)

@@ -9,7 +9,7 @@ from tabulate import tabulate
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
-from puxle.utils.util import coloring_str, from_uint8, to_uint8
+from puxle.utils.util import coloring_str
 
 TYPE = jnp.uint8
 LINE_THICKNESS = 3
@@ -168,24 +168,14 @@ class RubiksCube(Puzzle):
     def define_state_class(self) -> PuzzleState:
         str_parser = self.get_string_parser()
         raw_shape = (6, self.size * self.size)
-        raw = jnp.zeros(raw_shape, dtype=TYPE)
         active_bits = self._active_bits
-        packed_faces = to_uint8(raw, active_bits)
 
         @state_dataclass
         class State:
-            faces: FieldDescriptor.tensor(dtype=TYPE, shape=packed_faces.shape)
+            faces: FieldDescriptor.packed_tensor(shape=raw_shape, packed_bits=active_bits)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
-
-            @property
-            def packed(self):
-                return State(faces=to_uint8(self.faces, active_bits))
-
-            @property
-            def unpacked(self):
-                return State(faces=from_uint8(self.faces, raw_shape, active_bits))
 
         return State
 
@@ -271,7 +261,7 @@ class RubiksCube(Puzzle):
     def get_string_parser(self):
         def parser(state: "RubiksCube.State", *, use_color_overlay: bool = False, **_):
             # Unpack the state faces before printing
-            unpacked_faces = state.unpacked.faces
+            unpacked_faces = state.faces_unpacked
             as_color = self.color_embedding or use_color_overlay
 
             # Helper function to get face string
@@ -327,7 +317,7 @@ class RubiksCube(Puzzle):
 
     def get_target_state(self, key=None) -> "RubiksCube.State":
         faces = self._solved_faces()
-        return self.State(faces=faces).packed
+        return self.State.from_unpacked(faces=faces)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         return self.SolveConfig(TargetState=self.get_target_state(key))
@@ -360,8 +350,8 @@ class RubiksCube(Puzzle):
         The result is a *batched* `State` whose leading dimension is 24.
         This is useful for symmetry-aware hashing / canonicalization or data augmentation.
         """
-        # Work in unpacked (6, n, n) to apply precomputed axis rotations, then repack.
-        shaped = state.unpacked.faces.reshape((6, self.size, self.size))  # (6, n, n)
+        # Work in unpacked (6, n, n) to apply precomputed axis rotations.
+        shaped = state.faces_unpacked.reshape((6, self.size, self.size))  # (6, n, n)
 
         # Apply 24 global rotations via a single gather + per-face rot90.
         faces_perm = shaped[_SYM_PERM24]  # (24, 6, n, n)
@@ -369,8 +359,7 @@ class RubiksCube(Puzzle):
             lambda faces6, ks6: jax.vmap(lambda f, kk: rot90_traceable(f, kk))(faces6, ks6)
         )(faces_perm, _SYM_K24)  # (24, 6, n, n)
         sym_flat = rotated.reshape((24, 6, self._tile_count))
-        packed = jax.vmap(lambda x: to_uint8(x, self._active_bits))(sym_flat)
-        return self.State(faces=packed)
+        return self.State.from_unpacked(shape=(24,), faces=sym_flat)
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State") -> bool:
         return state == solve_config.TargetState
@@ -481,7 +470,7 @@ class RubiksCube(Puzzle):
         # axis is the axis of the rotation, 0 for x, 1 for y, 2 for z
         # index is the index of the edge to rotate
         # clockwise is a boolean, True for clockwise, False for counterclockwise
-        faces = state.unpacked.faces
+        faces = state.faces_unpacked
         shaped_faces = faces.reshape((6, self.size, self.size))
 
         rotate_edge_map = jnp.array(
@@ -546,7 +535,7 @@ class RubiksCube(Puzzle):
             ],
         )
         faces = jnp.reshape(shaped_faces, (6, self.size * self.size))
-        return self.State(faces=faces).packed
+        return state.set_unpacked(faces=faces)
 
     def get_img_parser(self):
         """
@@ -611,7 +600,7 @@ class RubiksCube(Puzzle):
                 return int(u * scale + offset_x), int(v * scale + offset_y)
 
             # Obtain sticker data, colour mapping, and helper for drawing numbered tiles
-            stickers = np.array(state.unpacked.faces, dtype=np.int32).reshape((6, self.size, self.size))
+            stickers = np.array(state.faces_unpacked, dtype=np.int32).reshape((6, self.size, self.size))
             color_faces = self._color_indices(stickers).reshape((6, self.size, self.size))
 
             def draw_tile(img_target, pts, face_id, row, col):

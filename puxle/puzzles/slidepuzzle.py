@@ -5,7 +5,6 @@ import jax.numpy as jnp
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
-from puxle.utils.util import from_uint8, to_uint8
 
 TYPE = jnp.uint8
 
@@ -18,33 +17,14 @@ class SlidePuzzle(Puzzle):
         str_parser = self.get_string_parser()
         size = self.size
         max_value = self.size**2 - 1
-        need_pack = max_value <= 16
-
-        if need_pack:
-            shape = to_uint8(jnp.zeros((size**2,), dtype=TYPE), 4).shape
-        else:
-            shape = (size**2,)
+        packed_bits = max_value.bit_length()
 
         @state_dataclass
         class State:
-            board: FieldDescriptor.tensor(dtype=TYPE, shape=shape)
+            board: FieldDescriptor.packed_tensor(shape=(size**2,), packed_bits=packed_bits)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
-
-            @property
-            def packed(self) -> "SlidePuzzle.State":
-                if need_pack:
-                    return State(board=to_uint8(self.board, 4))
-                else:
-                    return State(board=self.board)
-
-            @property
-            def unpacked(self) -> "SlidePuzzle.State":
-                if need_pack:
-                    return State(board=from_uint8(self.board, (size**2,), 4))
-                else:
-                    return State(board=self.board)
 
         return State
 
@@ -64,7 +44,7 @@ class SlidePuzzle(Puzzle):
             return str(x)
 
         def parser(state: "SlidePuzzle.State", **kwargs):
-            return form.format(*map(to_char, state.unpacked.board))
+            return form.format(*map(to_char, state.board_unpacked))
 
         return parser
 
@@ -74,11 +54,9 @@ class SlidePuzzle(Puzzle):
         return self._get_random_state(key)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
-        return self.SolveConfig(
-            TargetState=self.State(
-                board=jnp.array([*range(1, self.size**2), 0], dtype=TYPE)
-            ).packed
-        )
+        target = jnp.array([*range(1, self.size**2), 0], dtype=TYPE)
+        target_state = self.State.from_unpacked(board=target)
+        return self.SolveConfig(TargetState=target_state)
 
     def get_actions(
         self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State", action: chex.Array, filled: bool = True
@@ -86,8 +64,8 @@ class SlidePuzzle(Puzzle):
         """
         This function should return a state and the cost of the move.
         """
-        state_unpacked = state.unpacked
-        x, y = self._getBlankPosition(state_unpacked)
+        board = state.board_unpacked
+        x, y = self._getBlankPosition(board)
         pos = jnp.asarray((x, y))
         
         # Action mapping: 0: Left, 1: Right, 2: Up, 3: Down
@@ -95,8 +73,6 @@ class SlidePuzzle(Puzzle):
         move_delta = moves[action]
         
         next_pos = pos + move_delta
-        board = state_unpacked.board
-
         def is_valid(x, y):
             return jnp.logical_and(
                 x >= 0, jnp.logical_and(x < self.size, jnp.logical_and(y >= 0, y < self.size))
@@ -115,7 +91,7 @@ class SlidePuzzle(Puzzle):
             lambda: (swap(board, x, y, next_x, next_y), 1.0),
             lambda: (board, jnp.inf),
         )
-        return self.State(board=next_board).packed, cost
+        return state.set_unpacked(board=next_board), cost
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State") -> bool:
         return state == solve_config.TargetState
@@ -173,9 +149,8 @@ class SlidePuzzle(Puzzle):
         """
 
         def get_random_state(key):
-            return self.State(
-                board=jax.random.permutation(key, jnp.arange(0, self.size**2, dtype=TYPE))
-            ).packed
+            board = jax.random.permutation(key, jnp.arange(0, self.size**2, dtype=TYPE))
+            return self.State.from_unpacked(board=board)
 
         def not_solverable(x):
             state = x[0]
@@ -194,34 +169,34 @@ class SlidePuzzle(Puzzle):
 
     def _solvable(self, state: "SlidePuzzle.State"):
         """Check if the state is solvable"""
-        state = state.unpacked
+        board = state.board_unpacked
         N = self.size
-        inv_count = self._getInvCount(state)
+        inv_count = self._getInvCount(board)
         return jax.lax.cond(
             N % 2 == 1,
             lambda inv_count: inv_count % 2 == 0,
             lambda inv_count: jnp.logical_xor(
-                self._getBlankRow(state) % 2 == 0, inv_count % 2 == 0
+                self._getBlankRow(board) % 2 == 0, inv_count % 2 == 0
             ),
             inv_count,
         )
 
-    def _getBlankPosition(self, state: "SlidePuzzle.State"):
-        flat_index = jnp.argmax(state.board == 0)
+    def _getBlankPosition(self, board: chex.Array):
+        flat_index = jnp.argmax(board == 0)
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
-    def _getBlankRow(self, state: "SlidePuzzle.State"):
-        return self._getBlankPosition(state)[0]
+    def _getBlankRow(self, board: chex.Array):
+        return self._getBlankPosition(board)[0]
 
-    def _getBlankCol(self, state: "SlidePuzzle.State"):
-        return self._getBlankPosition(state)[1]
+    def _getBlankCol(self, board: chex.Array):
+        return self._getBlankPosition(board)[1]
 
-    def _getInvCount(self, state: "SlidePuzzle.State"):
+    def _getInvCount(self, board: chex.Array):
         def is_inv(a, b):
             return jnp.logical_and(a > b, jnp.logical_and(a != 0, b != 0))
 
         n = self.size
-        arr = state.board
+        arr = board
         inv_count = 0
         for i in range(n * n):
             for j in range(i + 1, n * n):
@@ -236,7 +211,6 @@ class SlidePuzzle(Puzzle):
         import numpy as np
 
         def img_func(state: "SlidePuzzle.State", **kwargs):
-            state = state.unpacked
             imgsize = IMG_SIZE[0]
             img = np.zeros(IMG_SIZE + (3,), np.uint8)
             img[:] = (144, 96, 8)  # R144,G96,B8
@@ -248,7 +222,7 @@ class SlidePuzzle(Puzzle):
                 -1,
             )
             fontsize = 2.5
-            board_flat = state.board
+            board_flat = state.board_unpacked
             for idx, val in enumerate(board_flat):
                 if val == 0:
                     continue
@@ -279,13 +253,13 @@ class SlidePuzzleHard(SlidePuzzle):
             raise ValueError(f"Size of the puzzle must be 3 or 4, got {size}")
 
         if size == 3:
-            self.hardest_state = self.State(
-                board=jnp.array([3, 1, 2, 0, 4, 5, 6, 7, 8], dtype=TYPE)
-            ).packed
+            board = jnp.array([3, 1, 2, 0, 4, 5, 6, 7, 8], dtype=TYPE)
+            self.hardest_state = self.State.from_unpacked(board=board)
         elif size == 4:
-            self.hardest_state = self.State(
-                board=jnp.array([0, 12, 9, 13, 15, 11, 10, 14, 3, 7, 2, 5, 4, 8, 6, 1], dtype=TYPE)
-            ).packed
+            board = jnp.array(
+                [0, 12, 9, 13, 15, 11, 10, 14, 3, 7, 2, 5, 4, 8, 6, 1], dtype=TYPE
+            )
+            self.hardest_state = self.State.from_unpacked(board=board)
 
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None

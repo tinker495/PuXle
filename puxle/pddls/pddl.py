@@ -9,7 +9,6 @@ import termcolor
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puxle.utils.util import from_uint8, to_uint8
 
 # Refactored helpers
 from .type_system import (
@@ -251,7 +250,7 @@ class PDDL(Puzzle):
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "PDDL.State":
         """Return initial state."""
-        return self.State(atoms=to_uint8(self.init_state, 1))
+        return self.State.from_unpacked(atoms=self.init_state)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         """Return solve config with goal mask."""
@@ -284,8 +283,7 @@ class PDDL(Puzzle):
         # If action is inapplicable, keep original state
         s_next = jnp.where(applicable, s_next, s)
 
-        # Pack next state
-        next_state = self.State(atoms=to_uint8(s_next, 1))
+        next_state = state.set_unpacked(atoms=s_next)
 
         # Cost: 1.0 for applicable, inf otherwise
         cost = jnp.where(applicable, 1.0, jnp.inf)

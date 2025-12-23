@@ -6,7 +6,6 @@ from termcolor import colored
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
-from puxle.utils.util import from_uint8, to_uint8
 
 TYPE = jnp.uint16
 
@@ -16,27 +15,15 @@ class Maze(Puzzle):
     size: int
 
     def define_solve_config_class(self) -> PuzzleState:
-        dummy_maze = jnp.zeros((self.size**2), dtype=jnp.bool_)
-        dummy_maze = to_uint8(dummy_maze)
         size = self.size
 
         @state_dataclass
         class SolveConfig:
             TargetState: FieldDescriptor.scalar(dtype=self.State)
-            Maze: FieldDescriptor.tensor(dtype=jnp.uint8, shape=(dummy_maze.shape[0],))
+            Maze: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1)
 
             def __str__(self, **kwargs):
                 return self.TargetState.str(solve_config=self, **kwargs)
-
-            @property
-            def packed(self):
-                packed_maze = to_uint8(self.Maze)
-                return SolveConfig(TargetState=self.TargetState, Maze=packed_maze)
-
-            @property
-            def unpacked(self):
-                maze = from_uint8(self.Maze, (size * size,))
-                return SolveConfig(TargetState=self.TargetState, Maze=maze)
 
         return SolveConfig
 
@@ -89,7 +76,7 @@ class Maze(Puzzle):
                 return f"Maze State: Player at position {state.pos}"
 
             # 1. Unpack the maze to boolean (True=wall, False=path)
-            bool_maze_flat = solve_config.unpacked.Maze
+            bool_maze_flat = solve_config.Maze_unpacked
 
             # 2. Create an integer representation (0=path, 1=wall)
             # Ensure correct shape for intermediate calculations
@@ -134,7 +121,7 @@ class Maze(Puzzle):
         self, solve_config: "Maze.SolveConfig", key=jax.random.PRNGKey(0), data=None
     ) -> "Maze.State":
         # Start state should also be chosen from valid path locations
-        bool_maze = solve_config.unpacked.Maze.reshape((self.size, self.size))
+        bool_maze = solve_config.Maze_unpacked.reshape((self.size, self.size))
         return self._get_random_state(bool_maze, key)
 
     def get_solve_config(self, key=jax.random.PRNGKey(128), data=None) -> Puzzle.SolveConfig:
@@ -146,7 +133,7 @@ class Maze(Puzzle):
         # Get target state on a valid path cell
         target_state = self._get_random_state(bool_maze, target_key)
 
-        return self.SolveConfig(TargetState=target_state, Maze=bool_maze).packed
+        return self.SolveConfig.from_unpacked(TargetState=target_state, Maze=bool_maze)
 
     def _generate_maze_dfs(self, key, size):
         """Generates a maze using Randomized Depth-First Search."""
@@ -269,7 +256,7 @@ class Maze(Puzzle):
         """
         # Define possible moves: up, down, left, right
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
-        bool_maze = solve_config.unpacked.Maze.reshape((self.size, self.size))
+        bool_maze = solve_config.Maze_unpacked.reshape((self.size, self.size))
         
         move_vec = moves[action]
         new_pos = (state.pos + move_vec).astype(TYPE)
@@ -381,7 +368,7 @@ class Maze(Puzzle):
 
             # --- Optimized Wall Rendering ---
             # 1. Unpack maze to boolean (True=wall)
-            maze_bool_jax = solve_config.unpacked.Maze.reshape((self.size, self.size))
+            maze_bool_jax = solve_config.Maze_unpacked.reshape((self.size, self.size))
             maze_bool_np = np.array(maze_bool_jax)  # Convert JAX array to NumPy array
 
             # 2. Create monochrome image (0=wall, 255=path) using NumPy array

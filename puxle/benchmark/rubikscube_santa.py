@@ -182,8 +182,8 @@ class RubiksCubeSantaBenchmark(Benchmark):
         initial_faces = jnp.asarray(sample_data["initial"], dtype=jnp.uint8)
         target_faces = jnp.asarray(sample_data["target"], dtype=jnp.uint8)
         
-        initial_state = puzzle.State(faces=initial_faces).packed
-        target_state = puzzle.State(faces=target_faces).packed
+        initial_state = puzzle.State.from_unpacked(faces=initial_faces.reshape(6, -1))
+        target_state = puzzle.State.from_unpacked(faces=target_faces.reshape(6, -1))
         
         solve_config = puzzle.SolveConfig(TargetState=target_state)
         

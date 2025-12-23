@@ -1,3 +1,14 @@
+"""
+PuXle utilities.
+
+Bitpacking note:
+- `to_uint8` / `from_uint8` and the variable-bit helpers are **legacy** utilities kept for
+  backwards compatibility and generic packing needs.
+- For **in-memory bitpacked puzzle states**, prefer xtructure's built-in support:
+  `FieldDescriptor.packed_tensor(...)` + `<field>_unpacked` + `set_unpacked(...)`, or aggregate
+  bitpacking via `bits=...` on primitive leaves with `.packed` / `.unpacked` views.
+"""
+
 from typing import Type, TypeVar
 
 import chex

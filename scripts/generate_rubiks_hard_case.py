@@ -66,7 +66,7 @@ def generate_state_from_sequence(puzzle, sequence, name=""):
         next_state, _ = puzzle.get_actions(solve_config, current_state, action)
         current_state = next_state
         
-    faces = current_state.unpacked.faces
+    faces = current_state.faces_unpacked
     faces_np = np.array(faces)
     flat = list(faces_np.flatten())
     print(f"Resulting State Faces (flattened):")

@@ -5,7 +5,6 @@ import jax.numpy as jnp
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
-from puxle.utils.util import from_uint8, to_uint8
 
 # Use 16-bit unsigned integers so that problem sizes >255 are handled without overflow.
 TYPE = jnp.uint16
@@ -18,27 +17,15 @@ class TSP(Puzzle):
     def define_state_class(self) -> PuzzleState:
         """Defines the state class for TSP using xtructure."""
         str_parser = self.get_string_parser()
-        mask = jnp.zeros(self.size, dtype=jnp.bool_)
-        packed_mask = to_uint8(mask)
         size = self.size
 
         @state_dataclass
         class State:
-            mask: FieldDescriptor.tensor(dtype=jnp.uint8, shape=packed_mask.shape)
+            mask: FieldDescriptor.packed_tensor(shape=(size,), packed_bits=1)
             point: FieldDescriptor.scalar(dtype=TYPE)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
-
-            @property
-            def packed(self):
-                packed_mask = to_uint8(self.mask)
-                return State(mask=packed_mask, point=self.point)
-
-            @property
-            def unpacked(self):
-                mask = from_uint8(self.mask, (size,))
-                return State(mask=mask, point=self.point)
 
         return State
 
@@ -75,7 +62,7 @@ class TSP(Puzzle):
             return true_char if x else false_char
 
         def parser(state: "TSP.State", **kwargs):
-            mask = state.unpacked.mask
+            mask = state.mask_unpacked
             point_mask = jnp.zeros_like(mask).at[state.point].set(True)
             maps = [to_char(x, true_char="↓", false_char=" ") for x in point_mask]
             maps += [to_char(x, true_char="■", false_char="☐") for x in mask]
@@ -89,7 +76,7 @@ class TSP(Puzzle):
         mask = jnp.zeros(self.size, dtype=jnp.bool_)
         point = solve_config.start
         mask = mask.at[point].set(True)
-        return self.State(mask=mask, point=point).packed
+        return self.State.from_unpacked(mask=mask, point=point)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         # Split PRNG key so that the start index is independent of point positions.
@@ -111,7 +98,7 @@ class TSP(Puzzle):
         This function returns the next state and cost for a given action (next point index).
         If moving to a point already visited, the cost is infinity.
         """
-        mask = state.unpacked.mask
+        mask = state.mask_unpacked
         point = state.point
         idx = action
 
@@ -126,7 +113,7 @@ class TSP(Puzzle):
             ),
             0,
         )
-        new_state = self.State(mask=new_mask, point=idx).packed
+        new_state = self.State.from_unpacked(mask=new_mask, point=idx.astype(TYPE))
         cost = jnp.where(filled, cost, jnp.inf)
         return new_state, cost
 
@@ -134,7 +121,7 @@ class TSP(Puzzle):
         """
         TSP is solved when all points have been visited.
         """
-        return jnp.all(state.unpacked.mask)
+        return jnp.all(state.mask_unpacked)
 
     def action_to_string(self, action: int) -> str:
         """
@@ -176,7 +163,7 @@ class TSP(Puzzle):
             idx = kwargs.get("idx", 0)
 
             # Get the visited mask as booleans
-            visited = state.unpacked.mask
+            visited = state.mask_unpacked
             # Convert the TSP points (assumed to be an array of shape [number_of_points, 2]) to a numpy array
             points_np = np.array(solve_config.points)
 

@@ -34,13 +34,13 @@ def _compare_sample(benchmark: LightsOutDeepCubeABenchmark, sample_id: int) -> b
     size = puzzle.size
 
     mismatched = False
-    initial_board = np.array(sample.state.unpacked.board, dtype=bool)
+    initial_board = np.array(sample.state.board_unpacked, dtype=bool)
 
     for action in range(puzzle.action_size):
         next_state, _ = puzzle.get_actions(
             solve_config, sample.state, jnp.asarray(action), filled=True
         )
-        puzzle_board = np.array(next_state.unpacked.board, dtype=bool)
+        puzzle_board = np.array(next_state.board_unpacked, dtype=bool)
         deepcube_board = _apply_deepcube_move(initial_board, action, size)
 
         if not np.array_equal(puzzle_board, deepcube_board):
@@ -49,7 +49,9 @@ def _compare_sample(benchmark: LightsOutDeepCubeABenchmark, sample_id: int) -> b
             print("PuXle board:")
             print(puzzle.get_string_parser()(next_state))
             print("DeepCubeA board:")
-            deepcube_state = puzzle.State(board=jnp.asarray(deepcube_board, dtype=jnp.bool_)).packed
+            deepcube_state = puzzle.State.from_unpacked(
+                board=jnp.asarray(deepcube_board, dtype=jnp.bool_)
+            )
             print(puzzle.get_string_parser()(deepcube_state))
             print()
     return not mismatched

@@ -7,7 +7,6 @@ from termcolor import colored
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
-from puxle.utils.util import from_uint8, to_uint8
 
 TYPE = jnp.uint8
 _MOVE_MATRIX_CACHE: dict[int, np.ndarray] = {}
@@ -35,26 +34,14 @@ class LightsOut(Puzzle):
     def define_state_class(self) -> PuzzleState:
         """Defines the state class for LightsOut using xtructure."""
         str_parser = self.get_string_parser()
-        board = jnp.zeros((self.size * self.size), dtype=bool)
-        packed_board = to_uint8(board)
         size = self.size
 
         @state_dataclass
         class State:
-            board: FieldDescriptor.tensor(dtype=TYPE, shape=packed_board.shape)
+            board: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
-
-            @property
-            def packed(self) -> "LightsOut.State":
-                board = to_uint8(self.board)
-                return State(board=board)
-
-            @property
-            def unpacked(self) -> "LightsOut.State":
-                board = from_uint8(self.board, (size * size,))
-                return State(board=board)
 
         return State
 
@@ -71,7 +58,7 @@ class LightsOut(Puzzle):
             return "□" if x == 0 else "■"
 
         def parser(state: "LightsOut.State", **kwargs):
-            return form.format(*map(to_char, state.unpacked.board))
+            return form.format(*map(to_char, state.board_unpacked))
 
         return parser
 
@@ -83,7 +70,8 @@ class LightsOut(Puzzle):
         )
 
     def get_target_state(self, key=None) -> "LightsOut.State":
-        return self.State(board=jnp.zeros(self.size**2, dtype=bool)).packed
+        board = jnp.zeros(self.size**2, dtype=jnp.bool_)
+        return self.State.from_unpacked(board=board)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         return self.SolveConfig(TargetState=self.get_target_state(key))
@@ -94,7 +82,7 @@ class LightsOut(Puzzle):
         """
         This function returns the next state and cost for a given action.
         """
-        board = state.unpacked.board
+        board = state.board_unpacked
         
         # Decode action to (x, y)
         # action is in range [0, size*size - 1]
@@ -122,7 +110,7 @@ class LightsOut(Puzzle):
         next_board, cost = jax.lax.cond(
             filled, lambda: (flip(board, x, y), 1.0), lambda: (board, jnp.inf)
         )
-        next_state = self.State(board=next_board).packed
+        next_state = state.set_unpacked(board=next_board)
         return next_state, cost
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State") -> bool:
@@ -193,7 +181,7 @@ class LightsOut(Puzzle):
         return not bool(np.any(inconsistent))
 
     def is_state_solvable(self, state: "LightsOut.State") -> bool:
-        board = np.array(state.unpacked.board, dtype=np.uint8)
+        board = np.array(state.board_unpacked, dtype=np.uint8)
         return self.board_is_solvable(board, self.size)
 
     def _get_visualize_format(self):
@@ -236,7 +224,7 @@ class LightsOut(Puzzle):
             # Calculate the size of each cell in the grid
             cell_size = imgsize // self.size
             # Reshape the flat board state into a 2D array
-            board = np.array(state.unpacked.board).reshape(self.size, self.size)
+            board = np.array(state.board_unpacked).reshape(self.size, self.size)
             # Define colors in BGR: light on → bright yellow, light off → black, and grid lines → gray
             on_color = (255, 255, 0)  # Yellow
             off_color = (0, 0, 0)  # Black
@@ -246,7 +234,6 @@ class LightsOut(Puzzle):
                 for j in range(self.size):
                     top_left = (j * cell_size, i * cell_size)
                     bottom_right = ((j + 1) * cell_size, (i + 1) * cell_size)
-                    # Use lit color if the cell is "on", otherwise use off color
                     cell_color = on_color if board[i, j] else off_color
                     img = cv2.rectangle(img, top_left, bottom_right, cell_color, thickness=-1)
                     img = cv2.rectangle(img, top_left, bottom_right, grid_color, thickness=1)

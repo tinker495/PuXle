@@ -136,7 +136,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
                 f"State: {board.astype(int).tolist()}"
             )
         faces = jnp.asarray(board, dtype=jnp.bool_)
-        return puzzle.State(board=faces).packed
+        return puzzle.State.from_unpacked(board=faces)
 
 
 __all__ = ["LightsOutDeepCubeABenchmark"]

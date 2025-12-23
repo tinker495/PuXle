@@ -19,6 +19,10 @@
 - **Extensible**: Easy-to-extend base classes for creating new puzzle and planning environments
 - **GPU Acceleration**: Full GPU support through JAX
 
+## 📚 Documentation
+
+- **Bitpacked runtime states (xtructure)**: `docs/tutorials/xtructure_bitpacking.md`
+
 ## 📦 Installation
 
 ### Basic Installation
