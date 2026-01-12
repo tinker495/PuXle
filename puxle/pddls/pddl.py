@@ -1,10 +1,11 @@
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import chex
 import jax
 import jax.numpy as jnp
 import pddl
+from pddl.core import Domain, Problem
 import termcolor
 
 from puxle.core.puzzle_base import Puzzle
@@ -42,23 +43,39 @@ class PDDL(Puzzle):
     - Typed objects
     """
 
-    def __init__(self, domain_file: str, problem_file: str, **kwargs):
+    def __init__(
+        self,
+        domain: Union[str, Domain],
+        problem: Union[str, Problem],
+        **kwargs,
+    ):
         """
-        Initialize PDDL puzzle from domain and problem files.
+        Initialize PDDL puzzle from domain and problem (files or objects).
 
         Args:
-            domain_file: Path to PDDL domain file
-            problem_file: Path to PDDL problem file
+            domain: Path to PDDL domain file OR pddl.core.Domain object.
+            problem: Path to PDDL problem file OR pddl.core.Problem object.
         """
-        self.domain_file = domain_file
-        self.problem_file = problem_file
+        # Parse PDDL files if paths are provided
+        if isinstance(domain, str):
+            self.domain_file = domain
+            try:
+                self.domain = pddl.parse_domain(domain)
+            except Exception as e:
+                raise ValueError(f"Failed to parse PDDL domain file: {e}")
+        else:
+            self.domain_file = None
+            self.domain = domain
 
-        # Parse PDDL files
-        try:
-            self.domain = pddl.parse_domain(domain_file)
-            self.problem = pddl.parse_problem(problem_file)
-        except Exception as e:
-            raise ValueError(f"Failed to parse PDDL files: {e}")
+        if isinstance(problem, str):
+            self.problem_file = problem
+            try:
+                self.problem = pddl.parse_problem(problem)
+            except Exception as e:
+                raise ValueError(f"Failed to parse PDDL problem file: {e}")
+        else:
+            self.problem_file = None
+            self.problem = problem
 
         super().__init__(**kwargs)
 
@@ -99,7 +116,7 @@ class PDDL(Puzzle):
 
         problem_path = os.path.abspath(os.path.join(data_dir, "problems", problem))
 
-        return cls(domain_file=domain_path, problem_file=problem_path, **kwargs)
+        return cls(domain=domain_path, problem=problem_path, **kwargs)
 
     def data_init(self):
         """Initialize PDDL data: ground atoms and actions, build masks."""

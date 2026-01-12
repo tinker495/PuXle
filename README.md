@@ -22,6 +22,7 @@
 ## 📚 Documentation
 
 - **Bitpacked runtime states (xtructure)**: `docs/tutorials/xtructure_bitpacking.md`
+- **PDDLFuse: Diverse Planning Domain Generator**: [`docs/pddlfuse.md`](docs/pddlfuse.md) - Based on the [PDDLFuse paper](https://arxiv.org/pdf/2411.19886)
 
 ## 📦 Installation
 

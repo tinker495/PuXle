@@ -17,13 +17,13 @@ def collect_type_hierarchy(domain) -> Tuple[Dict[str, str], Dict[str, Set[str]],
         if isinstance(types_obj, dict):
             for sub_t, par_t in types_obj.items():
                 if sub_t and par_t and sub_t != par_t:
-                    parent[sub_t] = par_t
+                    parent[str(sub_t)] = str(par_t)
         if not parent:
             th = getattr(domain, "type_hierarchy", None)
             if isinstance(th, dict):
                 for sub_t, par_t in th.items():
                     if sub_t and par_t and sub_t != par_t:
-                        parent[sub_t] = par_t
+                        parent[str(sub_t)] = str(par_t)
     except Exception:
         parent = {}
 
@@ -104,7 +104,14 @@ def extract_objects_by_type(
             for obj in problem.objects:
                 obj_name = getattr(obj, "name", str(obj))
                 if hasattr(obj, "type_tags") and obj.type_tags:
-                    for t in select_most_specific_types(set(obj.type_tags), hierarchy):
+                    tags = set(obj.type_tags)
+                elif hasattr(obj, "type_tag") and obj.type_tag:
+                    tags = {obj.type_tag}
+                else:
+                    tags = set()
+                
+                if tags:
+                    for t in select_most_specific_types(tags, hierarchy):
                         direct_by_type.setdefault(t, []).append(obj_name)
                     direct_by_type.setdefault("object", []).append(obj_name)
                 else:
@@ -115,7 +122,14 @@ def extract_objects_by_type(
         for obj in domain.constants:
             obj_name = getattr(obj, "name", str(obj))
             if hasattr(obj, "type_tags") and obj.type_tags:
-                for t in select_most_specific_types(set(obj.type_tags), hierarchy):
+                tags = set(obj.type_tags)
+            elif hasattr(obj, "type_tag") and obj.type_tag:
+                tags = {obj.type_tag}
+            else:
+                tags = set()
+
+            if tags:
+                for t in select_most_specific_types(tags, hierarchy):
                     direct_by_type.setdefault(t, []).append(obj_name)
                 direct_by_type.setdefault("object", []).append(obj_name)
             else:

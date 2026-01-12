@@ -95,3 +95,5 @@ class TestPDDLSemantics:
             params = action["parameters"]
             assert len(params) == 2
             # Parameters should be hall and room
+
+
