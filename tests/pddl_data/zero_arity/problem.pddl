@@ -1,0 +1,5 @@
+(define (problem test-zero-arity-prob)
+  (:domain test-zero-arity)
+  (:init)
+  (:goal (light-on))
+)

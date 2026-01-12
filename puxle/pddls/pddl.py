@@ -115,7 +115,9 @@ class PDDL(Puzzle):
         self.num_actions = len(self.grounded_actions)
 
         # Build masks for JAX operations
-        self._build_masks()
+        self.pre_mask, self.pre_neg_mask, self.add_mask, self.del_mask = self._build_masks()
+        self._build_initial_state()
+        self._build_goal_mask()
 
         # Set action size for Puzzle base class
         self.action_size = self.num_actions
@@ -153,13 +155,17 @@ class PDDL(Puzzle):
         """Extract objects grouped by types, respecting hierarchy (delegated)."""
         if not hasattr(self, "_type_hierarchy_cache"):
             self._type_hierarchy_cache = self._collect_type_hierarchy()
-        return ts_extract_objects_by_type(self.problem, self._type_hierarchy_cache)
+        return ts_extract_objects_by_type(self.problem, self._type_hierarchy_cache, domain=self.domain)
 
     def _ground_predicates(self) -> Tuple[List[str], Dict[str, int]]:
         """Ground all predicates to create atom universe (delegated)."""
         if not hasattr(self, "_type_hierarchy_cache"):
             self._type_hierarchy_cache = self._collect_type_hierarchy()
-        return gr_ground_predicates(self.domain, self.objects_by_type, self._type_hierarchy_cache)
+        return gr_ground_predicates(
+            getattr(self.domain, "predicates", []),
+            self.objects_by_type,
+            self._type_hierarchy_cache,
+        )
 
     def _get_type_combinations(self, param_types: List[str]) -> List[List[str]]:
         """Deprecated: combinations are now handled in the delegated grounding module."""
@@ -191,7 +197,11 @@ class PDDL(Puzzle):
         """Ground all actions to create action universe (delegated)."""
         if not hasattr(self, "_type_hierarchy_cache"):
             self._type_hierarchy_cache = self._collect_type_hierarchy()
-        return gr_ground_actions(self.domain, self.objects_by_type, self._type_hierarchy_cache)
+        return gr_ground_actions(
+            getattr(self.domain, "actions", []),
+            self.objects_by_type,
+            self._type_hierarchy_cache,
+        )
 
     def _ground_formula(
         self, formula, param_substitution: List[str], param_names: List[str]
@@ -209,18 +219,11 @@ class PDDL(Puzzle):
 
         return _ge(effect, param_substitution, param_names)
 
-    def _build_masks(self):
-        """Build JAX arrays for precondition, add, and delete masks (delegated)."""
-        pre_mask, add_mask, del_mask = mk_build_masks(
-            self.grounded_actions, self.atom_to_idx, self.num_atoms
-        )
-        self.pre_mask = pre_mask
-        self.add_mask = add_mask
-        self.del_mask = del_mask
-
-        # Build initial state and goal mask
-        self._build_initial_state()
-        self._build_goal_mask()
+    def _build_masks(
+        self,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        """Builds action masks (delegated)."""
+        return mk_build_masks(self.grounded_actions, self.atom_to_idx, self.num_atoms)
 
     def _build_initial_state(self):
         """Build initial state as boolean array (delegated)."""
@@ -271,11 +274,16 @@ class PDDL(Puzzle):
 
         # Get masks for this action
         pre = self.pre_mask[action]
+        pre_neg = self.pre_neg_mask[action] # Added pre_neg
         add = self.add_mask[action]
         dele = self.del_mask[action]
 
-        # Check applicability: pre -> s  <==>  ~pre | s
-        applicable = jnp.all(jnp.logical_or(~pre, s))
+        # Check applicability
+        # Positive preconditions: (~pre | s)
+        # Negative preconditions: (~pre_neg | ~s)
+        applicable = jnp.all(jnp.logical_or(~pre, s)) & jnp.all(
+            jnp.logical_or(~pre_neg, ~s)
+        )
 
         # Compute next state: (s & ~del) | add
         s_next = jnp.logical_or(jnp.logical_and(s, ~dele), add)

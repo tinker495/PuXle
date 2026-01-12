@@ -25,15 +25,15 @@ class TestPDDLSemantics:
 
         # Check flip-on preconditions and effects
         assert any("off" in p for p in flip_on_action["preconditions"])
-        add_effects, delete_effects = flip_on_action["effects"]
-        assert any("on" in e for e in add_effects)
-        assert any("off" in e for e in delete_effects)
+        effects = flip_on_action["effects"]
+        assert any("on" in e for e in effects["add"])
+        assert any("off" in e for e in effects["delete"])
 
         # Check flip-off preconditions and effects
         assert any("on" in p for p in flip_off_action["preconditions"])
-        add_effects, delete_effects = flip_off_action["effects"]
-        assert any("off" in e for e in add_effects)
-        assert any("on" in e for e in delete_effects)
+        effects = flip_off_action["effects"]
+        assert any("off" in e for e in effects["add"])
+        assert any("on" in e for e in effects["delete"])
 
     def test_door_move_domain_semantics(self):
         """Test specific semantics of the door-move domain."""
@@ -60,9 +60,9 @@ class TestPDDLSemantics:
         assert any("has-key" in p for p in preconditions)
 
         # Check open action effects
-        add_effects, delete_effects = open_action["effects"]
-        assert any("open r hall" in e for e in add_effects)
-        assert len(delete_effects) == 0
+        effects = open_action["effects"]
+        assert any("open r hall" in e for e in effects["add"])
+        assert len(effects["delete"]) == 0
 
         # Check move action preconditions (requires door to be open)
         preconditions = move_action["preconditions"]

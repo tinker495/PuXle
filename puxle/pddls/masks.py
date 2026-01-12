@@ -5,51 +5,15 @@ from typing import Dict, List, Tuple
 import jax.numpy as jnp
 
 
-def build_masks(
-    grounded_actions: List[Dict], atom_to_idx: Dict[str, int], num_atoms: int
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Build JAX arrays for precondition, add, and delete masks."""
-    pre_mask = jnp.zeros((len(grounded_actions), num_atoms), dtype=jnp.bool_)
-    add_mask = jnp.zeros((len(grounded_actions), num_atoms), dtype=jnp.bool_)
-    del_mask = jnp.zeros((len(grounded_actions), num_atoms), dtype=jnp.bool_)
-
-    for action_idx, action in enumerate(grounded_actions):
-        for precondition in action["preconditions"]:
-            if precondition in atom_to_idx:
-                atom_idx = atom_to_idx[precondition]
-                pre_mask = pre_mask.at[action_idx, atom_idx].set(True)
-        for add_effect in action["effects"][0]:
-            if add_effect in atom_to_idx:
-                atom_idx = atom_to_idx[add_effect]
-                add_mask = add_mask.at[action_idx, atom_idx].set(True)
-        for del_effect in action["effects"][1]:
-            if del_effect in atom_to_idx:
-                atom_idx = atom_to_idx[del_effect]
-                del_mask = del_mask.at[action_idx, atom_idx].set(True)
-
-    return pre_mask, add_mask, del_mask
-
-
-def build_initial_state(problem, atom_to_idx: Dict[str, int], num_atoms: int) -> jnp.ndarray:
-    """Build initial state as boolean array from PDDL problem init facts."""
-    init_state = jnp.zeros(num_atoms, dtype=jnp.bool_)
-
-    for fact in getattr(problem, "init", []) or []:
-        fact_str = f"({fact.name} {' '.join([getattr(arg, 'name', str(arg)) for arg in fact.terms])})"
-        if fact_str in atom_to_idx:
-            atom_idx = atom_to_idx[fact_str]
-            init_state = init_state.at[atom_idx].set(True)
-
-    return init_state
-
-
 def extract_goal_conditions(goal) -> List[str]:
     """Extract atomic conditions from a goal formula object."""
     if goal is None:
         return []
 
     if hasattr(goal, "name"):
-        return [f"({goal.name} {' '.join([getattr(arg, 'name', str(arg)) for arg in goal.terms])})"]
+        # Handle atomic predicate
+        args = " ".join([getattr(arg, "name", str(arg)) for arg in goal.terms])
+        return [f"({goal.name} {args})" if args else f"({goal.name})"]
 
     if hasattr(goal, "parts"):
         conditions: List[str] = []
@@ -64,6 +28,52 @@ def extract_goal_conditions(goal) -> List[str]:
         return conditions
 
     return []
+
+
+def build_masks(
+    grounded_actions: List[Dict], atom_to_idx: Dict[str, int], num_atoms: int
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Builds JAX masks for preconditions (pos/neg) and effects."""
+    num_actions = len(grounded_actions)
+    pre_mask = jnp.zeros((num_actions, num_atoms), dtype=bool)
+    pre_neg_mask = jnp.zeros((num_actions, num_atoms), dtype=bool)
+    add_mask = jnp.zeros((num_actions, num_atoms), dtype=bool)
+    del_mask = jnp.zeros((num_actions, num_atoms), dtype=bool)
+
+    for i, action in enumerate(grounded_actions):
+        # Positive Preconditions
+        for precondition in action.get("preconditions", []):
+            if precondition in atom_to_idx:
+                pre_mask = pre_mask.at[i, atom_to_idx[precondition]].set(True)
+        
+        # Negative Preconditions
+        for neg_precondition in action.get("preconditions_neg", []):
+            if neg_precondition in atom_to_idx:
+                pre_neg_mask = pre_neg_mask.at[i, atom_to_idx[neg_precondition]].set(True)
+
+        effects = action["effects"]
+        for add_effect in effects["add"]:
+            if add_effect in atom_to_idx:
+                add_mask = add_mask.at[i, atom_to_idx[add_effect]].set(True)
+        for del_effect in effects["delete"]:
+            if del_effect in atom_to_idx:
+                del_mask = del_mask.at[i, atom_to_idx[del_effect]].set(True)
+
+    return pre_mask, pre_neg_mask, add_mask, del_mask
+
+
+def build_initial_state(problem, atom_to_idx: Dict[str, int], num_atoms: int) -> jnp.ndarray:
+    """Build initial state as boolean array from PDDL problem init facts."""
+    init_state = jnp.zeros(num_atoms, dtype=jnp.bool_)
+
+    for fact in getattr(problem, "init", []) or []:
+        args = " ".join([getattr(arg, "name", str(arg)) for arg in fact.terms])
+        fact_str = f"({fact.name} {args})" if args else f"({fact.name})"
+        if fact_str in atom_to_idx:
+            atom_idx = atom_to_idx[fact_str]
+            init_state = init_state.at[atom_idx].set(True)
+
+    return init_state
 
 
 def build_goal_mask(problem, atom_to_idx: Dict[str, int], num_atoms: int) -> jnp.ndarray:

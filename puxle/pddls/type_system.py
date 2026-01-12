@@ -76,7 +76,7 @@ def select_most_specific_types(
 
 
 def extract_objects_by_type(
-    problem, hierarchy: Tuple[Dict[str, str], Dict[str, Set[str]], Dict[str, Set[str]]]
+    problem, hierarchy: Tuple[Dict[str, str], Dict[str, Set[str]], Dict[str, Set[str]]], domain=None
 ) -> Dict[str, list[str]]:
     """Extract objects grouped by types, respecting hierarchy if available."""
     objects_by_type: dict[str, list[str]] = {}
@@ -109,6 +109,17 @@ def extract_objects_by_type(
                     direct_by_type.setdefault("object", []).append(obj_name)
                 else:
                     direct_by_type.setdefault("object", []).append(obj_name)
+
+    # Handle domain constants
+    if domain is not None and hasattr(domain, "constants") and domain.constants:
+        for obj in domain.constants:
+            obj_name = getattr(obj, "name", str(obj))
+            if hasattr(obj, "type_tags") and obj.type_tags:
+                for t in select_most_specific_types(set(obj.type_tags), hierarchy):
+                    direct_by_type.setdefault(t, []).append(obj_name)
+                direct_by_type.setdefault("object", []).append(obj_name)
+            else:
+                direct_by_type.setdefault("object", []).append(obj_name)
 
     # Expand direct to include descendants under supertypes
     if direct_by_type:

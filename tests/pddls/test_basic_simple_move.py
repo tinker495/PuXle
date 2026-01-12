@@ -97,12 +97,12 @@ class TestPDDLWrapper:
         assert "(connected loc1 loc2)" in preconditions
         assert len(preconditions) == 2
 
-        # Check effects
-        add_effects, delete_effects = move_loc1_loc2["effects"]
-        assert "(at loc2)" in add_effects
-        assert "(at loc1)" in delete_effects
-        assert len(add_effects) == 1
-        assert len(delete_effects) == 1
+        # Check effects (now a dict with 'add' and 'delete' keys)
+        effects = move_loc1_loc2["effects"]
+        assert "(at loc2)" in effects["add"]
+        assert "(at loc1)" in effects["delete"]
+        assert len(effects["add"]) == 1
+        assert len(effects["delete"]) == 1
 
     def test_initial_state_and_goal(self, puzzle, rng_key):
         """Test initial state and goal configuration."""

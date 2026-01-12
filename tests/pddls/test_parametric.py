@@ -50,8 +50,8 @@ class TestPDDLParametric:
             assert isinstance(action["name"], str)
             assert isinstance(action["parameters"], list)
             assert isinstance(action["preconditions"], list)
-            assert isinstance(action["effects"], tuple)
-            assert len(action["effects"]) == 2  # (add_effects, delete_effects)
+            assert isinstance(action["effects"], dict)
+            assert "add" in action["effects"] and "delete" in action["effects"]
 
     @pytest.mark.parametrize("spec", DATA_SPECS, ids=lambda s: s.name)
     def test_neighbours_and_filled_contract_param(self, spec):

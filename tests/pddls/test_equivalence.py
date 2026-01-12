@@ -282,8 +282,8 @@ def _test_applicability_in_state(puzzle, reference, solve_config, state, state_n
             "name": action["name"],
             "parameters": action["parameters"],
             "preconditions": set(action["preconditions"]),
-            "add_effects": set(action["effects"][0]),  # add_effects
-            "delete_effects": set(action["effects"][1]),  # delete_effects
+            "add_effects": set(action["effects"]["add"]),
+            "delete_effects": set(action["effects"]["delete"]),
         }
 
         # Reference applicability
@@ -320,8 +320,8 @@ def _test_successors_in_state(puzzle, reference, solve_config, state, state_name
             "name": action["name"],
             "parameters": action["parameters"],
             "preconditions": set(action["preconditions"]),
-            "add_effects": set(action["effects"][0]),  # add_effects
-            "delete_effects": set(action["effects"][1]),  # delete_effects
+            "add_effects": set(action["effects"]["add"]),
+            "delete_effects": set(action["effects"]["delete"]),
         }
 
         # Reference successor (unused but kept for potential future use)

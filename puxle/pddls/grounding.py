@@ -15,163 +15,207 @@ def _get_type_combinations(param_types: List[object], objects_by_type: Dict[str,
 
     combinations: List[List[str]] = []
     first_type = param_types[0]
-    remaining_types = param_types[1:]
+    rest_types = param_types[1:]
 
-    # Get objects of the first type (supports union types)
-    if isinstance(first_type, (list, tuple, set)):
-        seen_union: set[str] = set()
-        available_objects: list[str] = []
-        for t in first_type:
-            for o in objects_by_type.get(t, []):
-                if o not in seen_union:
-                    seen_union.add(o)
-                    available_objects.append(o)
-    else:
-        available_objects = list(objects_by_type.get(first_type, []))
+    objects = objects_by_type.get(first_type, [])
+    rest_combinations = _get_type_combinations(rest_types, objects_by_type)
 
-    if not available_objects:
-        return []
-
-    sub_combinations = _get_type_combinations(remaining_types, objects_by_type)
-
-    for obj in available_objects:
-        for sub_combo in sub_combinations:
-            combinations.append([obj] + sub_combo)
+    combinations = []
+    for obj in objects:
+        for combo in rest_combinations:
+            combinations.append([obj] + combo)
 
     return combinations
 
 
-def ground_predicates(domain, objects_by_type: Dict[str, List[str]], hierarchy) -> Tuple[List[str], Dict[str, int]]:
-    """Ground all predicates from the domain using the object universe."""
-    grounded_atoms: List[str] = []
-    atom_to_idx: Dict[str, int] = {}
-
-    predicates = getattr(domain, "predicates", [])
+def ground_predicates(
+    predicates,
+    objects_by_type: Dict[str, List[str]],
+    type_hierarchy: Tuple[Dict[str, str], Dict[str, Set[str]], Dict[str, Set[str]]],
+) -> Tuple[List[str], Dict[str, int]]:
+    """Grounds all predicates to create the set of all possible atoms."""
+    grounded_atoms = []
+    atom_to_idx = {}
 
     for predicate in predicates:
         pred_name = predicate.name
-        # Extract parameter types from terms
-        param_types: List[object] = []
-        for term in getattr(predicate, "terms", []) or []:
-            if hasattr(term, "type_tags") and term.type_tags:
-                selected = select_most_specific_types(set(term.type_tags), hierarchy)
-                param_types.append(selected[0] if len(selected) == 1 else selected)
-            else:
-                param_types.append("object")
+        param_types = []
+        if hasattr(predicate, "terms"):
+            for term in predicate.terms:
+                type_tags = getattr(term, "type_tags", {"object"})
+                most_specific = select_most_specific_types(type_tags, type_hierarchy)
+                param_types.append(list(most_specific)[0] if most_specific else "object")
 
-        # Generate all type-consistent object combinations
         type_combinations = _get_type_combinations(param_types, objects_by_type)
 
         for obj_combination in type_combinations:
-            atom_str = f"({pred_name} {' '.join(obj_combination)})"
+            args = " ".join(obj_combination)
+            atom_str = f"({pred_name} {args})" if args else f"({pred_name})"
             atom_to_idx[atom_str] = len(grounded_atoms)
             grounded_atoms.append(atom_str)
 
     return grounded_atoms, atom_to_idx
 
 
-def _ground_formula(formula, param_substitution: List[str], param_names: List[str]) -> List[str]:
-    """Ground a formula (precondition) with parameter substitution."""
+def _ground_formula(
+    formula, param_substitution: List[str], param_names: List[str]
+) -> Tuple[List[str], List[str], bool]:
+    """
+    Recursively grounds a formula.
+    Returns: (positive_atoms, negative_atoms, impossible_flag)
+    """
     if formula is None:
-        return []
+        return [], [], False
 
-    # Handle simple atomic formulas
-    if hasattr(formula, "name"):
-        pred_name = formula.name
-        args = [getattr(arg, "name", str(arg)) for arg in getattr(formula, "terms", []) or []]
+    # Handle Equality (= ?x ?y)
+    if type(formula).__name__ == "EqualTo":
+        left = getattr(formula.left, "name", str(formula.left))
+        right = getattr(formula.right, "name", str(formula.right))
+        
+        # Substitute parameters
+        if left in param_names:
+            left = param_substitution[param_names.index(left)]
+        if right in param_names:
+            right = param_substitution[param_names.index(right)]
+            
+        if left == right:
+            return [], [], False  # Satisfied
+        else:
+            return [], [], True  # Impossible
 
-        substituted_args: List[str] = []
-        for arg in args:
-            if arg in param_names:
-                param_idx = param_names.index(arg)
-                if param_idx < len(param_substitution):
-                    substituted_args.append(param_substitution[param_idx])
-                else:
-                    substituted_args.append(arg)
-            else:
-                substituted_args.append(arg)
+    # Handle Negation (Not)
+    if hasattr(formula, "argument"):
+        pos, neg, impossible = _ground_formula(formula.argument, param_substitution, param_names)
+        if impossible:
+            # Not(Impossible) -> Satisfied
+            return [], [], False
+        
+        # If inner is unconditionally true (empty requirements)
+        if not pos and not neg:
+            return [], [], True
 
-        return [f"({pred_name} {' '.join(substituted_args)})"]
+        # Swap pos and neg
+        # Note: PDDL usually only allows neg of atomic/equality in preconditions
+        if pos: 
+            return neg, pos, False # Move pos to neg
+        elif neg:
+             return neg, pos, False # Move neg to pos (double negation)
+        return [], [], False # Empty
 
-    # Handle compound formulas (AND, OR, etc.)
+    # Handle compound formulas (AND, OR treated as AND for preconditions usually)
+    # Note: PDDL 'or' in preconditions requires Disjunctive Preconditions support.
+    # Currently we treat parts as AND (conjunctive).
+    parts = []
     if hasattr(formula, "parts"):
-        grounded_parts: List[str] = []
-        for part in formula.parts:
-            grounded_parts.extend(_ground_formula(part, param_substitution, param_names))
-        return grounded_parts
-
-    # Handle And/Or objects
-    if hasattr(formula, "operands"):
-        grounded_parts: List[str] = []
-        for operand in formula.operands:
-            grounded_parts.extend(_ground_formula(operand, param_substitution, param_names))
-        return grounded_parts
-
-    return []
-
-
-def _ground_effects(effect, param_substitution: List[str], param_names: List[str]) -> Tuple[List[str], List[str]]:
-    """Ground effects with parameter substitution, return (add_effects, delete_effects)."""
-    add_effects: List[str] = []
-    delete_effects: List[str] = []
-
-    if effect is None:
-        return add_effects, delete_effects
-
-    # Handle conjunctions (And) represented via parts or operands
-    if hasattr(effect, "parts") or hasattr(effect, "operands"):
-        parts = getattr(effect, "parts", []) or getattr(effect, "operands", [])
+        parts = formula.parts
+    elif hasattr(formula, "operands"):
+        parts = formula.operands
+    
+    if parts:
+        all_pos = []
+        all_neg = []
         for part in parts:
-            part_add, part_delete = _ground_effects(part, param_substitution, param_names)
-            add_effects.extend(part_add)
-            delete_effects.extend(part_delete)
-        return add_effects, delete_effects
+            pos, neg, impossible = _ground_formula(part, param_substitution, param_names)
+            if impossible:
+                return [], [], True
+            all_pos.extend(pos)
+            all_neg.extend(neg)
+        return all_pos, all_neg, False
 
-    # Handle negation (Not)
-    if hasattr(effect, "argument"):
-        grounded = _ground_formula(effect.argument, param_substitution, param_names)
-        if grounded:
-            delete_effects.append(grounded[0])
-        return add_effects, delete_effects
-
-    # Handle atomic positive literals
-    if hasattr(effect, "name") and hasattr(effect, "terms"):
-        grounded = _ground_formula(effect, param_substitution, param_names)
-        if grounded:
-            add_effects.append(grounded[0])
-        return add_effects, delete_effects
-
-    return add_effects, delete_effects
-
-
-def ground_actions(domain, objects_by_type: Dict[str, List[str]], hierarchy) -> Tuple[List[Dict], Dict[str, int]]:
-    """Ground all actions from the domain using the object universe."""
-    grounded_actions: List[Dict] = []
-    action_to_idx: Dict[str, int] = {}
-
-    for action in getattr(domain, "actions", []) or []:
-        action_name = action.name
-        param_types: List[object] = []
-        for param in getattr(action, "parameters", []) or []:
-            if hasattr(param, "type_tags") and param.type_tags:
-                selected = select_most_specific_types(set(param.type_tags), hierarchy)
-                param_types.append(selected[0] if len(selected) == 1 else selected)
+    # Handle Atomic Prediction
+    if hasattr(formula, "name") and hasattr(formula, "terms"):
+        pred_name = formula.name
+        obj_combination = []
+        for term in formula.terms:
+            term_name = getattr(term, "name", str(term))
+            if term_name in param_names:
+                obj_combination.append(param_substitution[param_names.index(term_name)])
             else:
-                param_types.append("object")
+                obj_combination.append(term_name)
+        
+        args = " ".join(obj_combination)
+        atom_str = f"({pred_name} {args})" if args else f"({pred_name})"
+        return [atom_str], [], False
+
+    return [], [], False
+
+
+def _ground_effects(
+    effect, param_substitution: List[str], param_names: List[str]
+) -> Dict[str, List[str]]:
+    """Grounds effects into add/delete lists."""
+    add_effects = []
+    delete_effects = []
+
+    # Flatten effect structure
+    effects_list = []
+    if hasattr(effect, "parts"):
+        effects_list = effect.parts
+    elif hasattr(effect, "operands"):
+        effects_list = effect.operands
+    else:
+        effects_list = [effect]
+
+    for eff in effects_list:
+        # Check for negation
+        if hasattr(eff, "argument"):
+            # Negative effect (delete)
+            # argument is implicitly atomic in STRIPS
+            pos, neg, imp = _ground_formula(eff.argument, param_substitution, param_names)
+            if not imp and pos:
+                 delete_effects.extend(pos) 
+                 # _ground_formula returns list[str], we extend
+        else:
+            # Positive effect (add)
+            pos, neg, imp = _ground_formula(eff, param_substitution, param_names)
+            if not imp and pos:
+                add_effects.extend(pos)
+
+    return {"add": add_effects, "delete": delete_effects}
+
+
+def ground_actions(
+    actions,
+    objects_by_type: Dict[str, List[str]],
+    type_hierarchy: Tuple[Dict[str, str], Dict[str, Set[str]], Dict[str, Set[str]]],
+) -> Tuple[List[Dict], Dict[str, int]]:
+    """Grounds all actions."""
+    grounded_actions = []
+    action_to_idx = {}
+
+    for action in actions:
+        action_name = action.name
+        param_types = []
+        if hasattr(action, "parameters"):
+            for param in action.parameters:
+                type_tags = getattr(param, "type_tags", {"object"})
+                most_specific = select_most_specific_types(type_tags, type_hierarchy)
+                param_types.append(list(most_specific)[0] if most_specific else "object")
 
         param_combinations = _get_type_combinations(param_types, objects_by_type)
 
         for param_combo in param_combinations:
             param_names = [param.name for param in getattr(action, "parameters", []) or []]
+            
+            # Ground Preconditions
+            # Result: (pos, neg, impossible)
+            pre_pos, pre_neg, impossible = _ground_formula(
+                action.precondition, param_combo, param_names
+            )
+            
+            if impossible:
+                continue
 
             grounded_action = {
                 "name": action_name,
                 "parameters": param_combo,
-                "preconditions": _ground_formula(action.precondition, param_combo, param_names),
+                "preconditions": pre_pos,
+                "preconditions_neg": pre_neg,
                 "effects": _ground_effects(action.effect, param_combo, param_names),
             }
 
-            action_str = f"({action_name} {' '.join(param_combo)})"
+            args = " ".join(param_combo)
+            action_str = f"({action_name} {args})" if args else f"({action_name})"
             action_to_idx[action_str] = len(grounded_actions)
             grounded_actions.append(grounded_action)
 
