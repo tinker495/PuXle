@@ -512,9 +512,9 @@ class Sokoban(Puzzle):
             rm_player = jnp.where(
                 board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board
             )
-            solve_config.TargetState = self.State.from_unpacked(board=rm_player)
+            solve_config = solve_config.replace(TargetState=self.State.from_unpacked(board=rm_player))
         else:
-            solve_config.TargetState = self.State.from_unpacked(board=board)
+            solve_config = solve_config.replace(TargetState=self.State.from_unpacked(board=board))
         return solve_config
 
     def get_inverse_neighbours(
