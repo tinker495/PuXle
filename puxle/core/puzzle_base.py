@@ -314,7 +314,7 @@ class Puzzle(ABC):
             "Default hindsight transform is for only target state,"
             "you should redefine this function"
         )
-        solve_config.TargetState = states
+        solve_config = solve_config.replace(TargetState=states)
         return solve_config
 
     def get_inverse_neighbours(
