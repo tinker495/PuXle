@@ -11,15 +11,25 @@ TYPE = jnp.uint8
 
 
 class TowerOfHanoi(Puzzle):
-    """
-    Tower of Hanoi Puzzle
+    """Tower of Hanoi puzzle with variable pegs.
 
-    In this puzzle, there are three pegs and a number of disks of different sizes.
-    The disks are initially stacked on the first peg in order of decreasing size (largest at bottom).
-    The goal is to move all disks to the third peg, following these rules:
-    1. Only one disk can be moved at a time
-    2. Each move consists of taking the upper disk from one stack and placing it on top of another stack
-    3. No disk may be placed on top of a smaller disk
+    Move all disks from the first peg to the last peg, obeying three rules:
+
+    1. Only one disk may be moved at a time.
+    2. A move takes the topmost disk from one peg and places it on another.
+    3. No disk may be placed on top of a smaller disk.
+
+    Each peg is stored as a fixed-length array of shape
+    ``(num_disks + 1,)`` whose first element is the current disk count
+    and subsequent elements hold disk sizes (smallest at index 1 = top).
+
+    Actions encode ordered ``(from_peg, to_peg)`` pairs, giving
+    ``num_pegs × (num_pegs − 1)`` possible moves (invalid moves yield
+    infinite cost).
+
+    Args:
+        size: Number of disks (default ``5``).
+        num_pegs: Number of pegs (default ``3``).
     """
 
     num_disks: int

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import partial
 
 import chex
@@ -154,6 +156,31 @@ _SYM_PERM24, _SYM_K24 = _build_symmetry_maps_24()
 
 
 class RubiksCube(Puzzle):
+    """N×N×N Rubik's Cube environment.
+
+    Each face is stored as a 1-D array of ``size * size`` sticker values.
+    Two representation modes are supported:
+
+    * **Color embedding** (default): values in ``[0, 5]`` (3 bits/sticker).
+    * **Tile-ID mode**: unique IDs in ``[0, 6·size²)`` (8 bits/sticker),
+      useful for puzzles where individual tile identity matters.
+
+    Actions encode ``(axis, slice_index, direction)`` triplets and follow
+    either **QTM** (quarter-turn metric, excludes whole-cube rotations) or
+    **UQTM** (includes center-slice moves on odd-sized cubes).
+
+    The class also exposes the 24 global rotational symmetries of the cube
+    via :meth:`state_symmetries` for symmetry-aware hashing or data
+    augmentation.
+
+    Args:
+        size: Edge length of the cube (default ``3``).
+        initial_shuffle: Number of random moves for scrambling (default ``10``).
+        color_embedding: If ``True`` (default), store 6-colour values;
+            otherwise store unique tile IDs.
+        metric: ``"QTM"`` (default) or ``"UQTM"``.
+    """
+
     size: int
     index_grid: chex.Array
 

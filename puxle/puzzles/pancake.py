@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -17,12 +19,20 @@ def get_color(size):
 
 
 class PancakeSorting(Puzzle):
-    """
-    Pancake Sorting Puzzle
+    """Pancake Sorting (prefix-reversal) puzzle.
 
-    In this puzzle, there's a stack of pancakes with different sizes.
-    The goal is to sort the pancakes by size with the largest at the bottom.
-    The only operation allowed is to insert a spatula at any position and flip all pancakes above it.
+    A stack of ``size`` distinctly-sized pancakes must be sorted so that
+    the largest is at the bottom (ascending order from top).  The only
+    allowed operation is a **prefix flip**: choose a position *k* and
+    reverse the top *k + 1* pancakes.
+
+    Every flip is its own inverse, so ``inverse_action_map`` is the
+    identity permutation.
+
+    The state is a 1-D ``uint8`` permutation of ``[1 .. size]``.
+
+    Args:
+        size: Number of pancakes in the stack (default ``35``).
     """
 
     size: int

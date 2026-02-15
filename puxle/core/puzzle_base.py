@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, TypeVar
+from typing import Any, Optional, TypeVar
 
 import chex
 import jax
@@ -12,11 +12,29 @@ T = TypeVar("T")
 
 
 class Puzzle(ABC):
+    """Abstract base class for all PuXle puzzle and planning environments.
+
+    Every concrete puzzle subclass must:
+
+    1. Set ``action_size`` (number of possible actions).
+    2. Implement :meth:`define_state_class` to return a ``@state_dataclass``-decorated class.
+    3. Implement :meth:`get_actions`, :meth:`is_solved`, :meth:`get_solve_config`,
+       :meth:`get_initial_state`, :meth:`get_string_parser`, and :meth:`get_img_parser`.
+
+    The base class handles JIT compilation of core methods and provides
+    default batch and inverse-neighbour logic.
+
+    Attributes:
+        action_size: Number of discrete actions available in this puzzle.
+        State: The ``@state_dataclass`` class representing states (set during ``__init__``).
+        SolveConfig: The ``@state_dataclass`` class representing goal configurations
+            (set during ``__init__``).
+    """
 
     action_size: int = None
 
     @property
-    def inverse_action_map(self) -> jnp.ndarray | None:
+    def inverse_action_map(self) -> Optional[jnp.ndarray]:
         """
         Returns an array mapping each action to its inverse, or None if not defined.
         If implemented, this method should return a jnp.ndarray where `map[i]` is the
@@ -48,6 +66,15 @@ class Puzzle(ABC):
         pass
 
     def define_solve_config_class(self) -> PuzzleState:
+        """Return the ``@state_dataclass`` class used for goal/solve configuration.
+
+        The default implementation creates a ``SolveConfig`` with a single
+        ``TargetState`` field.  Override this when the goal representation
+        requires additional fields (e.g., a goal mask for PDDL domains).
+
+        Returns:
+            A ``@state_dataclass`` class describing the solve configuration.
+        """
         @state_dataclass
         class SolveConfig:
             TargetState: FieldDescriptor.scalar(dtype=self.State)
@@ -59,6 +86,14 @@ class Puzzle(ABC):
 
     @abstractmethod
     def define_state_class(self) -> PuzzleState:
+        """Return the ``@state_dataclass`` class used for puzzle states.
+
+        Subclasses **must** implement this method.  The returned class should
+        use :class:`FieldDescriptor` to declare its fields.
+
+        Returns:
+            A ``@state_dataclass`` class describing the puzzle state.
+        """
         pass
 
     @property
@@ -84,8 +119,21 @@ class Puzzle(ABC):
         return self.only_target
 
     def __init__(self, **kwargs):
-        """
-        This function should be called in the __init__ of the subclass.
+        """Initialise the puzzle.
+
+        Subclass constructors **must** call ``super().__init__(**kwargs)``
+        after setting ``action_size`` and any instance attributes needed by
+        :meth:`define_state_class` / :meth:`data_init`.
+
+        This method:
+
+        1. Calls :meth:`data_init` for optional dataset loading.
+        2. Builds ``State`` and ``SolveConfig`` classes.
+        3. JIT-compiles core methods (``get_neighbours``, ``is_solved``, etc.).
+        4. Validates ``action_size`` and pre-computes the inverse-action permutation.
+
+        Raises:
+            ValueError: If ``action_size`` is still ``None`` after subclass init.
         """
         super().__init__()
         self.data_init()
@@ -120,16 +168,22 @@ class Puzzle(ABC):
             self._inverse_action_permutation = None
 
     def data_init(self):
-        """
-        This function should be called in the __init__ of the subclass.
-        If the puzzle need to load dataset, this function should be filled.
+        """Hook for loading datasets or heavy resources during init.
+
+        Called *before* ``define_state_class()``.  Override in puzzles that
+        require external data (e.g., Sokoban level files).
         """
         pass
 
     def get_solve_config_string_parser(self) -> callable:
-        """
-        This function should return a callable that takes a solve config and returns a string representation of it.
-        function signature: (solve_config: SolveConfig) -> str
+        """Return a callable that renders a ``SolveConfig`` as a string.
+
+        The default implementation delegates to :meth:`get_string_parser` on
+        ``solve_config.TargetState``.  Override when the solve config
+        contains fields beyond ``TargetState``.
+
+        Returns:
+            A function ``(solve_config: SolveConfig) -> str``.
         """
         assert self.only_target, (
             "You should redefine this function, because this function is only for target state"
@@ -145,16 +199,22 @@ class Puzzle(ABC):
 
     @abstractmethod
     def get_string_parser(self) -> callable:
-        """
-        This function should return a callable that takes a state and returns a string representation of it.
-        function signature: (state: State) -> str
+        """Return a callable that renders a ``State`` as a human-readable string.
+
+        Returns:
+            A function ``(state: State, **kwargs) -> str``.
         """
         pass
 
     def get_solve_config_img_parser(self) -> callable:
-        """
-        This function should return a callable that takes a solve config and returns a image representation of it.
-        function signature: (solve_config: SolveConfig) -> jnp.ndarray
+        """Return a callable that renders a ``SolveConfig`` as an image array.
+
+        The default implementation delegates to :meth:`get_img_parser` on
+        ``solve_config.TargetState``.  Override when the solve config
+        contains fields beyond ``TargetState``.
+
+        Returns:
+            A function ``(solve_config: SolveConfig) -> jnp.ndarray``.
         """
         assert self.only_target, (
             "You should redefine this function, because this function is only for target state"
@@ -170,36 +230,63 @@ class Puzzle(ABC):
 
     @abstractmethod
     def get_img_parser(self) -> callable:
-        """
-        This function should return a callable that takes a state and returns a image representation of it.
-        function signature: (state: State) -> jnp.ndarray
+        """Return a callable that renders a ``State`` as an image (NumPy/JAX array).
+
+        Returns:
+            A function ``(state: State, **kwargs) -> jnp.ndarray``
+            producing an ``(H, W, 3)`` RGB image.
         """
         pass
 
     def get_data(self, key=None) -> Any:
-        """
-        This function should be called in the __init__ of the subclass.
-        If the puzzle need to load dataset, this function should be filled.
+        """Optionally sample or return puzzle-specific data used by ``get_inits``.
+
+        Args:
+            key: Optional JAX PRNG key for stochastic data selection.
+
+        Returns:
+            Puzzle-specific data (e.g., a Sokoban level index) or ``None``.
         """
         return None
 
     @abstractmethod
     def get_solve_config(self, key=None, data=None) -> SolveConfig:
-        """
-        This function should return a solve config.
+        """Build and return a goal / solve configuration.
+
+        Args:
+            key: Optional JAX PRNG key for stochastic goal generation.
+            data: Optional puzzle-specific data from :meth:`get_data`.
+
+        Returns:
+            A ``SolveConfig`` instance describing the puzzle objective.
         """
         pass
 
     @abstractmethod
     def get_initial_state(self, solve_config: SolveConfig, key=None, data=None) -> State:
-        """
-        This function should return a initial state.
+        """Build and return the initial (scrambled) state for a given goal.
+
+        Args:
+            solve_config: The goal configuration for this episode.
+            key: Optional JAX PRNG key for random scrambling.
+            data: Optional puzzle-specific data from :meth:`get_data`.
+
+        Returns:
+            A ``State`` instance representing the starting position.
         """
         pass
 
     def get_inits(self, key=None) -> tuple[SolveConfig, State]:
-        """
-        This function should return a initial state and solve config.
+        """Convenience method returning ``(solve_config, initial_state)``.
+
+        Splits ``key`` internally to call :meth:`get_data`,
+        :meth:`get_solve_config`, and :meth:`get_initial_state`.
+
+        Args:
+            key: JAX PRNG key.
+
+        Returns:
+            A ``(SolveConfig, State)`` tuple.
         """
         datakey, solveconfigkey, initkey = jax.random.split(key, 3)
         data = self.get_data(datakey)
@@ -207,8 +294,19 @@ class Puzzle(ABC):
         return solve_config, self.get_initial_state(solve_config, initkey, data)
 
     def batched_get_actions(self, solve_configs: SolveConfig, states: State, actions: chex.Array, filleds: bool = True, multi_solve_config: bool = False) -> tuple[State, chex.Array]:
-        """
-        This function should return a state and the cost of the move.
+        """Vectorised version of :meth:`get_actions`.
+
+        Args:
+            solve_configs: Solve configurations — single or batched.
+            states: Batch of states with leading batch dimension.
+            actions: Batch of action indices.
+            filleds: Whether to fill invalid moves (broadcast scalar or batch).
+            multi_solve_config: If ``True``, ``solve_configs`` has the same
+                batch dimension as ``states``; otherwise a single config is
+                broadcast.
+
+        Returns:
+            ``(next_states, costs)`` with shapes matching the input batch.
         """
         if multi_solve_config:
             return jax.vmap(self.get_actions, in_axes=(0, 0, 0, 0))(
@@ -221,8 +319,17 @@ class Puzzle(ABC):
 
     @abstractmethod
     def get_actions(self, solve_config: SolveConfig, state: State, actions: chex.Array, filled: bool = True) -> tuple[State, chex.Array]:
-        """
-        This function should return a state and the cost of the move.
+        """Apply a single action to a state and return the result.
+
+        Args:
+            solve_config: Current goal configuration.
+            state: Current puzzle state.
+            actions: Scalar action index.
+            filled: If ``True``, invalid actions return the same state with
+                ``jnp.inf`` cost; if ``False``, behaviour is puzzle-specific.
+
+        Returns:
+            ``(next_state, cost)`` where ``cost`` is ``jnp.inf`` for invalid moves.
         """
         pass
 
@@ -233,8 +340,18 @@ class Puzzle(ABC):
         filleds: bool = True,
         multi_solve_config: bool = False,
     ) -> tuple[State, chex.Array]:
-        """
-        This function should return a neighbours, and the cost of the move.
+        """Vectorised version of :meth:`get_neighbours`.
+
+        Args:
+            solve_configs: Solve configurations — single or batched.
+            states: Batch of states with leading batch dimension.
+            filleds: Whether to fill invalid moves.
+            multi_solve_config: If ``True``, ``solve_configs`` has the same
+                batch dimension as ``states``.
+
+        Returns:
+            ``(neighbour_states, costs)`` with shapes
+            ``(action_size, batch, ...)`` and ``(action_size, batch)``.
         """
         if multi_solve_config:
             return jax.vmap(self.get_neighbours, in_axes=(0, 0, 0), out_axes=(1, 1))(
@@ -248,9 +365,22 @@ class Puzzle(ABC):
     def get_neighbours(
         self, solve_config: SolveConfig, state: State, filled: bool = True
     ) -> tuple[State, chex.Array]:
-        """
-        This function should return a neighbours, and the cost of the move.
-        if impossible to move in a direction cost should be inf and State should be same as input state.
+        """Compute all successor states for every action.
+
+        Equivalent to calling :meth:`get_actions` for each action index and
+        stacking the results.  Invalid actions produce ``cost = jnp.inf``
+        and the original state.
+
+        Args:
+            solve_config: Current goal configuration.
+            state: Current puzzle state.
+            filled: If ``True``, invalid actions are filled with
+                ``(state, jnp.inf)``.
+
+        Returns:
+            ``(neighbour_states, costs)`` where ``neighbour_states`` has
+            shape ``(action_size, ...)`` and ``costs`` has shape
+            ``(action_size,)``.
         """
         actions = jnp.arange(self.action_size)
         states, costs = jax.vmap(self.get_actions, in_axes=(None, None, 0, None), out_axes=(0, 0))(
@@ -261,8 +391,16 @@ class Puzzle(ABC):
     def batched_is_solved(
         self, solve_configs: SolveConfig, states: State, multi_solve_config: bool = False
     ) -> bool:
-        """
-        This function should return a boolean array that indicates whether the state is the target state.
+        """Vectorised version of :meth:`is_solved`.
+
+        Args:
+            solve_configs: Solve configurations — single or batched.
+            states: Batch of states.
+            multi_solve_config: If ``True``, solve configs are batched
+                alongside states.
+
+        Returns:
+            Boolean array of shape ``(batch,)``.
         """
         if multi_solve_config:
             return jax.vmap(self.is_solved, in_axes=(0, 0))(solve_configs, states)
@@ -281,22 +419,49 @@ class Puzzle(ABC):
         pass
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
+        """Return a human-readable name for the given action index.
+
+        Override in subclasses to provide meaningful names
+        (e.g., ``"R"`` for right, ``"U'"`` for counter-clockwise).
+
+        Args:
+            action: Integer action index in ``[0, action_size)``.
+
+        Returns:
+            String representation of the action.
         """
         return f"action {action}"
 
     def batched_hindsight_transform(self, solve_configs: SolveConfig, states: State) -> SolveConfig:
-        """
-        This function shoulde transformt the state to the solve config.
+        """Vectorised version of :meth:`hindsight_transform`.
+
+        Args:
+            solve_configs: Batch of solve configurations.
+            states: Batch of states to treat as new goals.
+
+        Returns:
+            Batch of updated ``SolveConfig`` instances.
         """
         return jax.vmap(self.hindsight_transform)(solve_configs, states)
 
     def solve_config_to_state_transform(
         self, solve_config: SolveConfig, key: jax.random.PRNGKey = None
     ) -> State:
-        """
-        This function shoulde transformt the solve config to the state.
+        """Convert a ``SolveConfig`` into the corresponding target ``State``.
+
+        The default implementation simply extracts ``solve_config.TargetState``.
+        Override for puzzles whose goal is not a single target state.
+
+        Args:
+            solve_config: The goal configuration.
+            key: Optional PRNG key (unused in default implementation).
+
+        Returns:
+            The target ``State`` encoded in the configuration.
+
+        Raises:
+            AssertionError: If the puzzle does not have a target state or
+                the config has additional fields.
         """
         assert self.has_target, "This puzzle does not have target state"
         assert self.only_target, (
@@ -306,8 +471,20 @@ class Puzzle(ABC):
         return solve_config.TargetState
 
     def hindsight_transform(self, solve_config: SolveConfig, states: State) -> SolveConfig:
-        """
-        This function shoulde transformt the state to the solve config.
+        """Hindsight experience replay: rewrite the goal to match *states*.
+
+        Creates a new ``SolveConfig`` whose ``TargetState`` equals the given
+        state, enabling hindsight relabelling for training neural heuristics.
+
+        Args:
+            solve_config: Original solve configuration (used as template).
+            states: State to embed as the new target.
+
+        Returns:
+            A new ``SolveConfig`` with ``TargetState`` replaced.
+
+        Raises:
+            AssertionError: If the puzzle goal is not a simple target state.
         """
         assert self.has_target, "This puzzle does not have target state"
         assert self.only_target, (
@@ -351,8 +528,16 @@ class Puzzle(ABC):
         filleds: bool = True,
         multi_solve_config: bool = False,
     ) -> tuple[State, chex.Array]:
-        """
-        This function should return inverse neighbours and the cost of the move.
+        """Vectorised version of :meth:`get_inverse_neighbours`.
+
+        Args:
+            solve_configs: Solve configurations — single or batched.
+            states: Batch of states.
+            filleds: Whether to fill invalid moves.
+            multi_solve_config: If ``True``, solve configs share the batch dim.
+
+        Returns:
+            ``(inverse_neighbour_states, costs)``.
         """
         if multi_solve_config:
             return jax.vmap(self.get_inverse_neighbours, in_axes=(0, 0, 0), out_axes=(1, 1))(
@@ -366,6 +551,20 @@ class Puzzle(ABC):
     def _get_suffled_state(
         self, solve_config: "Puzzle.SolveConfig", init_state: "Puzzle.State", key, num_shuffle
     ):
+        """Generate a scrambled state by applying random actions.
+
+        Uses a ``while_loop`` to apply ``num_shuffle`` (±1) random actions,
+        avoiding immediate backtracking.
+
+        Args:
+            solve_config: Goal configuration (passed to ``get_neighbours``).
+            init_state: State to start scrambling from (usually the solved state).
+            key: JAX PRNG key.
+            num_shuffle: Base number of random actions to apply.
+
+        Returns:
+            A scrambled ``State``.
+        """
         key, subkey = jax.random.split(key)
         num_shuffle += jax.random.randint(
             subkey, (), 0, 2

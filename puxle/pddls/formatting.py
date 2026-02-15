@@ -1,3 +1,8 @@
+"""Pretty-printing utilities for PDDL states, actions, and solve configs.
+
+Provides colour-coded terminal output (via ``termcolor`` and optional
+``rich``) for debugging and visualisation of grounded atoms and actions.
+"""
 from __future__ import annotations
 
 from typing import Dict, List, Tuple

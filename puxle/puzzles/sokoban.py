@@ -15,6 +15,27 @@ TYPE = jnp.uint8
 
 
 class Sokoban(Puzzle):
+    """Sokoban (box-pushing) puzzle using the Boxoban dataset.
+
+    Each cell is one of four base types (empty / wall / player / box) packed
+    in 2 bits.  The board is fixed at 10×10 and levels are loaded from
+    pre-packed ``.npy`` files shipped with the ``puxle.data`` subpackage.
+
+    This puzzle is **not reversible** in the standard sense — inverse
+    neighbours are computed via a dedicated pull-move implementation in
+    :meth:`get_inverse_neighbours`.
+
+    Two solve conditions are supported:
+
+    * ``ALL_BOXES_ON_TARGET`` (default): only box positions must match.
+    * ``ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET``: both box **and** player
+      positions must match the goal.
+
+    Args:
+        size: Board edge length (must be ``10``).
+        solve_condition: Which condition defines a solved state.
+    """
+
     size: int = 10
     solve_condition: "Sokoban.SolveCondition" = None
 

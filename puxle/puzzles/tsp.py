@@ -11,6 +11,22 @@ TYPE = jnp.uint16
 
 
 class TSP(Puzzle):
+    """Travelling Salesman Problem (TSP) as a sequential-visit puzzle.
+
+    ``size`` cities are uniformly sampled in the unit square.  The agent
+    starts at a random city and must visit every remaining city exactly
+    once, minimising total Euclidean distance (including the return to
+    the start city).
+
+    State consists of a packed visited-mask (1 bit / city) and the
+    index of the current city.  The action space equals the number of
+    cities; visiting an already-visited city yields infinite cost.
+
+    This puzzle is **not reversible**.
+
+    Args:
+        size: Number of cities (default ``16``).
+    """
 
     size: int
 

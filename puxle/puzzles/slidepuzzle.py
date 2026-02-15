@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -10,6 +12,17 @@ TYPE = jnp.uint8
 
 
 class SlidePuzzle(Puzzle):
+    """N×N sliding tile puzzle (15-puzzle generalisation).
+
+    The board is a flat array of ``size²`` values where ``0`` represents the
+    blank tile.  Actions move the blank in four directions (←, →, ↑, ↓).
+    Only solvable permutations are generated.
+
+    State packing uses ``ceil(log₂(size²))`` bits per tile via xtructure.
+
+    Args:
+        size: Edge length of the grid (default ``4`` → 15-puzzle).
+    """
 
     size: int
 

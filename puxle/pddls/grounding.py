@@ -1,6 +1,12 @@
+"""Predicate and action grounding for PDDL environments.
+
+Generates the universe of grounded atoms and grounded actions by
+instantiating every typed predicate / action schema with all valid
+object combinations drawn from the problem's typed-object pool.
+"""
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 
 from .type_system import select_most_specific_types
 

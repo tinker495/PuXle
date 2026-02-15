@@ -1,3 +1,9 @@
+"""PDDL type-hierarchy extraction and object grouping.
+
+Builds parent/ancestor/descendant maps from a domain's ``:types`` block
+and uses them to group problem objects by the most specific type,
+propagating objects to supertypes as needed for grounding.
+"""
 from __future__ import annotations
 
 from typing import Dict, Iterable, Set, Tuple

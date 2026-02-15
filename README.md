@@ -5,6 +5,7 @@
 # **PuXle**: **P**lanning **u**sing ja**X**-based **l**earning **e**nvironments
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://tinker495.github.io/PuXle/)
 
 **PuXle** is a high-performance library for parallelized planning and puzzle environments built on JAX. It provides a comprehensive collection of classic puzzles and PDDL-based planning domains optimized for AI research, reinforcement learning, and search algorithms. PuXle leverages [Xtructure](https://github.com/tinker495/Xtructure.git) as a backend for JAX-optimized data structures, offering advantages such as efficient batched operations, GPU-accelerated priority queues and hash tables for faster planning and puzzle solving in AI research. PuXle serves as the planning and puzzle implementation backend for [JAxtar](https://github.com/tinker495/JAxtar), enabling JAX-native parallelizable A* and Q* solvers for neural heuristic search research.
 
@@ -21,8 +22,11 @@
 
 ## 📚 Documentation
 
-- **Bitpacked runtime states (xtructure)**: `docs/tutorials/xtructure_bitpacking.md`
-- **PDDLFuse: Diverse Planning Domain Generator**: [`docs/pddlfuse.md`](docs/pddlfuse.md) - Based on the [PDDLFuse paper](https://arxiv.org/pdf/2411.19886)
+Full API documentation is automatically built and deployed to **[GitHub Pages](https://tinker495.github.io/PuXle/)** on every push to `main`.
+
+- **[API Reference](https://tinker495.github.io/PuXle/api/index.html)** — All modules, classes, and functions
+- **Bitpacked runtime states (xtructure)**: [`docs/tutorials/xtructure_bitpacking.md`](docs/tutorials/xtructure_bitpacking.md)
+- **PDDLFuse: Diverse Planning Domain Generator**: [`docs/pddlfuse.md`](docs/pddlfuse.md) — Based on the [PDDLFuse paper](https://arxiv.org/pdf/2411.19886)
 
 ## 📦 Installation
 

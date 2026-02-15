@@ -1,3 +1,9 @@
+"""JAX boolean-mask construction for PDDL preconditions, effects, and goals.
+
+Each grounded action is encoded as four boolean vectors over the atom
+universe: positive preconditions, negative preconditions, add effects,
+and delete effects.  Initial-state and goal masks are also built here.
+"""
 from __future__ import annotations
 
 from typing import Dict, List, Tuple

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -11,6 +13,24 @@ TYPE = jnp.uint16
 
 
 class Maze(Puzzle):
+    """Randomly-generated 2-D maze puzzle.
+
+    A ``size × size`` boolean grid is generated via randomised depth-first
+    search (``True`` = wall, ``False`` = path).  The player position is a
+    2-element ``uint16`` coordinate.  Four actions (←, →, ↑, ↓) are
+    available; illegal moves (into walls or out of bounds) incur infinite
+    cost.
+
+    The maze layout is stored inside the ``SolveConfig`` so that both
+    the target position and wall configuration travel together.
+
+    This puzzle is **reversible**: each direction has a clear inverse
+    (left ↔ right, up ↔ down).
+
+    Args:
+        size: Edge length of the square grid (default ``23``; should be
+            odd for well-formed DFS mazes).
+    """
 
     size: int
 

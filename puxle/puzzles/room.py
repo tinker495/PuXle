@@ -31,11 +31,23 @@ def dsu_find_jax(parent_array: jnp.ndarray, i: int) -> int:
 
 
 class Room(Maze):
-    """A Maze subclass representing a fixed 3x3 grid of rooms.
-    The internal dimension of each room is configurable via the total grid size.
-    Size must be of the form 3*N+2, where N>=1 is the room dimension.
-    If an invalid size is provided, it adjusts to the nearest valid size.
-    Doors between rooms are now randomly opened/closed while ensuring solvability.
+    """Maze variant with a fixed 3×3 grid of rectangular rooms.
+
+    Each room has an internal dimension of ``room_dim × room_dim``.
+    The total grid size must satisfy ``3·N + 2`` where ``N ≥ 1``; if an
+    invalid size is given, the nearest valid size is used instead.
+
+    Doors between adjacent rooms are opened using a randomised
+    **Kruskal-based** spanning-tree algorithm to guarantee full
+    connectivity.  Additional doors may be opened with probability
+    ``prob_open_extra_door``.
+
+    Inherits movement logic and inverse-action map from :class:`Maze`.
+
+    Args:
+        size: Total grid edge length (default ``11`` → ``room_dim = 3``).
+        prob_open_extra_door: Probability of opening non-spanning-tree
+            doors (default ``1.0`` = open all).
     """
 
     room_dim: int  # Internal dimension of each room

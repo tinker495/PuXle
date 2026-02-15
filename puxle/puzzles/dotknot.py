@@ -18,6 +18,27 @@ COLOR_MAP = {
 
 
 class DotKnot(Puzzle):
+    """Dot-and-Knot path-connection puzzle.
+
+    On an ``size × size`` grid, pairs of same-coloured dots must be
+    connected by moving them toward each other.  When two dots of the
+    same colour meet they merge into a path segment.  The puzzle is
+    solved when no unmerged dots remain (and the board is non-empty).
+
+    Cell encoding (4 bits per cell via xtructure bitpacking):
+
+    * ``0``: empty.
+    * ``1 .. 2·color_num``: dot endpoints (two per colour).
+    * ``> 2·color_num``: path segments.
+
+    Four directional actions move the lowest-indexed available dot.
+
+    This puzzle is **not reversible**.
+
+    Args:
+        size: Edge length of the grid (default ``10``; must be ≥ 4).
+        color_num: Number of dot colours (default ``4``).
+    """
 
     size: int
 

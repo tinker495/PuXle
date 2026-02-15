@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -28,6 +30,19 @@ def action_to_char(action: int) -> str:
 
 
 class LightsOut(Puzzle):
+    """Lights Out puzzle on an N×N grid.
+
+    Pressing a button toggles it and its four orthogonal neighbours.
+    The goal is to turn all lights **off**.  Each action is its own inverse,
+    so ``inverse_action_map`` is the identity.
+
+    The board is stored as 1-bit-per-cell via xtructure bitpacking.
+    A GF(2) solvability check is available via :meth:`board_is_solvable`.
+
+    Args:
+        size: Edge length of the grid (default ``7``).
+        initial_shuffle: Number of random presses for scrambling (default ``8``).
+    """
 
     size: int
 

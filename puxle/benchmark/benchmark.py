@@ -16,7 +16,17 @@ SolveConfigT = TypeVar("SolveConfigT", bound=PuzzleState)
 
 @dataclass(frozen=True)
 class BenchmarkSample(Generic[StateT, SolveConfigT]):
-    """Container for a benchmark instance."""
+    """Immutable container for a single benchmark instance.
+
+    Attributes:
+        state: Initial puzzle state for this sample.
+        solve_config: Target/goal configuration for verification.
+        optimal_action_sequence: Known-optimal action string list, or
+            ``None`` if unavailable.
+        optimal_path: Sequence of states along the optimal path, or
+            ``None``.
+        optimal_path_costs: Total cost of the optimal path, or ``None``.
+    """
 
     state: StateT
     solve_config: SolveConfigT
@@ -26,7 +36,19 @@ class BenchmarkSample(Generic[StateT, SolveConfigT]):
 
 
 class Benchmark(ABC, Generic[StateT, SolveConfigT]):
-    """Abstract base class describing a benchmark dataset."""
+    """Abstract base class for a benchmark dataset.
+
+    Subclasses must implement:
+
+    * :meth:`build_puzzle` — create the :class:`Puzzle` instance.
+    * :meth:`load_dataset` — load or generate the raw dataset.
+    * :meth:`sample_ids` — enumerate available sample IDs.
+    * :meth:`get_sample` — retrieve a :class:`BenchmarkSample` by ID.
+
+    The base class provides lazy caching for ``puzzle`` and ``dataset``
+    and a generic :meth:`verify_solution` that checks both validity
+    (is the final state solved?) and optimality (is the cost ≤ optimal?).
+    """
 
     def __init__(self) -> None:
         self._puzzle: Puzzle | None = None

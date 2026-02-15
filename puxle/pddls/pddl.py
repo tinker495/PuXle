@@ -35,12 +35,33 @@ from .state_defs import build_solve_config_class, build_state_class
 
 
 class PDDL(Puzzle):
-    """
-    PDDL wrapper for PuXle that supports STRIPS subset:
-    - Positive preconditions only
-    - Add/delete effects (no conditional effects)
-    - Conjunctive positive goals
-    - Typed objects
+    """PuXle wrapper that turns a PDDL domain + problem into a :class:`Puzzle`.
+
+    Supports the **STRIPS** subset of PDDL:
+
+    * Positive *and* negative preconditions (conjunctive).
+    * Add / delete effects (no conditional or quantified effects).
+    * Conjunctive positive goals.
+    * Typed objects with type-hierarchy resolution.
+
+    The state is a packed boolean vector over **grounded atoms**
+    (1 bit per atom via xtructure bitpacking).  The solve-config
+    stores a goal mask rather than a full target state, enabling
+    partial-goal problems.
+
+    The class delegates heavy lifting to helper modules:
+
+    * :mod:`~puxle.pddls.type_system` — type hierarchy extraction.
+    * :mod:`~puxle.pddls.grounding` — predicate and action grounding.
+    * :mod:`~puxle.pddls.masks` — JAX mask construction.
+    * :mod:`~puxle.pddls.formatting` — pretty-printing utilities.
+    * :mod:`~puxle.pddls.state_defs` — dynamic state/solve-config classes.
+
+    Args:
+        domain: Path to a PDDL domain file **or** a ``pddl.core.Domain``
+            object.
+        problem: Path to a PDDL problem file **or** a ``pddl.core.Problem``
+            object.
     """
 
     def __init__(

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -10,15 +12,25 @@ TYPE = jnp.uint8
 
 
 class TopSpin(Puzzle):
-    """
-    Top Spin puzzle implementation.
+    """Top Spin puzzle on a circular track.
 
-    State: A permutation of numbers from 1 to n_discs.
-    Actions:
-        0: Shift the entire ring one step to the left.
-        1: Shift the entire ring one step to the right.
-        2: Reverse the order of the discs within the turnstile (first `turnstile_size` discs).
-    Goal: Arrange the discs in ascending order [1, 2, ..., n_discs].
+    ``n_discs`` numbered tokens sit on a ring.  Three actions are
+    available:
+
+    * **Shift left** (action 0): rotate the entire ring one position
+      counter-clockwise.
+    * **Shift right** (action 1): rotate the ring one position clockwise.
+    * **Reverse turnstile** (action 2): reverse the first
+      ``turnstile_size`` tokens in the array.
+
+    The goal is the sorted permutation ``[1, 2, …, n_discs]``.
+
+    Inverse action map: left ↔ right; reverse is self-inverse.
+
+    Args:
+        size: Number of tokens on the ring (default ``20``).
+        turnstile_size: Number of tokens covered by the turnstile
+            (default ``4``).
     """
 
     n_discs: int
