@@ -88,6 +88,34 @@ def test_action_modifier():
     # Check that p_new is in precondition
     # String representation might help debugging if direct object check fails
     assert "p_new" in str(m_act.precondition)
+
+def test_action_modifier_type_compatibility():
+    vehicle_var = Variable("v", type_tags={"vehicle"})
+    truck_var = Variable("t", type_tags={"truck"})
+
+    requires_truck = Predicate("requires-truck", Variable("x", type_tags={"truck"}))
+    requires_vehicle = Predicate("requires-vehicle", Variable("x", type_tags={"vehicle"}))
+
+    params = FusionParams(
+        prob_add_pre=1.0,
+        prob_add_eff=0.0,
+        prob_rem_pre=0.0,
+        prob_rem_eff=0.0,
+        prob_neg=0.0,
+        seed=42,
+    )
+    modifier = ActionModifier(params)
+    types_map = {"vehicle": "object", "truck": "vehicle"}
+
+    # Supertype variable should NOT be used where a subtype is required.
+    act_vehicle = Action("act-veh", parameters=[vehicle_var], precondition=Predicate("p1"), effect=Predicate("p1"))
+    m_vehicle = modifier.modify_actions([act_vehicle], [requires_truck], types_map)[0]
+    assert "requires-truck" not in str(m_vehicle.precondition)
+
+    # Subtype variable can be used where a supertype is required.
+    act_truck = Action("act-truck", parameters=[truck_var], precondition=Predicate("p1"), effect=Predicate("p1"))
+    m_truck = modifier.modify_actions([act_truck], [requires_vehicle], types_map)[0]
+    assert "requires-vehicle" in str(m_truck.precondition)
     
 def test_fuse_and_load_api(domain_files, tmp_path):
     d1, d2 = domain_files
@@ -123,3 +151,23 @@ def test_n_domain_fusion(tmp_path):
     assert len(fused.actions) == 3
     names = {a.name for a in fused.actions}
     assert names == {"a1", "a2", "a3"}
+
+def test_domain_fusion_predicate_signature_collision(tmp_path):
+    d1_path = tmp_path / "d1_sig.pddl"
+    d1_path.write_text(
+        "(define (domain d1_sig) (:requirements :strips :typing) (:types a) (:predicates (shared ?x - a)))"
+    )
+
+    d2_path = tmp_path / "d2_sig.pddl"
+    d2_path.write_text(
+        "(define (domain d2_sig) (:requirements :strips :typing) (:types b) (:predicates (shared ?x - b)))"
+    )
+
+    import pddl
+
+    d1 = pddl.parse_domain(str(d1_path))
+    d2 = pddl.parse_domain(str(d2_path))
+
+    fusion = DomainFusion()
+    with pytest.raises(ValueError, match="Predicate name collision"):
+        fusion.fuse_domains([d1, d2], name="bad-fused")

@@ -11,22 +11,51 @@ from typing import Dict, List, Set, Tuple
 from .type_system import select_most_specific_types
 
 
-def _get_type_combinations(param_types: List[object], objects_by_type: Dict[str, List[str]]) -> List[List[str]]:
-    """Get all valid object combinations for given parameter types.
+def _normalize_type_options(type_tags, type_hierarchy) -> List[str]:
+    """Resolve a term's type tags into a deterministic list of candidate types."""
+    tags = set(type_tags) if type_tags else {"object"}
+    most_specific = select_most_specific_types(tags, type_hierarchy)
+    if not most_specific:
+        return ["object"]
+    return sorted(set(most_specific))
 
-    param_types may contain strings (single type) or iterables (union of types).
+
+def _objects_for_type_spec(type_spec, objects_by_type: Dict[str, List[str]]) -> List[str]:
+    """Return candidate objects for one parameter type spec.
+
+    ``type_spec`` can be either:
+    - ``str``: a single type
+    - iterable of ``str``: union type (e.g., ``(either t1 t2)``)
     """
+    if isinstance(type_spec, str):
+        return list(objects_by_type.get(type_spec, []))
+
+    # Union of types
+    candidates: List[str] = []
+    seen: set[str] = set()
+    for t in type_spec:
+        for obj in objects_by_type.get(t, []):
+            if obj not in seen:
+                seen.add(obj)
+                candidates.append(obj)
+    return candidates
+
+
+def _get_type_combinations(param_types: List[object], objects_by_type: Dict[str, List[str]]) -> List[List[str]]:
+    """Get all valid object combinations for given parameter types."""
     if not param_types:
         return [[]]
 
-    combinations: List[List[str]] = []
     first_type = param_types[0]
     rest_types = param_types[1:]
 
-    objects = objects_by_type.get(first_type, [])
+    objects = _objects_for_type_spec(first_type, objects_by_type)
+    if not objects:
+        return []
+
     rest_combinations = _get_type_combinations(rest_types, objects_by_type)
 
-    combinations = []
+    combinations: List[List[str]] = []
     for obj in objects:
         for combo in rest_combinations:
             combinations.append([obj] + combo)
@@ -48,9 +77,11 @@ def ground_predicates(
         param_types = []
         if hasattr(predicate, "terms"):
             for term in predicate.terms:
-                type_tags = getattr(term, "type_tags", {"object"})
-                most_specific = select_most_specific_types(type_tags, type_hierarchy)
-                param_types.append(list(most_specific)[0] if most_specific else "object")
+                type_tags = getattr(term, "type_tags", None)
+                if not type_tags:
+                    single = getattr(term, "type_tag", None)
+                    type_tags = {single} if single else {"object"}
+                param_types.append(_normalize_type_options(type_tags, type_hierarchy))
 
         type_combinations = _get_type_combinations(param_types, objects_by_type)
 
@@ -74,7 +105,8 @@ def _ground_formula(
         return [], [], False
 
     # Handle Equality (= ?x ?y)
-    if type(formula).__name__ == "EqualTo":
+    formula_type = type(formula).__name__
+    if formula_type == "EqualTo":
         left = getattr(formula.left, "name", str(formula.left))
         right = getattr(formula.right, "name", str(formula.right))
         
@@ -89,8 +121,26 @@ def _ground_formula(
         else:
             return [], [], True  # Impossible
 
+    if formula_type == "Or":
+        parts = []
+        if hasattr(formula, "parts"):
+            parts = list(formula.parts)
+        elif hasattr(formula, "operands"):
+            parts = list(formula.operands)
+        if not parts:
+            # pddl parser may represent empty `()` as `Or()`; treat as tautology.
+            return [], [], False
+        raise ValueError(
+            "Disjunctive preconditions `(or ...)` are not supported in STRIPS mode."
+        )
+
+    if formula_type == "OneOf":
+        raise ValueError(
+            "Non-deterministic preconditions `(oneof ...)` are not supported in STRIPS mode."
+        )
+
     # Handle Negation (Not)
-    if hasattr(formula, "argument"):
+    if formula_type == "Not":
         pos, neg, impossible = _ground_formula(formula.argument, param_substitution, param_names)
         if impossible:
             # Not(Impossible) -> Satisfied
@@ -108,15 +158,17 @@ def _ground_formula(
              return neg, pos, False # Move neg to pos (double negation)
         return [], [], False # Empty
 
-    # Handle compound formulas (AND, OR treated as AND for preconditions usually)
-    # Note: PDDL 'or' in preconditions requires Disjunctive Preconditions support.
-    # Currently we treat parts as AND (conjunctive).
+    # Handle compound formulas (conjunctive only)
     parts = []
     if hasattr(formula, "parts"):
         parts = formula.parts
     elif hasattr(formula, "operands"):
         parts = formula.operands
     
+    if formula_type == "And" and not parts:
+        # Empty conjunction means no constraints.
+        return [], [], False
+
     if parts:
         all_pos = []
         all_neg = []
@@ -143,7 +195,9 @@ def _ground_formula(
         atom_str = f"({pred_name} {args})" if args else f"({pred_name})"
         return [atom_str], [], False
 
-    return [], [], False
+    raise ValueError(
+        f"Unsupported formula node `{formula_type}` in STRIPS grounding."
+    )
 
 
 def _ground_effects(
@@ -163,8 +217,22 @@ def _ground_effects(
         effects_list = [effect]
 
     for eff in effects_list:
+        eff_type = type(eff).__name__
+        if eff_type in {"Or", "OneOf"}:
+            parts = []
+            if hasattr(eff, "parts"):
+                parts = list(eff.parts)
+            elif hasattr(eff, "operands"):
+                parts = list(eff.operands)
+            if not parts:
+                # pddl parser may represent empty `()` as `Or()`; treat as no-op.
+                continue
+            raise ValueError(
+                f"Unsupported effect node `{eff_type}` in STRIPS grounding."
+            )
+
         # Check for negation
-        if hasattr(eff, "argument"):
+        if eff_type == "Not":
             # Negative effect (delete)
             # argument is implicitly atomic in STRIPS
             pos, neg, imp = _ground_formula(eff.argument, param_substitution, param_names)
@@ -194,9 +262,11 @@ def ground_actions(
         param_types = []
         if hasattr(action, "parameters"):
             for param in action.parameters:
-                type_tags = getattr(param, "type_tags", {"object"})
-                most_specific = select_most_specific_types(type_tags, type_hierarchy)
-                param_types.append(list(most_specific)[0] if most_specific else "object")
+                type_tags = getattr(param, "type_tags", None)
+                if not type_tags:
+                    single = getattr(param, "type_tag", None)
+                    type_tags = {single} if single else {"object"}
+                param_types.append(_normalize_type_options(type_tags, type_hierarchy))
 
         param_combinations = _get_type_combinations(param_types, objects_by_type)
 

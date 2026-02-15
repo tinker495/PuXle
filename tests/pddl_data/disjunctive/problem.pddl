@@ -1,0 +1,6 @@
+(define (problem test-disjunctive-problem)
+  (:domain test-disjunctive)
+  (:objects l1 - loc)
+  (:init (safe l1))
+  (:goal (at l1))
+)

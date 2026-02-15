@@ -90,3 +90,33 @@ class TestPDDLFeatures:
         # Atom should be "(light-on)", NOT "(light-on )"
         assert "(light-on)" in puzzle.grounded_atoms
         assert "(light-on )" not in puzzle.grounded_atoms
+
+    def test_either_type_grounding(self):
+        domain_file = str(BASE_DIR / "either_move" / "domain.pddl")
+        problem_file = str(BASE_DIR / "either_move" / "problem.pddl")
+
+        puzzle = PDDL(domain_file, problem_file)
+
+        # Union type `(either room hall)` should cover both object sets.
+        assert "(at r1)" in set(puzzle.grounded_atoms)
+        assert "(at h1)" in set(puzzle.grounded_atoms)
+
+        grounded_action_strs = {
+            f"({a['name']} {' '.join(a['parameters'])})" for a in puzzle.grounded_actions
+        }
+        assert "(mark r1)" in grounded_action_strs
+        assert "(mark h1)" in grounded_action_strs
+
+    def test_disjunctive_precondition_is_rejected(self):
+        domain_file = str(BASE_DIR / "disjunctive" / "domain.pddl")
+        problem_file = str(BASE_DIR / "disjunctive" / "problem.pddl")
+
+        with pytest.raises(ValueError, match="Disjunctive preconditions"):
+            PDDL(domain_file, problem_file)
+
+    def test_negative_goal_is_rejected(self):
+        domain_file = str(BASE_DIR / "negative_goal" / "domain.pddl")
+        problem_file = str(BASE_DIR / "negative_goal" / "problem.pddl")
+
+        with pytest.raises(ValueError, match="Negative goals"):
+            PDDL(domain_file, problem_file)

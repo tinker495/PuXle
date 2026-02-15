@@ -1,6 +1,5 @@
-from typing import List, Set, Dict, Optional, Union, Any
-import pddl
-from pddl.logic import Predicate, Constant, Variable
+from typing import Any, Dict, List, Set
+from pddl.logic import Constant, Predicate
 from pddl.core import Domain, Action
 from pddl.requirements import Requirements
 
@@ -117,19 +116,39 @@ class DomainFusion:
         return list(merged_constants.values())
 
     def _merge_predicates(self, domains: List[Domain]) -> List[Predicate]:
-        merged_predicates = {}
+        merged_predicates: Dict[str, Predicate] = {}
+        predicate_signatures: Dict[str, tuple[int, tuple[tuple[str, ...], ...]]] = {}
         for d in domains:
             for p in d.predicates:
-                # Keying by name and arity might be safer, 
-                # but pddl allows overloading? Standard STRIPS usually doesn't.
-                # We assume unique signatures for simplicity.
-                # Actually, same predicate signature (name + args) is fine to merge.
-                sig = (p.name, tuple(getattr(arg, "type_tags", tuple()) for arg in p.terms)) 
-                # p.terms usually gives variables. variable.type_tags gives types.
-                # Using string representation for signature check might be easier/safer
-                if p.name not in merged_predicates:
-                    merged_predicates[p.name] = p
+                name = str(p.name)
+                signature = self._predicate_signature(p)
+                if name not in merged_predicates:
+                    merged_predicates[name] = p
+                    predicate_signatures[name] = signature
+                    continue
+                if predicate_signatures[name] != signature:
+                    raise ValueError(
+                        "Predicate name collision with incompatible signatures: "
+                        f"'{name}' {predicate_signatures[name]} vs {signature}. "
+                        "Rename colliding predicates before fusion."
+                    )
         return list(merged_predicates.values())
+
+    def _predicate_signature(self, predicate: Predicate) -> tuple[int, tuple[tuple[str, ...], ...]]:
+        arity = int(getattr(predicate, "arity", len(getattr(predicate, "terms", ()))))
+        term_type_signature: list[tuple[str, ...]] = []
+        for term in getattr(predicate, "terms", ()) or ():
+            term_type_signature.append(self._term_type_signature(term))
+        return arity, tuple(term_type_signature)
+
+    def _term_type_signature(self, term) -> tuple[str, ...]:
+        type_tags = getattr(term, "type_tags", None)
+        if type_tags:
+            return tuple(sorted(str(t) for t in type_tags))
+        type_tag = getattr(term, "type_tag", None)
+        if type_tag:
+            return (str(type_tag),)
+        return ("object",)
 
     def _merge_actions(self, domains: List[Domain]) -> List[Action]:
         merged_actions = []

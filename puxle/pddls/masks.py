@@ -16,6 +16,22 @@ def extract_goal_conditions(goal) -> List[str]:
     if goal is None:
         return []
 
+    goal_type = type(goal).__name__
+    if goal_type == "Not":
+        raise ValueError("Negative goals are not supported in STRIPS mode.")
+    if goal_type == "Or":
+        parts = []
+        if hasattr(goal, "parts"):
+            parts = list(goal.parts)
+        elif hasattr(goal, "operands"):
+            parts = list(goal.operands)
+        if not parts:
+            # pddl parser may represent empty `()` as `Or()`; treat as empty goal.
+            return []
+        raise ValueError("Disjunctive goals `(or ...)` are not supported in STRIPS mode.")
+    if goal_type == "EqualTo":
+        raise ValueError("Equality goals are not supported in STRIPS mode.")
+
     if hasattr(goal, "name"):
         # Handle atomic predicate
         args = " ".join([getattr(arg, "name", str(arg)) for arg in goal.terms])
@@ -33,7 +49,7 @@ def extract_goal_conditions(goal) -> List[str]:
             conditions.extend(extract_goal_conditions(operand))
         return conditions
 
-    return []
+    raise ValueError(f"Unsupported goal node `{goal_type}` in STRIPS mode.")
 
 
 def build_masks(
@@ -73,11 +89,16 @@ def build_initial_state(problem, atom_to_idx: Dict[str, int], num_atoms: int) ->
     init_state = jnp.zeros(num_atoms, dtype=jnp.bool_)
 
     for fact in getattr(problem, "init", []) or []:
+        if not hasattr(fact, "name") or not hasattr(fact, "terms"):
+            raise ValueError(
+                f"Unsupported initial-state element `{type(fact).__name__}` in STRIPS mode."
+            )
         args = " ".join([getattr(arg, "name", str(arg)) for arg in fact.terms])
         fact_str = f"({fact.name} {args})" if args else f"({fact.name})"
-        if fact_str in atom_to_idx:
-            atom_idx = atom_to_idx[fact_str]
-            init_state = init_state.at[atom_idx].set(True)
+        if fact_str not in atom_to_idx:
+            raise ValueError(f"Initial fact `{fact_str}` is not in grounded atom universe.")
+        atom_idx = atom_to_idx[fact_str]
+        init_state = init_state.at[atom_idx].set(True)
 
     return init_state
 
@@ -89,8 +110,9 @@ def build_goal_mask(problem, atom_to_idx: Dict[str, int], num_atoms: int) -> jnp
     goal_conditions = extract_goal_conditions(getattr(problem, "goal", None))
 
     for condition in goal_conditions:
-        if condition in atom_to_idx:
-            atom_idx = atom_to_idx[condition]
-            goal_mask = goal_mask.at[atom_idx].set(True)
+        if condition not in atom_to_idx:
+            raise ValueError(f"Goal atom `{condition}` is not in grounded atom universe.")
+        atom_idx = atom_to_idx[condition]
+        goal_mask = goal_mask.at[atom_idx].set(True)
 
     return goal_mask

@@ -9,6 +9,20 @@ from puxle.pddls.fusion.domain_fusion import DomainFusion
 from puxle.pddls.fusion.action_modifier import ActionModifier, FusionParams
 from puxle.pddls.fusion.problem_generator import ProblemGenerator
 
+def _domain_type_parent_map(domain: Domain) -> dict[str, str]:
+    """Return {type_name: parent_type_name} for compatibility checks."""
+    mapping: dict[str, str] = {}
+    domain_types = getattr(domain, "types", None)
+    if isinstance(domain_types, dict):
+        for t, parent in domain_types.items():
+            t_name = str(t)
+            parent_name = "object" if parent is None else str(parent)
+            mapping[t_name] = parent_name
+    elif domain_types:
+        for t in domain_types:
+            mapping[str(t)] = "object"
+    return mapping
+
 def fuse_and_load(
     domain_paths: List[str], 
     params: Optional[FusionParams] = None,
@@ -40,7 +54,7 @@ def fuse_and_load(
     # 3. Modify Actions (Stochastic Dynamics)
     # We need all predicates for sampling new conditions/effects
     all_predicates = list(fused_domain.predicates)
-    types_map = {str(t): t for t in fused_domain.types} # Not fully used yet but future proofing
+    types_map = _domain_type_parent_map(fused_domain)
     
     modifier = ActionModifier(params)
     modified_actions = modifier.modify_actions(
@@ -95,7 +109,7 @@ def generate_benchmark(
     fused_domain = fusion_engine.fuse_domains(domains, name="fused-benchmark")
     
     all_predicates = list(fused_domain.predicates)
-    types_map = {str(t): t for t in fused_domain.types}
+    types_map = _domain_type_parent_map(fused_domain)
     modifier = ActionModifier(params)
     modified_actions = modifier.modify_actions(list(fused_domain.actions), all_predicates, types_map)
     
@@ -159,7 +173,7 @@ def iterative_fusion(
     
     # Apply modifications
     all_predicates = list(current_domain.predicates)
-    types_map = {str(t): t for t in current_domain.types}
+    types_map = _domain_type_parent_map(current_domain)
     modifier = ActionModifier(params)
     modified_actions = modifier.modify_actions(
         list(current_domain.actions), all_predicates, types_map
@@ -190,7 +204,7 @@ def iterative_fusion(
         
         # Re-apply modifications to the larger set
         all_predicates = list(current_domain.predicates)
-        types_map = {str(t): t for t in current_domain.types}
+        types_map = _domain_type_parent_map(current_domain)
         modified_actions = modifier.modify_actions(
             list(current_domain.actions), all_predicates, types_map
         )

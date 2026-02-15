@@ -1,0 +1,6 @@
+(define (problem test-negative-goal-problem)
+  (:domain test-negative-goal)
+  (:objects l1 - loc)
+  (:init (at l1))
+  (:goal (not (at l1)))
+)

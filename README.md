@@ -73,10 +73,10 @@ import jax.numpy as jnp
 from puxle import PDDL
 
 # Initialize PDDL planning domain
-pddl_env = PDDL(domain_file="path/to/domain.pddl", problem_file="path/to/problem.pddl")
+pddl_env = PDDL(domain="path/to/domain.pddl", problem="path/to/problem.pddl")
 
 # Get initial state and goal configuration
-solve_config, initial_state = pddl_env.get_inits()
+solve_config, initial_state = pddl_env.get_inits(jax.random.PRNGKey(0))
 
 # Get all applicable actions and their effects
 neighbors, costs = pddl_env.get_neighbours(solve_config, initial_state)
@@ -116,10 +116,11 @@ for i, cost in enumerate(costs):
 **⚠️ Experimental Feature**: PDDL support in PuXle is currently experimental and under active development. While we strive for full STRIPS subset compliance, some edge cases may not be fully supported yet.
 
 PuXle supports the full STRIPS subset of PDDL:
-- **Positive preconditions only**
+- **Conjunctive preconditions** (positive + negative literals)
 - **Add/delete effects** (no conditional effects)
 - **Conjunctive positive goals**
 - **Typed objects**
+- **Equality / inequality constraints in preconditions**
 - **Automatic grounding** of predicates and actions
 - **JAX-optimized state representation** with bit-packed atoms
 
