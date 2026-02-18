@@ -61,13 +61,13 @@ def test_domain_fusion_merge(domain_files):
     type_names = {str(t) for t in fused.types}
     assert type_names == {"a", "b", "c"}
     
-    # Predicates union (p1, p2, p3) -> p2 shared
+    # Predicates union (disjoint)
     pred_names = {p.name for p in fused.predicates}
-    assert pred_names == {"p1", "p2", "p3"}
+    assert pred_names == {"dom0_p1", "dom0_p2", "dom1_p2", "dom1_p3"}
     
-    # Actions union (act1, act2)
+    # Actions union (disjoint)
     act_names = {a.name for a in fused.actions}
-    assert act_names == {"act1", "act2"}
+    assert act_names == {"dom0_act1", "dom1_act2"}
 
 def test_action_modifier():
     # Setup simple data
@@ -150,7 +150,7 @@ def test_n_domain_fusion(tmp_path):
     
     assert len(fused.actions) == 3
     names = {a.name for a in fused.actions}
-    assert names == {"a1", "a2", "a3"}
+    assert names == {"dom0_a1", "dom1_a2", "dom2_a3"}
 
 def test_domain_fusion_predicate_signature_collision(tmp_path):
     d1_path = tmp_path / "d1_sig.pddl"
@@ -169,5 +169,8 @@ def test_domain_fusion_predicate_signature_collision(tmp_path):
     d2 = pddl.parse_domain(str(d2_path))
 
     fusion = DomainFusion()
-    with pytest.raises(ValueError, match="Predicate name collision"):
-        fusion.fuse_domains([d1, d2], name="bad-fused")
+    fused = fusion.fuse_domains([d1, d2], name="good-fused")
+    
+    pred_names = {p.name for p in fused.predicates}
+    assert "dom0_shared" in pred_names
+    assert "dom1_shared" in pred_names
