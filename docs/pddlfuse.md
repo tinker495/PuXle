@@ -4,11 +4,11 @@
 
 ## Core Features
 
-### 1. N-Way Domain Fusion
+### 1. N-Way Domain Fusion (Disjoint Union)
 Merges multiple source domains (e.g., Blocksworld, Gripper, Logistics) into a single monolithic domain.
-- **Type Hierarchy Integration**: Analyzes and unions the type structures of each domain.
-- **Predicate & Action Merging**: Includes all actions while preventing name collisions.
-- **Result**: Creates an environment where multiple "worlds" coexist (e.g., blocks and trucks in the same state space), though direct interaction usually occurs via the action modification phase.
+- **Disjoint Fusion**: Predicates and actions from each domain are prefixed (e.g., `dom0_on`, `dom1_move`) to ensure no name collisions occur. This guarantees that domains remain structurally independent unless explicitly connected via stochastic modifications.
+- **Type Hierarchy Integration**: Analyzes and unions the type structures of each domain (merged by name).
+- **Result**: Creates an environment where multiple "worlds" coexist (e.g., blocks and trucks in the same state space), interacting only through stochastically added effects.
 
 ### 2. Stochastic Action Modification
 Beyond simple merging, PDDLFuse randomly alters the dynamics of the domain to create new challenges.
@@ -16,6 +16,7 @@ Beyond simple merging, PDDLFuse randomly alters the dynamics of the domain to cr
 - **Add Effects**: Introduces unintended side-effects when actions are executed.
 - **Remove Preconditions/Effects**: Simplifies actions by removing constraints or effects, increasing the state space connectivity.
 - **Negation Support**: Adds requirements for conditions to be *false*, or effects that delete existing facts.
+- **Reversibility Enforcement**: Ensures that if an action deletes a predicate (e.g., `not P`), there exists at least one action that adds it back (`P`), preventing dead-ends in the state space.
 
 ### 3. Automated Problem Generation
 Automatically generates solvable problem files for the newly created domain.
@@ -43,6 +44,7 @@ params = FusionParams(
     prob_add_pre=0.1,  # 10% probability to add a precondition
     prob_add_eff=0.05, # 5% probability to add an effect
     prob_neg=0.2,      # 20% probability that added term is negated
+    rev_flag=True,     # Ensure reversibility (prevent dead-ends)
     seed=42            # Seed for reproducibility
 )
 
@@ -68,7 +70,7 @@ generate_benchmark(
     output_dir="./benchmarks/my_fused_set",
     count=50,                      # Number of problems to generate
     difficulty_depth_range=(10, 50), # Difficulty (solution depth range)
-    params=FusionParams(seed=123)
+    params=FusionParams(rev_flag=True, seed=123)
 )
 ```
 
@@ -118,6 +120,7 @@ Controlled via `puxle.pddls.fusion.action_modifier.FusionParams`.
 | `prob_rem_pre` | float | 0.05 | Probability of removing an existing precondition. |
 | `prob_rem_eff` | float | 0.05 | Probability of removing an existing effect. |
 | `prob_neg` | float | 0.1 | Probability that an added precondition/effect is negated (Not). |
+| `rev_flag` | bool | True | If True, ensures that for every deleted predicate, there exists an adder action. |
 | `seed` | int | 42 | Random seed for generation. |
 
 ---

@@ -14,6 +14,7 @@ class FusionParams:
     prob_rem_pre: float = 0.05
     prob_rem_eff: float = 0.05
     prob_neg: float = 0.1
+    rev_flag: bool = True # Ensures reversibility
     seed: int = 42
 
 class ActionModifier:
@@ -38,6 +39,10 @@ class ActionModifier:
         for action in actions:
             modified = self._modify_single_action(action, all_predicates, type_ancestors)
             modified_actions.append(modified)
+            
+        if self.params.rev_flag:
+            modified_actions = self._enforce_reversibility(modified_actions, all_predicates, types_map, type_ancestors)
+            
         return modified_actions
 
     def _modify_single_action(
@@ -102,6 +107,137 @@ class ActionModifier:
             precondition=new_precondition,
             effect=new_effect
         )
+
+    def _enforce_reversibility(
+        self,
+        actions: List[Action],
+        all_predicates: List[Predicate],
+        types_map: Dict[str, Any],
+        type_ancestors: Dict[str, Set[str]]
+    ) -> List[Action]:
+        """
+        Ensures that for every predicate P, if an action deletes P, there is an action that adds P.
+        """
+        # 1. Identify predicates that are deleted but never added
+        deleted_preds = set()
+        added_preds = set()
+        
+        for action in actions:
+            effects = self._extract_atomic_conditions(action.effect)
+            for eff in effects:
+                if isinstance(eff, Not):
+                    # Deletion
+                    # We store the name only, as strict reversibility might require matching args,
+                    # but paper usually implies predicate-level or general existence.
+                    # "Ensures predicate reversibility" - likely predicate level.
+                    # Or specific grounding? Symbolic planning usually checks lifted level.
+                    # If action A(x) deletes P(x), we need action B(x) adding P(x).
+                    # We will track by Predicate Name check.
+                    if hasattr(eff.argument, 'name'):
+                        predicate_name = eff.argument.name
+                        deleted_preds.add(predicate_name)
+                elif isinstance(eff, Predicate):
+                    # Addition
+                    added_preds.add(eff.name)
+        
+        missing_adds = deleted_preds - added_preds
+        
+        if not missing_adds:
+            return actions
+            
+        # 2. Fix missing additions
+        # For each missing predicate, find a compatible action and add it as an effect.
+        # Or pick a random action that *could* support it.
+        
+        # We need to map Name back to Predicate Object to know arity/types
+        pred_map = {p.name: p for p in all_predicates}
+        
+        # We might need to modify actions in place or create new list.
+        # Since actions are immutable-ish, we replace them in the list.
+        
+        # Strategy: scan missing_adds, pick random action that is compatible, add effect.
+        
+        new_actions = list(actions)
+        
+        for pred_name in missing_adds:
+            target_pred = pred_map.get(pred_name)
+            if not target_pred:
+                continue
+                
+            # Find candidate actions
+            candidates = []
+            for i, action in enumerate(new_actions):
+                # Check if action parameters can support this predicate
+                # We need to see if we can bind predicate terms to action params
+                compatible_vars = []
+                
+                # Check if all terms of predicate can be mapped to action params
+                # This is similar to _sample_predicate_for_action logic
+                
+                # We reuse the logic:
+                term_candidate_vars_list = []
+                possible = True
+                for term in target_pred.terms:
+                    vars_for_term = self._compatible_action_params_for_term(
+                        term, action.parameters, type_ancestors
+                    )
+                    if not vars_for_term:
+                        possible = False
+                        break
+                    term_candidate_vars_list.append(vars_for_term)
+                
+                if possible:
+                    # PROACTIVE CHECK: Can we validly add this predicate to this action's effects?
+                    # Since we don't know the exact grounding variables yet (logic below picks them random),
+                    # we can only check if the predicate ITSELF is fundamentally inconsistent (e.g. if we add P, does it have Not(P))?
+                    # But P vs Not(P) check requires variables for strict equality if grounded.
+                    # However, at lifted level, if effect is Not(P(x,y)), adding P(x,y) is contradiction.
+                    # If effect is Not(P(?a, ?b)), adding P(?u, ?v) might be valid if ?a!=?u.
+                    # For simplicty, let's assume if the action unconditionally deletes a matching predicate type, avoid it.
+                    # OR better: iterate candidates in random order and try until satisfied.
+                    
+                     # Actually, standard PDDL allows P(x) and Not(P(y)).
+                     # So strict consistency check depends on grounding.
+                     # We will filter candidates later.
+                     candidates.append((i, term_candidate_vars_list))
+            
+            if not candidates:
+                continue
+            
+            # Shuffle candidates to try random ones
+            self.rng.shuffle(candidates)
+            
+            success = False
+            for idx, vars_list in candidates:
+                # Construct the new effect term
+                # Try a few groundings?
+                for _ in range(5): # retry grounding a few times
+                    chosen_vars = [self.rng.choice(v_pool) for v_pool in vars_list]
+                    new_effect_term = Predicate(pred_name, *chosen_vars)
+                    
+                    # Modify the action
+                    original_action = new_actions[idx]
+                    current_effects = self._extract_atomic_conditions(original_action.effect)
+                    
+                    # Avoid adding if it contradicts? (adding P and ~P same time)
+                    if self._is_consistent(new_effect_term, current_effects):
+                        current_effects.append(new_effect_term)
+                        
+                        # Rebuild action
+                        new_eff_formula = self._list_to_formula(current_effects)
+                        new_action = Action(
+                            name=original_action.name,
+                            parameters=original_action.parameters,
+                            precondition=original_action.precondition,
+                            effect=new_eff_formula
+                        )
+                        new_actions[idx] = new_action
+                        success = True
+                        break
+                if success:
+                    break
+                
+        return new_actions
 
     def _sample_predicate_for_action(
         self, 
