@@ -2,6 +2,82 @@
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "puxle"
+version = "0.2.0"
+description = "Parallelized puzzle and planning environments built on JAX."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "tinker495", email = "wjdrbtjr495@gmail.com" },
+]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "jax>=0.4.0",
+    "chex>=0.1.0",
+    "numpy>=2.2.0",
+    "opencv-python>=4.10.0",
+    "pddl>=0.4.3",
+    "tabulate>=0.9.0",
+    "termcolor>=1.1.0",
+    "tqdm>=4.67.1",
+    "xtructure @ git+https://github.com/tinker495/xtructure.git",
+]
+
+[project.urls]
+Homepage = "https://github.com/tinker495/PuXle"
+Documentation = "https://tinker495.github.io/PuXle/"
+Repository = "https://github.com/tinker495/PuXle"
+Issues = "https://github.com/tinker495/PuXle/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pre-commit>=3.0.0",
+]
+docs = [
+    "sphinx>=7.0",
+    "furo",
+    "sphinx-autodoc-typehints",
+    "myst-parser",
+]
+visualization = [
+    "click>=8.1.0",
+    "Pillow>=9.0.0",
+]
+cuda = [
+    "jax[cuda]>=0.4.0",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["puxle*"]
+
+[tool.setuptools.package-data]
+puxle = [
+    "data/**/*.csv",
+    "data/**/*.json",
+    "data/**/*.npy",
+    "data/**/*.pddl",
+    "data/**/*.pkl",
+    "data/**/*.png",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests", "."]
 pythonpath = ["."]

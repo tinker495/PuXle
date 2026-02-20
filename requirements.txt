@@ -1,11 +1,15 @@
-jax[cuda]>=0.4.0
-chex>=0.1.0
-pytest>=7.0.0
-click>=8.1.0
-tabulate>=0.9.0
-termcolor>=1.1.0
-Pillow>=9.0.0
-opencv-python>=4.10.0
-tqdm>=4.67.1
-pddl>=0.4.3
-xtructure @ git+https://github.com/tinker495/xtructure.git
+# Compatibility requirements file.
+# Canonical dependency definitions live in pyproject.toml.
+
+# Legacy-compatible install from pyproject metadata:
+# - Runtime deps from [project.dependencies]
+# - Dev tooling from [project.optional-dependencies.dev]
+# - Visualization helpers from [project.optional-dependencies.visualization]
+# - CUDA variant from [project.optional-dependencies.cuda]
+.[dev,visualization,cuda]
+
+# Optional installs ([project.optional-dependencies]):
+# .[dev]
+# .[docs]
+# .[visualization]
+# .[cuda]

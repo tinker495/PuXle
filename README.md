@@ -30,10 +30,25 @@ Full API documentation is automatically built and deployed to **[GitHub Pages](h
 
 ## 📦 Installation
 
-### Basic Installation
+Install from PyPI (stable release) or GitHub (latest `main`):
+
 ```bash
 pip install puxle
-pip install git+https://github.com/tinker495/PuXle.git # recommended
+pip install "puxle @ git+https://github.com/tinker495/PuXle.git"
+```
+
+Optional extras (pyproject-managed):
+
+```bash
+pip install "puxle[dev]"
+pip install "puxle[docs]"
+pip install "puxle[visualization]"
+pip install "puxle[cuda]"
+
+# Combine extras
+pip install "puxle[dev,docs,visualization,cuda]"
+# GitHub + extras
+pip install "puxle[dev,docs,visualization,cuda] @ git+https://github.com/tinker495/PuXle.git"
 ```
 
 ## 🎯 Quick Start

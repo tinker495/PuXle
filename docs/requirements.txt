@@ -1,5 +1,4 @@
-sphinx>=7.0
-furo
-sphinx-autodoc-typehints
-myst-parser
-numpy>=1.24
+# Compatibility shim for tools that still use this requirements file.
+# Source of truth: pyproject extras.
+# Run `pip install -r docs/requirements.txt` from repository root.
+.[docs]

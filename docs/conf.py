@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath(".."))
 project = "PuXle"
 copyright = "2024, tinker495"
 author = "tinker495"
-release = "0.1.0"
+release = "0.2.0"
 
 # -- General configuration ---------------------------------------------------
 extensions = [
