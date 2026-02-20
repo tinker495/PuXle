@@ -1,4 +1,4 @@
-
+from collections.abc import Callable
 
 import chex
 import jax
@@ -46,7 +46,7 @@ class SlidePuzzle(Puzzle):
         self.action_size = 4
         super().__init__(**kwargs)
 
-    def get_string_parser(self):
+    def get_string_parser(self) -> Callable:
         form = self._get_visualize_format()
 
         def to_char(x):
@@ -78,7 +78,7 @@ class SlidePuzzle(Puzzle):
         This function should return a state and the cost of the move.
         """
         board = state.board_unpacked
-        x, y = self._getBlankPosition(board)
+        x, y = self._get_blank_position(board)
         pos = jnp.asarray((x, y))
         
         # Action mapping: 0: Left, 1: Right, 2: Up, 3: Down
@@ -110,20 +110,7 @@ class SlidePuzzle(Puzzle):
         return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
-        """
-        match action:
-            case 0:
-                return "←"
-            case 1:
-                return "→"
-            case 2:
-                return "↑"
-            case 3:
-                return "↓"
-            case _:
-                raise ValueError(f"Invalid action: {action}")
+        return self._directional_action_to_string(action)
 
     @property
     def inverse_action_map(self) -> jnp.ndarray | None:
@@ -184,27 +171,27 @@ class SlidePuzzle(Puzzle):
         """Check if the state is solvable"""
         board = state.board_unpacked
         N = self.size
-        inv_count = self._getInvCount(board)
+        inv_count = self._get_inv_count(board)
         return jax.lax.cond(
             N % 2 == 1,
             lambda inv_count: inv_count % 2 == 0,
             lambda inv_count: jnp.logical_xor(
-                self._getBlankRow(board) % 2 == 0, inv_count % 2 == 0
+                self._get_blank_row(board) % 2 == 0, inv_count % 2 == 0
             ),
             inv_count,
         )
 
-    def _getBlankPosition(self, board: chex.Array):
+    def _get_blank_position(self, board: chex.Array):
         flat_index = jnp.argmax(board == 0)
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
-    def _getBlankRow(self, board: chex.Array):
-        return self._getBlankPosition(board)[0]
+    def _get_blank_row(self, board: chex.Array):
+        return self._get_blank_position(board)[0]
 
-    def _getBlankCol(self, board: chex.Array):
-        return self._getBlankPosition(board)[1]
+    def _get_blank_col(self, board: chex.Array):
+        return self._get_blank_position(board)[1]
 
-    def _getInvCount(self, board: chex.Array):
+    def _get_inv_count(self, board: chex.Array):
         def is_inv(a, b):
             return jnp.logical_and(a > b, jnp.logical_and(a != 0, b != 0))
 
@@ -216,7 +203,7 @@ class SlidePuzzle(Puzzle):
                 inv_count += is_inv(arr[i], arr[j])
         return inv_count
 
-    def get_img_parser(self):
+    def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.
         """

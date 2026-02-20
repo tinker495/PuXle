@@ -7,8 +7,6 @@ class DomainFusion:
     """
     Engine for fusing multiple PDDL domains into a single domain.
     """
-    def __init__(self):
-        pass
 
     def fuse_domains(self, domains: List[Domain], name: str = "fused-domain") -> Domain:
         """

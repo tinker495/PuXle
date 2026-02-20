@@ -1,4 +1,3 @@
-import pytest
 from pddl.core import Domain, Action
 from pddl.logic import Predicate, Constant
 from pddl.logic.base import Not, And

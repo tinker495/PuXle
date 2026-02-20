@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any, Optional, TypeVar
 
 import chex
@@ -175,7 +176,7 @@ class Puzzle(ABC):
         """
         pass
 
-    def get_solve_config_string_parser(self) -> callable:
+    def get_solve_config_string_parser(self) -> Callable:
         """Return a callable that renders a ``SolveConfig`` as a string.
 
         The default implementation delegates to :meth:`get_string_parser` on
@@ -198,7 +199,7 @@ class Puzzle(ABC):
         return stringparser
 
     @abstractmethod
-    def get_string_parser(self) -> callable:
+    def get_string_parser(self) -> Callable:
         """Return a callable that renders a ``State`` as a human-readable string.
 
         Returns:
@@ -206,7 +207,7 @@ class Puzzle(ABC):
         """
         pass
 
-    def get_solve_config_img_parser(self) -> callable:
+    def get_solve_config_img_parser(self) -> Callable:
         """Return a callable that renders a ``SolveConfig`` as an image array.
 
         The default implementation delegates to :meth:`get_img_parser` on
@@ -229,7 +230,7 @@ class Puzzle(ABC):
         return imgparser
 
     @abstractmethod
-    def get_img_parser(self) -> callable:
+    def get_img_parser(self) -> Callable:
         """Return a callable that renders a ``State`` as an image (NumPy/JAX array).
 
         Returns:
@@ -432,6 +433,32 @@ class Puzzle(ABC):
         """
         return f"action {action}"
 
+    _DIRECTIONAL_LABELS = ("←", "→", "↑", "↓")
+
+    @staticmethod
+    def _directional_action_to_string(action: int) -> str:
+        """Shared helper for puzzles using 4 directional actions (←→↑↓)."""
+        if 0 <= action <= 3:
+            return Puzzle._DIRECTIONAL_LABELS[action]
+        raise ValueError(f"Invalid action: {action}")
+
+    @staticmethod
+    def _grid_visualize_format(size: int) -> str:
+        """Build a box-drawing grid format string for an ``size × size`` board."""
+        form = "┏━"
+        for i in range(size):
+            form += "━━" if i != size - 1 else "━━┓"
+        form += "\n"
+        for i in range(size):
+            form += "┃ "
+            for j in range(size):
+                form += "{:s} "
+            form += "┃\n"
+        form += "┗━"
+        for i in range(size):
+            form += "━━" if i != size - 1 else "━━┛"
+        return form
+
     def batched_hindsight_transform(self, solve_configs: SolveConfig, states: State) -> SolveConfig:
         """Vectorised version of :meth:`hindsight_transform`.
 
@@ -548,7 +575,7 @@ class Puzzle(ABC):
                 solve_configs, states, filleds
             )
 
-    def _get_suffled_state(
+    def _get_shuffled_state(
         self, solve_config: "Puzzle.SolveConfig", init_state: "Puzzle.State", key, num_shuffle
     ):
         """Generate a scrambled state by applying random actions.

@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -69,13 +71,13 @@ class DotKnot(Puzzle):
         self.action_size = 4
         super().__init__(**kwargs)
 
-    def get_solve_config_string_parser(self):
+    def get_solve_config_string_parser(self) -> Callable:
         def parser(solve_config: "DotKnot.SolveConfig"):
             return ""
 
         return parser
 
-    def get_string_parser(self):
+    def get_string_parser(self) -> Callable:
         form = self._get_visualize_format()
 
         def to_char(x):
@@ -151,7 +153,7 @@ class DotKnot(Puzzle):
 
         point_idx = selected_color
         color_idx = (point_idx - 1) % self.color_num
-        available, pos = self._getBlankPosition(state, point_idx)
+        available, pos = self._get_blank_position(state, point_idx)
         new_pos = (pos + move_vector).astype(TYPE)
         is_merge, valid_move = is_valid(new_pos, color_idx)
         valid_move = valid_move & available
@@ -174,38 +176,12 @@ class DotKnot(Puzzle):
         return no_point & ~empty
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
-        """
-        match action:
-            case 0:
-                return "←"
-            case 1:
-                return "→"
-            case 2:
-                return "↑"
-            case 3:
-                return "↓"
-            case _:
-                raise ValueError(f"Invalid action: {action}")
+        return self._directional_action_to_string(action)
 
     def _get_visualize_format(self):
-        size = self.size
-        form = "┏━"
-        for i in range(size):
-            form += "━━" if i != size - 1 else "━━┓"
-        form += "\n"
-        for i in range(size):
-            form += "┃ "
-            for j in range(size):
-                form += "{:s} "
-            form += "┃" + "\n"
-        form += "┗━"
-        for i in range(size):
-            form += "━━" if i != size - 1 else "━━┛"
-        return form
+        return self._grid_visualize_format(self.size)
 
-    def _getBlankPosition(self, state: "DotKnot.State", idx: int):
+    def _get_blank_position(self, state: "DotKnot.State", idx: int):
         unpacked_board = state.board_unpacked
         one_hot = unpacked_board == idx
         available = jnp.any(one_hot)
@@ -240,13 +216,13 @@ class DotKnot(Puzzle):
         )
         return self.State.from_unpacked(board=board)
 
-    def get_solve_config_img_parser(self):
+    def get_solve_config_img_parser(self) -> Callable:
         def parser(solve_config: "DotKnot.SolveConfig"):
             pass
 
         return parser
 
-    def get_img_parser(self):
+    def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.
         """

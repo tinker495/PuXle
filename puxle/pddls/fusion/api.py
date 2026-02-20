@@ -1,8 +1,8 @@
-from typing import List, Optional, Any, Tuple
+from typing import List, Optional, Tuple
 from pathlib import Path
 import os
 import pddl
-from pddl.core import Domain, Problem
+from pddl.core import Domain
 
 from puxle import PDDL
 from puxle.pddls.fusion.domain_fusion import DomainFusion
@@ -89,8 +89,8 @@ def generate_benchmark(
     output_dir: str,
     count: int = 10,
     params: Optional[FusionParams] = None,
-    difficulty_depth_range: tuple = (5, 20)
-):
+    difficulty_depth_range: Tuple[int, int] = (5, 20)
+) -> None:
     """
     Generates a suite of PDDL domain/problem files for external benchmarks.
     """
@@ -226,7 +226,7 @@ def generate_benchmark_with_varying_depth(
     depth_range: Tuple[int, int] = (1, 3),
     problems_per_depth: int = 10,
     params: Optional[FusionParams] = None
-):
+) -> None:
     """
     Generates benchmarks across a range of fusion depths.
     

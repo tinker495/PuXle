@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from functools import partial
-from importlib.resources import files
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
 import jax
 import jax.numpy as jnp
-from puxle.core.puzzle_state import PuzzleState
-from puxle.benchmark._deepcubea import load_deepcubea
+from puxle.benchmark._deepcubea import load_deepcubea_dataset
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.puzzles.rubikscube import RubiksCube
 
@@ -53,7 +51,6 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         super().__init__()
         self._dataset_path = Path(dataset_path).expanduser().resolve() if dataset_path else None
         self._solve_config_cache = None
-        self._notation_to_action: dict[str, int] | None = None
         self._use_color_embedding = use_color_embedding
         self._explicit_states = states
 
@@ -66,28 +63,10 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         if self._explicit_states is not None:
             return {"states": self._explicit_states, "solutions": None}
 
-        if self._dataset_path is not None:
-            if not self._dataset_path.is_file():
-                raise FileNotFoundError(
-                    f"DeepCubeA dataset not found at {self._dataset_path}"
-                )
-            with self._dataset_path.open("rb") as handle:
-                return load_deepcubea(handle)
-
-        try:
-            resource = files("puxle.data.rubikscube") / DEFAULT_DATASET_NAME
-            with resource.open("rb") as handle:
-                return load_deepcubea(handle)
-        except (ModuleNotFoundError, FileNotFoundError):
-            pass
-
-        fallback = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH
-        if not fallback.is_file():
-            raise FileNotFoundError(
-                f"Unable to locate {DEFAULT_DATASET_NAME} under package resources or at {fallback}"
-            )
-        with fallback.open("rb") as handle:
-            return load_deepcubea(handle)
+        fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH.parent
+        return load_deepcubea_dataset(
+            self._dataset_path, DEFAULT_DATASET_NAME, "puxle.data.rubikscube", fallback_dir
+        )
 
     def sample_ids(self) -> Iterable[Hashable]:
         return range(len(self.dataset["states"]))
@@ -159,41 +138,6 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
             action_sequence.append(notation)
         optimal_action_sequence = tuple(action_sequence)
         return optimal_action_sequence, float(len(optimal_action_sequence))
-
-    def _build_action_lookup(self) -> dict[str, int]:
-        if self._notation_to_action is None:
-            self._notation_to_action = {
-                self.puzzle.action_to_string(action): action
-                for action in range(self.puzzle.action_size)
-            }
-        return self._notation_to_action
-
-    def _build_optimal_path(
-        self,
-        initial_state: PuzzleState,
-        solve_config: RubiksCube.SolveConfig,
-        action_sequence: Sequence[str],
-    ) -> tuple[PuzzleState, ...]:
-        if not action_sequence:
-            return tuple()
-
-        action_lookup = self._build_action_lookup()
-        puzzle = self.puzzle
-        current_state = initial_state
-        path: list[PuzzleState] = []
-
-        for step, notation in enumerate(action_sequence, start=1):
-            try:
-                action_idx = action_lookup[notation]
-            except KeyError as exc:
-                raise KeyError(f"Unknown action notation '{notation}' at step {step}") from exc
-
-            neighbours, _ = puzzle.get_neighbours(solve_config, current_state, filled=True)
-            next_state = neighbours[action_idx]
-            path.append(next_state)
-            current_state = next_state
-
-        return tuple(path)
 
 
 class RubiksCubeDeepCubeAHardBenchmark(RubiksCubeDeepCubeABenchmark):

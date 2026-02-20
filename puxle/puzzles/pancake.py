@@ -1,4 +1,4 @@
-
+from collections.abc import Callable
 
 import chex
 import jax
@@ -77,7 +77,7 @@ class PancakeSorting(Puzzle):
 
         return parser
 
-    def get_img_parser(self) -> callable:
+    def get_img_parser(self) -> Callable:
         """Returns a function to convert a state to an image representation"""
         import cv2
         import numpy as np

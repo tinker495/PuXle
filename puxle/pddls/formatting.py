@@ -5,9 +5,9 @@ Provides colour-coded terminal output (via ``termcolor`` and optional
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Dict, List, Tuple
 
-import jax
 import jax.numpy as jnp
 import termcolor
 
@@ -31,7 +31,7 @@ def build_label_color_maps(domain) -> Tuple[Dict[str, str], Dict[str, str]]:
         for predicate in getattr(domain, "predicates", []) or []:
             if hasattr(predicate, "name"):
                 labels.add(predicate.name)
-    except Exception:
+    except (AttributeError, TypeError):
         labels = set()
 
     rich_palette = [
@@ -84,7 +84,7 @@ def action_to_string(grounded_actions: List[Dict], index: int, label_termcolor_m
     return f"action_{index}"
 
 
-def build_state_string_parser(env) -> callable:
+def build_state_string_parser(env) -> Callable:
     def parser(state, solve_config=None, **kwargs):
         atoms = state.unpacked_atoms
         true_indices = [i for i in range(env.num_atoms) if bool(atoms[i])]
@@ -99,7 +99,7 @@ def build_state_string_parser(env) -> callable:
             try:
                 goal_count = int(jnp.sum(goal_mask))
                 goals_satisfied = int(jnp.sum(jnp.logical_and(goal_mask, atoms)))
-            except Exception:
+            except (TypeError, IndexError, ValueError):
                 gm = [bool(goal_mask[i]) for i in range(env.num_atoms)]
                 goal_count = sum(gm)
                 goals_satisfied = sum(1 for i in range(env.num_atoms) if gm[i] and bool(atoms[i]))
@@ -109,7 +109,7 @@ def build_state_string_parser(env) -> callable:
             try:
                 goal_true = [i for i in true_indices if bool(goal_mask[i])]
                 non_goal_true = [i for i in true_indices if not bool(goal_mask[i])]
-            except Exception:
+            except (TypeError, IndexError, ValueError):
                 gm = [bool(goal_mask[i]) for i in range(env.num_atoms)]
                 goal_true = [i for i in true_indices if gm[i]]
                 non_goal_true = [i for i in true_indices if not gm[i]]
@@ -160,7 +160,7 @@ def build_state_string_parser(env) -> callable:
                 if goal_mask is not None and bool(goal_mask[idx]):
                     try:
                         satisfied = bool(atoms[idx])
-                    except Exception:
+                    except (TypeError, IndexError):
                         satisfied = True
                     text.append(" - " + ("✓" if satisfied else "✗"))
                 sample_table.add_row(str(row_idx), text)
@@ -196,7 +196,7 @@ def build_state_string_parser(env) -> callable:
                 parts.append(raw_sample_line)
             parts.append(capture.get())
             return "\n".join(parts)
-        except Exception:
+        except Exception:  # fallback if rich unavailable or rendering fails
             pieces: list[str] = []
             if kwargs.get("header", False):
                 pieces.append(f"State: {true_count}/{env.num_atoms} true atoms ({density:.2f}%)")
@@ -223,7 +223,7 @@ def build_state_string_parser(env) -> callable:
     return parser
 
 
-def build_solve_config_string_parser(env) -> callable:
+def build_solve_config_string_parser(env) -> Callable:
     def parser(solve_config, **kwargs):
         goal_mask = solve_config.GoalMask
         goal_indices = [i for i in range(env.num_atoms) if bool(goal_mask[i])]
@@ -294,7 +294,7 @@ def build_solve_config_string_parser(env) -> callable:
                 parts.append(raw_sample_line)
             parts.append(capture.get())
             return "\n".join(parts)
-        except Exception:
+        except Exception:  # fallback if rich unavailable or rendering fails
             pieces: list[str] = []
             if kwargs.get("header", False):
                 pieces.append(f"Goal: {goal_count} atoms")

@@ -1,5 +1,4 @@
 
-import pytest
 import pddl
 from pddl.core import Domain, Action
 from pddl.logic import Predicate, Constant
@@ -7,7 +6,6 @@ from pddl.logic.base import And
 
 from puxle.pddls.fusion.api import iterative_fusion, FusionParams
 from puxle.pddls.fusion.validator import DomainValidator
-from puxle.pddls.fusion.problem_generator import ProblemGenerator
 
 def test_validator_basic():
     validator = DomainValidator()

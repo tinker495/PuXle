@@ -1,3 +1,4 @@
+from collections.abc import Callable
 import os
 from enum import Enum
 from importlib.resources import files
@@ -149,28 +150,15 @@ class Sokoban(Puzzle):
             return jnp.all(rm_player == t_board)
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
-        """
-        match action:
-            case 0:
-                return "←"
-            case 1:
-                return "→"
-            case 2:
-                return "↑"
-            case 3:
-                return "↓"
-            case _:
-                raise ValueError(f"Invalid action: {action}")
+        return self._directional_action_to_string(action)
 
-    def get_solve_config_string_parser(self):
+    def get_solve_config_string_parser(self) -> Callable:
         def parser(solve_config: "Sokoban.SolveConfig", **kwargs):
             return solve_config.TargetState.str(solve_config=solve_config)
 
         return parser
 
-    def get_string_parser(self):
+    def get_string_parser(self) -> Callable:
         form = self._get_visualize_format()
 
         def to_char(x):
@@ -244,7 +232,7 @@ class Sokoban(Puzzle):
         """
         # Unpack the board so that we work on a flat representation.
         board = state.board_unpacked
-        x, y = self._getPlayerPosition(state)
+        x, y = self._get_player_position(state)
         current_pos = jnp.array([x, y])
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
         
@@ -326,12 +314,12 @@ class Sokoban(Puzzle):
         bottom_border = "┗━" + "━━" * size + "┛"
         return top_border + middle + bottom_border
 
-    def _getPlayerPosition(self, state: "Sokoban.State"):
+    def _get_player_position(self, state: "Sokoban.State"):
         board = state.board_unpacked
         flat_index = jnp.argmax(board == Sokoban.Object.PLAYER.value)
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
-    def get_img_parser(self):
+    def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.
         """
@@ -549,7 +537,7 @@ class Sokoban(Puzzle):
         """
 
         board = state.board_unpacked
-        x, y = self._getPlayerPosition(state)
+        x, y = self._get_player_position(state)
         current_pos = jnp.array([x, y])
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
 

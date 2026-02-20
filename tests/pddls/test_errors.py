@@ -9,7 +9,7 @@ class TestPDDLErrors:
     """Error handling tests."""
 
     def test_malformed_pddl_error(self):
-        """Test that malformed PDDL raises appropriate exceptions."""
+        """Test that malformed PDDL parse failures are wrapped as ValueError."""
         bad_domain = str(
             (Path(__file__).resolve().parents[1] / "pddl_data" / "bad" / "domain.pddl")
         )
@@ -17,7 +17,7 @@ class TestPDDLErrors:
             (Path(__file__).resolve().parents[1] / "pddl_data" / "simple_move" / "problem.pddl")
         )
 
-        with pytest.raises(Exception):  # Should raise some parsing error
+        with pytest.raises(ValueError, match="Failed to parse PDDL domain file"):
             PDDL(bad_domain, good_problem)
 
     def test_missing_file_error(self):

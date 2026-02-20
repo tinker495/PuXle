@@ -1,4 +1,4 @@
-
+from collections.abc import Callable
 
 import chex
 import jax
@@ -66,13 +66,13 @@ class Maze(Puzzle):
         self.action_size = 4
         super().__init__(**kwargs)
 
-    def get_solve_config_string_parser(self):
+    def get_solve_config_string_parser(self) -> Callable:
         def parser(solve_config: "Maze.SolveConfig", **kwargs):
             return solve_config.TargetState.str(solve_config=solve_config)
 
         return parser
 
-    def get_string_parser(self):
+    def get_string_parser(self) -> Callable:
         form = self._get_visualize_format()
 
         def to_char(x):
@@ -301,20 +301,7 @@ class Maze(Puzzle):
         return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
-        """
-        match action:
-            case 0:
-                return "←"
-            case 1:
-                return "→"
-            case 2:
-                return "↑"
-            case 3:
-                return "↓"
-            case _:
-                raise ValueError(f"Invalid action: {action}")
+        return self._directional_action_to_string(action)
 
     @property
     def inverse_action_map(self) -> jnp.ndarray | None:
@@ -325,21 +312,7 @@ class Maze(Puzzle):
         return jnp.array([1, 0, 3, 2])
 
     def _get_visualize_format(self):
-        size = self.size
-        form = "┏━"
-        for i in range(size):
-            form += "━━" if i != size - 1 else "━━┓"
-        form += "\n"
-        for i in range(size):
-            form += "┃ "
-            for j in range(size):
-                form += "{:s} "
-            form += "┃"
-            form += "\n"
-        form += "┗━"
-        for i in range(size):
-            form += "━━" if i != size - 1 else "━━┛"
-        return form
+        return self._grid_visualize_format(self.size)
 
     def _get_random_state(self, bool_maze: chex.Array, key):
         """
@@ -375,7 +348,7 @@ class Maze(Puzzle):
 
         return self.State(pos=final_pos)
 
-    def get_img_parser(self):
+    def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.
         """
@@ -456,7 +429,7 @@ class Maze(Puzzle):
 
         return img_func
 
-    def get_solve_config_img_parser(self):
+    def get_solve_config_img_parser(self) -> Callable:
         def parser(solve_config: "Maze.SolveConfig"):
             return self.get_img_parser()(solve_config.TargetState, solve_config)
 

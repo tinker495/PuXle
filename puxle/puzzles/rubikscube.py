@@ -1,5 +1,4 @@
-
-
+from collections.abc import Callable
 from functools import partial
 
 import chex
@@ -285,7 +284,7 @@ class RubiksCube(Puzzle):
             token = str(int(value)).rjust(self._token_width)
         return coloring_str(token, rgb_map[color_idx])
 
-    def get_string_parser(self):
+    def get_string_parser(self) -> Callable:
         def parser(state: "RubiksCube.State", *, use_color_overlay: bool = False, **_):
             # Unpack the state faces before printing
             unpacked_faces = state.faces_unpacked
@@ -338,7 +337,7 @@ class RubiksCube(Puzzle):
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "RubiksCube.State":
-        return self._get_suffled_state(
+        return self._get_shuffled_state(
             solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
         )
 
@@ -564,13 +563,136 @@ class RubiksCube(Puzzle):
         faces = jnp.reshape(shaped_faces, (6, self.size * self.size))
         return state.set_unpacked(faces=faces)
 
-    def get_img_parser(self):
+    def _compute_projection_params(self, imgsize: int):
         """
-        This function is a decorator that adds an img_parser to the class.
+        Compute projection parameters for isometric cube rendering.
+
+        Returns:
+            tuple: (cos45, sin45, scale, offset_x, offset_y, margin)
         """
         import math
 
+        cos45 = math.cos(math.pi / 4)
+        sin45 = math.sin(math.pi / 4)
+
+        # Orthographic projection helper
+        def project(x, y, z):
+            u = cos45 * x - sin45 * z
+            v = cos45 * y + 0.5 * (x + z)
+            return u, v
+
+        # Determine the cube's bounding box in projection to scale and center it on the image
+        vertices = []
+        # Top face (UP): shifted down by adjusting y coordinates
+        vertices += [(0, 0, 0), (self.size, 0, 0), (self.size, 0, self.size), (0, 0, self.size)]
+        # Front face (FRONT): shifted down
+        vertices += [
+            (0, 0, self.size),
+            (self.size, 0, self.size),
+            (self.size, -self.size, self.size),
+            (0, -self.size, self.size),
+        ]
+        # Right face (RIGHT): shifted down
+        vertices += [
+            (self.size, 0, self.size),
+            (self.size, -self.size, self.size),
+            (self.size, -self.size, 0),
+            (self.size, 0, 0),
+        ]
+
+        proj_pts = [project(x, y, z) for (x, y, z) in vertices]
+        us = [pt[0] for pt in proj_pts]
+        vs = [pt[1] for pt in proj_pts]
+        min_u, max_u = min(us), max(us)
+        min_v, max_v = min(vs), max(vs)
+        margin = imgsize * 0.05
+        available_width = imgsize - 2 * margin
+        available_height = imgsize - 2 * margin
+        scale = min(available_width / (max_u - min_u), available_height / (max_v - min_v))
+        offset_x = margin - min_u * scale
+        offset_y = margin - min_v * scale - 0.25 * available_width
+
+        return cos45, sin45, scale, offset_x, offset_y, margin
+
+    @staticmethod
+    def _draw_tile(img_target, pts, color_idx, value, color_embedding):
+        """
+        Draw a single cube face tile with color and optional numbering.
+
+        Args:
+            img_target: Target image array
+            pts: Corner points of the tile
+            color_idx: Color index (0-5)
+            value: Tile value for numbering
+            color_embedding: Whether using color embedding mode
+        """
         import cv2
+        import numpy as np
+
+        color = rgb_map[color_idx]
+        cv2.fillPoly(img_target, [pts], color)
+        cv2.polylines(
+            img_target,
+            [pts],
+            isClosed=True,
+            color=(0, 0, 0),
+            thickness=LINE_THICKNESS,
+        )
+
+        if not color_embedding:
+            center = np.mean(pts[:, 0, :], axis=0)
+            edge = np.linalg.norm(pts[0, 0, :] - pts[1, 0, :])
+            font_scale = max(0.3, min(1.2, edge / 32.0))
+            thickness = max(1, int(round(LINE_THICKNESS / 2)))
+            text = str(value)
+            (text_width, text_height), baseline = cv2.getTextSize(
+                text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness
+            )
+            text_x = int(center[0] - text_width / 2)
+            text_y = int(center[1] + text_height / 2)
+
+            cv2.putText(
+                img_target,
+                text,
+                (text_x, text_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                (0, 0, 0),
+                thickness,
+                lineType=cv2.LINE_AA,
+            )
+
+    def _draw_face_grid(self, img, face_id, coords_generator, transform, stickers, color_faces):
+        """
+        Draw a complete cube face as a grid of tiles.
+
+        Args:
+            img: Target image array
+            face_id: Face identifier (UP, FRONT, RIGHT, etc.)
+            coords_generator: Generator function (i, j) -> [(x0,y0,z0), (x1,y1,z1), (x2,y2,z2), (x3,y3,z3)]
+            transform: Transform function (x, y, z) -> (screen_x, screen_y)
+            stickers: Sticker value array
+            color_faces: Color index array
+        """
+        import numpy as np
+
+        for i in range(self.size):
+            for j in range(self.size):
+                corners = coords_generator(i, j)
+                pts = np.array(
+                    [transform(*c) for c in corners], np.int32
+                ).reshape((-1, 1, 2))
+
+                row, col = coords_generator.get_face_indices(i, j)
+                color_idx = int(color_faces[face_id, row, col])
+                value = int(stickers[face_id, row, col])
+
+                self._draw_tile(img, pts, color_idx, value, self.color_embedding)
+
+    def get_img_parser(self) -> Callable:
+        """
+        This function is a decorator that adds an img_parser to the class.
+        """
         import numpy as np
 
         def img_func(state: "RubiksCube.State", another_faces: bool = True, **kwargs):
@@ -579,98 +701,32 @@ class RubiksCube(Puzzle):
             img = np.zeros((imgsize, imgsize, 3), dtype=np.uint8)
             img[:] = (190, 190, 190)
 
-            # Set up projection parameters for a 45° view from above
-            cos45 = math.cos(math.pi / 4)
-            sin45 = math.sin(math.pi / 4)
+            # Set up projection parameters
+            cos45, sin45, scale, offset_x, offset_y, margin = self._compute_projection_params(imgsize)
 
             # Orthographic projection after a rotation: first around y then around x
             def project(x, y, z):
-                u = cos45 * x - sin45 * z  # Changed sign for z component
-                v = cos45 * y + 0.5 * (x + z)  # Modified formula for correct orientation
+                u = cos45 * x - sin45 * z
+                v = cos45 * y + 0.5 * (x + z)
                 return u, v
-
-            # Determine the cube's bounding box in projection to scale and center it on the image
-            vertices = []
-            # Top face (UP): shifted down by adjusting y coordinates
-            vertices += [(0, 0, 0), (self.size, 0, 0), (self.size, 0, self.size), (0, 0, self.size)]
-            # Front face (FRONT): shifted down
-            vertices += [
-                (0, 0, self.size),
-                (self.size, 0, self.size),
-                (self.size, -self.size, self.size),
-                (0, -self.size, self.size),
-            ]
-            # Right face (RIGHT): shifted down
-            vertices += [
-                (self.size, 0, self.size),
-                (self.size, -self.size, self.size),
-                (self.size, -self.size, 0),
-                (self.size, 0, 0),
-            ]
-
-            proj_pts = [project(x, y, z) for (x, y, z) in vertices]
-            us = [pt[0] for pt in proj_pts]
-            vs = [pt[1] for pt in proj_pts]
-            min_u, max_u = min(us), max(us)
-            min_v, max_v = min(vs), max(vs)
-            margin = imgsize * 0.05  # Increased margin to 15% to move image down
-            available_width = imgsize - 2 * margin
-            available_height = imgsize - 2 * margin
-            scale = min(available_width / (max_u - min_u), available_height / (max_v - min_v))
-            offset_x = margin - min_u * scale
-            offset_y = (
-                margin - min_v * scale - 0.25 * available_width
-            )  # Increased y offset by 50% to move image down
 
             def transform(x, y, z):
                 u, v = project(x, y, z)
                 return int(u * scale + offset_x), int(v * scale + offset_y)
 
-            # Obtain sticker data, colour mapping, and helper for drawing numbered tiles
+            # Obtain sticker data and colour mapping
             stickers = np.array(state.faces_unpacked, dtype=np.int32).reshape((6, self.size, self.size))
             color_faces = self._color_indices(stickers).reshape((6, self.size, self.size))
 
             def draw_tile(img_target, pts, face_id, row, col):
                 color_idx = int(color_faces[face_id, row, col])
                 value = int(stickers[face_id, row, col])
-                color = rgb_map[color_idx]
-                cv2.fillPoly(img_target, [pts], color)
-                cv2.polylines(
-                    img_target,
-                    [pts],
-                    isClosed=True,
-                    color=(0, 0, 0),
-                    thickness=LINE_THICKNESS,
-                )
-
-                if not self.color_embedding:
-                    center = np.mean(pts[:, 0, :], axis=0)
-                    edge = np.linalg.norm(pts[0, 0, :] - pts[1, 0, :])
-                    font_scale = max(0.3, min(1.2, edge / 32.0))
-                    thickness = max(1, int(round(LINE_THICKNESS / 2)))
-                    text = str(value)
-                    (text_width, text_height), baseline = cv2.getTextSize(
-                        text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness
-                    )
-                    text_x = int(center[0] - text_width / 2)
-                    text_y = int(center[1] + text_height / 2)
-
-                    cv2.putText(
-                        img_target,
-                        text,
-                        (text_x, text_y),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        font_scale,
-                        (0, 0, 0),
-                        thickness,
-                        lineType=cv2.LINE_AA,
-                    )
+                self._draw_tile(img_target, pts, color_idx, value, self.color_embedding)
 
             # Draw faces in correct order for proper depth.
             # 1. Draw the front face (FRONT)
             for i in range(self.size):
                 for j in range(self.size):
-                    # Modified coordinates for correct orientation
                     p0 = (j, i, self.size)
                     p1 = (j + 1, i, self.size)
                     p2 = (j + 1, i + 1, self.size)
@@ -683,7 +739,6 @@ class RubiksCube(Puzzle):
             # 2. Draw the right face (RIGHT)
             for i in range(self.size):
                 for j in range(self.size):
-                    # Modified coordinates for correct orientation
                     p0 = (self.size, i, self.size - j)
                     p1 = (self.size, i, self.size - (j + 1))
                     p2 = (self.size, i + 1, self.size - (j + 1))
@@ -714,7 +769,6 @@ class RubiksCube(Puzzle):
                 # 4. Draw the back face (BACK)
                 for i in range(self.size):
                     for j in range(self.size):
-                        # Modified coordinates for correct orientation
                         p0 = (self.size - j - 1, i, 0)
                         p1 = (self.size - j, i, 0)
                         p2 = (self.size - j, i + 1, 0)
@@ -728,7 +782,6 @@ class RubiksCube(Puzzle):
                 # 2. Draw the down face (DOWN)
                 for i in range(self.size):
                     for j in range(self.size):
-                        # Modified coordinates for correct orientation
                         p0 = (i, self.size, j)
                         p1 = (i, self.size, j + 1)
                         p2 = (i + 1, self.size, j + 1)
@@ -742,7 +795,6 @@ class RubiksCube(Puzzle):
                 # 3. Draw the left face (LEFT) last so that it appears above the other faces
                 for i in range(self.size):
                     for j in range(self.size):
-                        # Modified coordinates for correct orientation
                         p0 = (0, i, j)
                         p1 = (0, i, j + 1)
                         p2 = (0, i + 1, j + 1)
@@ -774,7 +826,7 @@ class RubiksCubeRandom(RubiksCube):
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         solve_config = super().get_solve_config(key, data)
-        solve_config.TargetState = self._get_suffled_state(
+        solve_config.TargetState = self._get_shuffled_state(
             solve_config, solve_config.TargetState, key, num_shuffle=100
         )
         return solve_config
