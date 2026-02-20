@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 import pytest
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.core.puzzle_state import FieldDescriptor, state_dataclass
 
 def test_state_dataclass_standard_packing():
     @state_dataclass

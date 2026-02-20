@@ -1,8 +1,6 @@
 import pytest
-from pathlib import Path
-from pddl.core import Domain, Action
-from pddl.logic import Predicate, Constant, Variable
-from pddl.requirements import Requirements
+from pddl.core import Action
+from pddl.logic import Predicate, Variable
 
 from puxle.pddls.fusion.domain_fusion import DomainFusion
 from puxle.pddls.fusion.action_modifier import ActionModifier, FusionParams

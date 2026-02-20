@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from functools import partial
-from importlib.resources import files
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
 import jax
 import jax.numpy as jnp
-from puxle.core.puzzle_state import PuzzleState
-from puxle.benchmark._deepcubea import load_deepcubea
+from puxle.benchmark._deepcubea import load_deepcubea_dataset
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.puzzles.rubikscube import RubiksCube
 
@@ -61,14 +59,12 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
 
         return RubiksCube(size=3, initial_shuffle=100, color_embedding=self._use_color_embedding)
 
-import puxle.benchmark._deepcubea as _dc
-
     def load_dataset(self) -> dict[str, Any]:
         if self._explicit_states is not None:
             return {"states": self._explicit_states, "solutions": None}
 
         fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH.parent
-        return _dc.load_deepcubea_dataset(
+        return load_deepcubea_dataset(
             self._dataset_path, DEFAULT_DATASET_NAME, "puxle.data.rubikscube", fallback_dir
         )
 

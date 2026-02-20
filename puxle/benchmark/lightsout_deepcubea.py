@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import math
-from importlib.resources import files
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
 import jax.numpy as jnp
 import numpy as np
-from puxle.benchmark._deepcubea import load_deepcubea
+from puxle.benchmark._deepcubea import load_deepcubea_dataset
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_state import PuzzleState
 from puxle.puzzles.lightsout import LightsOut
@@ -34,11 +33,9 @@ class LightsOutDeepCubeABenchmark(Benchmark):
     def build_puzzle(self) -> LightsOut:
         return LightsOut(size=self._ensure_size())
 
-import puxle.benchmark._deepcubea as _dc
-
     def load_dataset(self) -> dict[str, Any]:
         fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH
-        return _dc.load_deepcubea_dataset(
+        return load_deepcubea_dataset(
             self._dataset_path, self._dataset_name, "puxle.data.lightsout", fallback_dir
         )
 

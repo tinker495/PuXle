@@ -248,7 +248,7 @@ def test_initialization_immutability(puzzle_instance):
     original_config_leaves_copy = [jnp.array(x) if hasattr(x, 'copy') else x for x in original_config_leaves]
     
     try:
-        state = puzzle_instance.get_initial_state(solve_config, key, data)
+        puzzle_instance.get_initial_state(solve_config, key, data)
     except Exception as e:
         pytest.fail(f"get_initial_state failed: {e}")
 

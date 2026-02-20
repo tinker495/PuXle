@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import math
 from enum import Enum
-from importlib.resources import files
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
 import jax.numpy as jnp
-from puxle.benchmark._deepcubea import load_deepcubea
+from puxle.benchmark._deepcubea import load_deepcubea_dataset
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_state import PuzzleState
 from puxle.puzzles.slidepuzzle import SlidePuzzle
@@ -84,14 +83,12 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
     def build_puzzle(self) -> SlidePuzzle:
         return SlidePuzzle(size=self._ensure_board_size())
 
-import puxle.benchmark._deepcubea as _dc
-
     def load_dataset(self) -> dict[str, Any]:
         if self._explicit_states is not None:
             return {"states": self._explicit_states, "solutions": None}
 
         fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH
-        return _dc.load_deepcubea_dataset(
+        return load_deepcubea_dataset(
             self._dataset_path, self._dataset_name, "puxle.data.slidepuzzle", fallback_dir
         )
 
