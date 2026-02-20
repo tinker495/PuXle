@@ -149,20 +149,7 @@ class Sokoban(Puzzle):
             return jnp.all(rm_player == t_board)
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
-        """
-        match action:
-            case 0:
-                return "←"
-            case 1:
-                return "→"
-            case 2:
-                return "↑"
-            case 3:
-                return "↓"
-            case _:
-                raise ValueError(f"Invalid action: {action}")
+        return self._directional_action_to_string(action)
 
     def get_solve_config_string_parser(self):
         def parser(solve_config: "Sokoban.SolveConfig", **kwargs):

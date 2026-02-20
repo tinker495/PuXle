@@ -4,7 +4,6 @@ import pickle
 import warnings
 from typing import Any, IO
 
-import numpy as np
 
 
 class DeepCubeAUnpickler(pickle.Unpickler):

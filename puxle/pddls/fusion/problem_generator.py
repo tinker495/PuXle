@@ -1,14 +1,10 @@
 import random
-from typing import List, Dict, Set, Optional, Tuple, Any
-from dataclasses import dataclass
-import copy
+from typing import List, Dict, Set, Optional
 
-import pddl
 from pddl.core import Domain, Problem
 from pddl.logic import Predicate, Constant
 from pddl.logic.base import And, Not
 from pddl.action import Action
-from pddl.requirements import Requirements
 
 # Minimal forward model for generation (pure Python)
 # We avoid full PDDL grounding here since we are generating symbol-level problems

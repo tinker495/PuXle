@@ -169,7 +169,6 @@ class ActionModifier:
             for i, action in enumerate(new_actions):
                 # Check if action parameters can support this predicate
                 # We need to see if we can bind predicate terms to action params
-                compatible_vars = []
                 
                 # Check if all terms of predicate can be mapped to action params
                 # This is similar to _sample_predicate_for_action logic

@@ -110,20 +110,7 @@ class SlidePuzzle(Puzzle):
         return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
-        """
-        match action:
-            case 0:
-                return "←"
-            case 1:
-                return "→"
-            case 2:
-                return "↑"
-            case 3:
-                return "↓"
-            case _:
-                raise ValueError(f"Invalid action: {action}")
+        return self._directional_action_to_string(action)
 
     @property
     def inverse_action_map(self) -> jnp.ndarray | None:

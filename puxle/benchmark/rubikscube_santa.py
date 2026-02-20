@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Hashable, Iterable, Optional, Sequence
+from typing import Any, Dict, Hashable, Iterable
 
 import jax.numpy as jnp
 import numpy as np
@@ -67,8 +67,8 @@ class RubiksCubeSantaBenchmark(Benchmark):
         try:
             dims = self.puzzle_type.split('_')[1].split('/')
             self.size = int(dims[0])
-        except (IndexError, ValueError):
-            raise ValueError(f"Could not parse size from '{self.puzzle_type}'.")
+        except (IndexError, ValueError) as e:
+            raise ValueError(f"Could not parse size from '{self.puzzle_type}'.") from e
 
     def build_puzzle(self) -> RubiksCube:
         # We enforce color embedding because Santa dataset uses colors (A, B...) 

@@ -301,20 +301,7 @@ class Maze(Puzzle):
         return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
-        """
-        match action:
-            case 0:
-                return "←"
-            case 1:
-                return "→"
-            case 2:
-                return "↑"
-            case 3:
-                return "↓"
-            case _:
-                raise ValueError(f"Invalid action: {action}")
+        return self._directional_action_to_string(action)
 
     @property
     def inverse_action_map(self) -> jnp.ndarray | None:
@@ -325,21 +312,7 @@ class Maze(Puzzle):
         return jnp.array([1, 0, 3, 2])
 
     def _get_visualize_format(self):
-        size = self.size
-        form = "┏━"
-        for i in range(size):
-            form += "━━" if i != size - 1 else "━━┓"
-        form += "\n"
-        for i in range(size):
-            form += "┃ "
-            for j in range(size):
-                form += "{:s} "
-            form += "┃"
-            form += "\n"
-        form += "┗━"
-        for i in range(size):
-            form += "━━" if i != size - 1 else "━━┛"
-        return form
+        return self._grid_visualize_format(self.size)
 
     def _get_random_state(self, bool_maze: chex.Array, key):
         """

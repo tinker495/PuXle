@@ -174,36 +174,10 @@ class DotKnot(Puzzle):
         return no_point & ~empty
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
-        """
-        match action:
-            case 0:
-                return "←"
-            case 1:
-                return "→"
-            case 2:
-                return "↑"
-            case 3:
-                return "↓"
-            case _:
-                raise ValueError(f"Invalid action: {action}")
+        return self._directional_action_to_string(action)
 
     def _get_visualize_format(self):
-        size = self.size
-        form = "┏━"
-        for i in range(size):
-            form += "━━" if i != size - 1 else "━━┓"
-        form += "\n"
-        for i in range(size):
-            form += "┃ "
-            for j in range(size):
-                form += "{:s} "
-            form += "┃" + "\n"
-        form += "┗━"
-        for i in range(size):
-            form += "━━" if i != size - 1 else "━━┛"
-        return form
+        return self._grid_visualize_format(self.size)
 
     def _getBlankPosition(self, state: "DotKnot.State", idx: int):
         unpacked_board = state.board_unpacked

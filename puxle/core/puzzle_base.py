@@ -432,6 +432,32 @@ class Puzzle(ABC):
         """
         return f"action {action}"
 
+    _DIRECTIONAL_LABELS = ("←", "→", "↑", "↓")
+
+    @staticmethod
+    def _directional_action_to_string(action: int) -> str:
+        """Shared helper for puzzles using 4 directional actions (←→↑↓)."""
+        if 0 <= action <= 3:
+            return Puzzle._DIRECTIONAL_LABELS[action]
+        raise ValueError(f"Invalid action: {action}")
+
+    @staticmethod
+    def _grid_visualize_format(size: int) -> str:
+        """Build a box-drawing grid format string for an ``size × size`` board."""
+        form = "┏━"
+        for i in range(size):
+            form += "━━" if i != size - 1 else "━━┓"
+        form += "\n"
+        for i in range(size):
+            form += "┃ "
+            for j in range(size):
+                form += "{:s} "
+            form += "┃\n"
+        form += "┗━"
+        for i in range(size):
+            form += "━━" if i != size - 1 else "━━┛"
+        return form
+
     def batched_hindsight_transform(self, solve_configs: SolveConfig, states: State) -> SolveConfig:
         """Vectorised version of :meth:`hindsight_transform`.
 

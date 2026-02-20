@@ -2,14 +2,12 @@ import os
 from typing import Dict, List, Optional, Tuple, Union
 
 import chex
-import jax
 import jax.numpy as jnp
 import pddl
 from pddl.core import Domain, Problem
-import termcolor
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.core.puzzle_state import PuzzleState
 
 # Refactored helpers
 from .type_system import (
@@ -83,7 +81,7 @@ class PDDL(Puzzle):
             try:
                 self.domain = pddl.parse_domain(domain)
             except Exception as e:
-                raise ValueError(f"Failed to parse PDDL domain file: {e}")
+                raise ValueError(f"Failed to parse PDDL domain file: {e}") from e
         else:
             self.domain_file = None
             self.domain = domain
@@ -93,7 +91,7 @@ class PDDL(Puzzle):
             try:
                 self.problem = pddl.parse_problem(problem)
             except Exception as e:
-                raise ValueError(f"Failed to parse PDDL problem file: {e}")
+                raise ValueError(f"Failed to parse PDDL problem file: {e}") from e
         else:
             self.problem_file = None
             self.problem = problem

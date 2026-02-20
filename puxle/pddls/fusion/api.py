@@ -1,8 +1,8 @@
-from typing import List, Optional, Any, Tuple
+from typing import List, Optional, Tuple
 from pathlib import Path
 import os
 import pddl
-from pddl.core import Domain, Problem
+from pddl.core import Domain
 
 from puxle import PDDL
 from puxle.pddls.fusion.domain_fusion import DomainFusion
