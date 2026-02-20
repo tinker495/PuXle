@@ -50,7 +50,8 @@ def load_deepcubea_dataset(
         with resource.open("rb") as handle:
             return load_deepcubea(handle)
     except (ModuleNotFoundError, FileNotFoundError):
-        pass
+        import logging
+        logging.getLogger(__name__).debug("Resource not found, trying fallback...")
 
     fallback = fallback_dir / dataset_name
     if not fallback.is_file():

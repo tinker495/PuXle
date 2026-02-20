@@ -97,5 +97,5 @@ autodoc_mock_imports = [
 # Prefer real JAX when available; fall back to mocks only when unavailable.
 try:
     import jax  # noqa: F401
-except Exception:
+except ImportError:
     autodoc_mock_imports.extend(["jax", "jaxlib"])
