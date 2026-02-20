@@ -81,7 +81,7 @@ class PDDL(Puzzle):
             self.domain_file = domain
             try:
                 self.domain = pddl.parse_domain(domain)
-            except (OSError, SyntaxError, ValueError) as e:
+            except Exception as e:
                 raise ValueError(f"Failed to parse PDDL domain file: {e}") from e
         else:
             self.domain_file = None
@@ -91,7 +91,7 @@ class PDDL(Puzzle):
             self.problem_file = problem
             try:
                 self.problem = pddl.parse_problem(problem)
-            except (OSError, SyntaxError, ValueError) as e:
+            except Exception as e:
                 raise ValueError(f"Failed to parse PDDL problem file: {e}") from e
         else:
             self.problem_file = None
