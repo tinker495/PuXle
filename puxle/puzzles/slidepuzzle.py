@@ -1,4 +1,4 @@
-
+from collections.abc import Callable
 
 import chex
 import jax
@@ -46,7 +46,7 @@ class SlidePuzzle(Puzzle):
         self.action_size = 4
         super().__init__(**kwargs)
 
-    def get_string_parser(self):
+    def get_string_parser(self) -> Callable:
         form = self._get_visualize_format()
 
         def to_char(x):
@@ -203,7 +203,7 @@ class SlidePuzzle(Puzzle):
                 inv_count += is_inv(arr[i], arr[j])
         return inv_count
 
-    def get_img_parser(self):
+    def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.
         """

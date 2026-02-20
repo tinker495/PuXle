@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -69,13 +71,13 @@ class DotKnot(Puzzle):
         self.action_size = 4
         super().__init__(**kwargs)
 
-    def get_solve_config_string_parser(self):
+    def get_solve_config_string_parser(self) -> Callable:
         def parser(solve_config: "DotKnot.SolveConfig"):
             return ""
 
         return parser
 
-    def get_string_parser(self):
+    def get_string_parser(self) -> Callable:
         form = self._get_visualize_format()
 
         def to_char(x):
@@ -214,13 +216,13 @@ class DotKnot(Puzzle):
         )
         return self.State.from_unpacked(board=board)
 
-    def get_solve_config_img_parser(self):
+    def get_solve_config_img_parser(self) -> Callable:
         def parser(solve_config: "DotKnot.SolveConfig"):
             pass
 
         return parser
 
-    def get_img_parser(self):
+    def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.
         """

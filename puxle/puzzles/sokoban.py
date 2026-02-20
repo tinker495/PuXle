@@ -1,3 +1,4 @@
+from collections.abc import Callable
 import os
 from enum import Enum
 from importlib.resources import files
@@ -151,13 +152,13 @@ class Sokoban(Puzzle):
     def action_to_string(self, action: int) -> str:
         return self._directional_action_to_string(action)
 
-    def get_solve_config_string_parser(self):
+    def get_solve_config_string_parser(self) -> Callable:
         def parser(solve_config: "Sokoban.SolveConfig", **kwargs):
             return solve_config.TargetState.str(solve_config=solve_config)
 
         return parser
 
-    def get_string_parser(self):
+    def get_string_parser(self) -> Callable:
         form = self._get_visualize_format()
 
         def to_char(x):
@@ -318,7 +319,7 @@ class Sokoban(Puzzle):
         flat_index = jnp.argmax(board == Sokoban.Object.PLAYER.value)
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
-    def get_img_parser(self):
+    def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.
         """

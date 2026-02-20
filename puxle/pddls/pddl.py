@@ -1,4 +1,5 @@
 import os
+from collections.abc import Callable
 from typing import Dict, List, Optional, Tuple, Union
 
 import chex
@@ -80,7 +81,7 @@ class PDDL(Puzzle):
             self.domain_file = domain
             try:
                 self.domain = pddl.parse_domain(domain)
-            except Exception as e:
+            except (OSError, SyntaxError, ValueError) as e:
                 raise ValueError(f"Failed to parse PDDL domain file: {e}") from e
         else:
             self.domain_file = None
@@ -90,7 +91,7 @@ class PDDL(Puzzle):
             self.problem_file = problem
             try:
                 self.problem = pddl.parse_problem(problem)
-            except Exception as e:
+            except (OSError, SyntaxError, ValueError) as e:
                 raise ValueError(f"Failed to parse PDDL problem file: {e}") from e
         else:
             self.problem_file = None
@@ -137,7 +138,7 @@ class PDDL(Puzzle):
 
         return cls(domain=domain_path, problem=problem_path, **kwargs)
 
-    def data_init(self):
+    def data_init(self) -> None:
         """Initialize PDDL data: ground atoms and actions, build masks."""
         # Extract objects by type
         self.objects_by_type = self._extract_objects_by_type()
@@ -343,12 +344,12 @@ class PDDL(Puzzle):
         # Check if all goal atoms are true: all(~goal_mask | s)
         return jnp.all(jnp.logical_or(~goal_mask, s))
 
-    def get_string_parser(self) -> callable:
+    def get_string_parser(self) -> Callable:
         """Return string parser for states. If a solve_config is provided, annotate goal atoms."""
 
         return build_state_string_parser(self)
 
-    def get_img_parser(self) -> callable:
+    def get_img_parser(self) -> Callable:
         """Return image parser for states. If a solve_config is provided, annotate goal atoms."""
 
         def img_parser(state: "PDDL.State", solve_config: "PDDL.SolveConfig" = None, **kwargs):
@@ -405,12 +406,12 @@ class PDDL(Puzzle):
         """Override to handle goal mask instead of target state."""
         return True
 
-    def get_solve_config_string_parser(self) -> callable:
+    def get_solve_config_string_parser(self) -> Callable:
         """Return string parser for solve config with goal mask."""
 
         return build_solve_config_string_parser(self)
 
-    def get_solve_config_img_parser(self) -> callable:
+    def get_solve_config_img_parser(self) -> Callable:
         """Return image parser for solve config with goal mask."""
 
         def img_parser(solve_config: "PDDL.SolveConfig", **kwargs):

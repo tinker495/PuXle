@@ -1,4 +1,4 @@
-
+from collections.abc import Callable
 
 import chex
 import jax
@@ -66,13 +66,13 @@ class Maze(Puzzle):
         self.action_size = 4
         super().__init__(**kwargs)
 
-    def get_solve_config_string_parser(self):
+    def get_solve_config_string_parser(self) -> Callable:
         def parser(solve_config: "Maze.SolveConfig", **kwargs):
             return solve_config.TargetState.str(solve_config=solve_config)
 
         return parser
 
-    def get_string_parser(self):
+    def get_string_parser(self) -> Callable:
         form = self._get_visualize_format()
 
         def to_char(x):
@@ -348,7 +348,7 @@ class Maze(Puzzle):
 
         return self.State(pos=final_pos)
 
-    def get_img_parser(self):
+    def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.
         """
@@ -429,7 +429,7 @@ class Maze(Puzzle):
 
         return img_func
 
-    def get_solve_config_img_parser(self):
+    def get_solve_config_img_parser(self) -> Callable:
         def parser(solve_config: "Maze.SolveConfig"):
             return self.get_img_parser()(solve_config.TargetState, solve_config)
 

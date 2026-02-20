@@ -1,4 +1,4 @@
-
+from collections.abc import Callable
 
 import chex
 import jax
@@ -57,7 +57,7 @@ class TopSpin(Puzzle):
         self.action_size = 3
         super().__init__(**kwargs)
 
-    def get_string_parser(self) -> callable:
+    def get_string_parser(self) -> Callable:
         def parser(state: "TopSpin.State", **kwargs):
             # Highlight the turnstile
             turnstile_str = " ".join(

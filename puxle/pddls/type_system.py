@@ -30,7 +30,7 @@ def collect_type_hierarchy(domain) -> Tuple[Dict[str, str], Dict[str, Set[str]],
                 for sub_t, par_t in th.items():
                     if sub_t and par_t and sub_t != par_t:
                         parent[str(sub_t)] = str(par_t)
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         parent = {}
 
     ancestors: dict[str, set[str]] = {}

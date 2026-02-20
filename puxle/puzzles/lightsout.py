@@ -1,4 +1,4 @@
-
+from collections.abc import Callable
 
 import chex
 import jax
@@ -66,7 +66,7 @@ class LightsOut(Puzzle):
         self.action_size = self.size * self.size
         super().__init__(**kwargs)
 
-    def get_string_parser(self):
+    def get_string_parser(self) -> Callable:
         form = self._get_visualize_format()
 
         def to_char(x):
@@ -225,7 +225,7 @@ class LightsOut(Puzzle):
         form += "━━┛"
         return form
 
-    def get_img_parser(self):
+    def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.
         """

@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -65,7 +67,7 @@ class TSP(Puzzle):
         self.action_size = self.size
         super().__init__(**kwargs)
 
-    def get_solve_config_string_parser(self) -> callable:
+    def get_solve_config_string_parser(self) -> Callable:
         def parser(solve_config: "TSP.SolveConfig", **kwargs):
             return f"TSP SolveConfig: {self.size} points, start at {solve_config.start}"
 
@@ -151,7 +153,7 @@ class TSP(Puzzle):
         form += "[" + "{:s} " * size + "]"
         return form
 
-    def get_solve_config_img_parser(self) -> callable:
+    def get_solve_config_img_parser(self) -> Callable:
         def parser(solve_config: "TSP.SolveConfig", **kwargs):
             raise NotImplementedError("TSP does not support image visualization")
 

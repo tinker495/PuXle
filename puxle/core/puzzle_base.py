@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any, Optional, TypeVar
 
 import chex
@@ -175,7 +176,7 @@ class Puzzle(ABC):
         """
         pass
 
-    def get_solve_config_string_parser(self) -> callable:
+    def get_solve_config_string_parser(self) -> Callable:
         """Return a callable that renders a ``SolveConfig`` as a string.
 
         The default implementation delegates to :meth:`get_string_parser` on
@@ -198,7 +199,7 @@ class Puzzle(ABC):
         return stringparser
 
     @abstractmethod
-    def get_string_parser(self) -> callable:
+    def get_string_parser(self) -> Callable:
         """Return a callable that renders a ``State`` as a human-readable string.
 
         Returns:
@@ -206,7 +207,7 @@ class Puzzle(ABC):
         """
         pass
 
-    def get_solve_config_img_parser(self) -> callable:
+    def get_solve_config_img_parser(self) -> Callable:
         """Return a callable that renders a ``SolveConfig`` as an image array.
 
         The default implementation delegates to :meth:`get_img_parser` on
@@ -229,7 +230,7 @@ class Puzzle(ABC):
         return imgparser
 
     @abstractmethod
-    def get_img_parser(self) -> callable:
+    def get_img_parser(self) -> Callable:
         """Return a callable that renders a ``State`` as an image (NumPy/JAX array).
 
         Returns:
