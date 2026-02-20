@@ -34,29 +34,13 @@ class LightsOutDeepCubeABenchmark(Benchmark):
     def build_puzzle(self) -> LightsOut:
         return LightsOut(size=self._ensure_size())
 
+import puxle.benchmark._deepcubea as _dc
+
     def load_dataset(self) -> dict[str, Any]:
-        if self._dataset_path is not None:
-            if not self._dataset_path.is_file():
-                raise FileNotFoundError(
-                    f"LightsOut DeepCubeA dataset not found at {self._dataset_path}"
-                )
-            with self._dataset_path.open("rb") as handle:
-                return load_deepcubea(handle)
-
-        try:
-            resource = files("puxle.data.lightsout") / self._dataset_name
-            with resource.open("rb") as handle:
-                return load_deepcubea(handle)
-        except (ModuleNotFoundError, FileNotFoundError):
-            pass
-
-        fallback = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH / self._dataset_name
-        if not fallback.is_file():
-            raise FileNotFoundError(
-                f"Unable to locate {self._dataset_name} under package resources or at {fallback}"
-            )
-        with fallback.open("rb") as handle:
-            return load_deepcubea(handle)
+        fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH
+        return _dc.load_deepcubea_dataset(
+            self._dataset_path, self._dataset_name, "puxle.data.lightsout", fallback_dir
+        )
 
     def sample_ids(self) -> Iterable[Hashable]:
         return range(len(self.dataset["states"]))

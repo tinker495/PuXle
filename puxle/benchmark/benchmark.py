@@ -53,6 +53,7 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
     def __init__(self) -> None:
         self._puzzle: Puzzle | None = None
         self._dataset: Any = None
+        self._notation_to_action: dict[str, int] | None = None
 
     @property
     def puzzle(self) -> Puzzle:
@@ -161,3 +162,41 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
             return False
 
         return True
+
+    def _build_action_lookup(self) -> dict[str, int]:
+        """Build a mapping from action notation to action index."""
+        if self._notation_to_action is None:
+            puzzle = self.puzzle
+            self._notation_to_action = {
+                puzzle.action_to_string(action): action
+                for action in range(puzzle.action_size)
+            }
+        return self._notation_to_action
+
+    def _build_optimal_path(
+        self,
+        initial_state: StateT,
+        solve_config: SolveConfigT,
+        action_sequence: Sequence[str] | None,
+    ) -> tuple[StateT, ...] | None:
+        """Reconstruct the sequence of states from an action sequence."""
+        if not action_sequence:
+            return tuple() if action_sequence is not None else None
+
+        action_lookup = self._build_action_lookup()
+        puzzle = self.puzzle
+        current_state = initial_state
+        path: list[StateT] = []
+
+        for step, notation in enumerate(action_sequence, start=1):
+            try:
+                action_idx = action_lookup[notation]
+            except KeyError as exc:
+                raise KeyError(f"Unknown action notation '{notation}' at step {step}") from exc
+
+            neighbours, _ = puzzle.get_neighbours(solve_config, current_state, filled=True)
+            next_state = neighbours[action_idx]
+            path.append(next_state)
+            current_state = next_state
+
+        return tuple(path)

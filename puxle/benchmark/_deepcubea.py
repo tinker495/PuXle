@@ -29,5 +29,36 @@ def load_deepcubea(handle: IO[bytes]) -> Any:
         return DeepCubeAUnpickler(handle).load()
 
 
-__all__ = ["DeepCubeAUnpickler", "load_deepcubea"]
+from importlib.resources import files
+from pathlib import Path
+
+def load_deepcubea_dataset(
+    dataset_path: Path | None,
+    dataset_name: str,
+    package_resource: str,
+    fallback_dir: Path,
+) -> dict[str, Any]:
+    """Helper to load a DeepCubeA dataset from various possible locations."""
+    if dataset_path is not None:
+        if not dataset_path.is_file():
+            raise FileNotFoundError(f"DeepCubeA dataset not found at {dataset_path}")
+        with dataset_path.open("rb") as handle:
+            return load_deepcubea(handle)
+
+    try:
+        resource = files(package_resource) / dataset_name
+        with resource.open("rb") as handle:
+            return load_deepcubea(handle)
+    except (ModuleNotFoundError, FileNotFoundError):
+        pass
+
+    fallback = fallback_dir / dataset_name
+    if not fallback.is_file():
+        raise FileNotFoundError(
+            f"Unable to locate {dataset_name} under package resources or at {fallback}"
+        )
+    with fallback.open("rb") as handle:
+        return load_deepcubea(handle)
+
+__all__ = ["DeepCubeAUnpickler", "load_deepcubea", "load_deepcubea_dataset"]
 

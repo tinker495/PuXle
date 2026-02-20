@@ -1,5 +1,4 @@
 import pytest
-import os
 from pathlib import Path
 from pddl.core import Domain, Action
 from pddl.logic import Predicate, Constant, Variable

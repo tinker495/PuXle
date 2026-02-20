@@ -80,7 +80,7 @@ class LightsOut(Puzzle):
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "LightsOut.State":
-        return self._get_suffled_state(
+        return self._get_shuffled_state(
             solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
         )
 
@@ -268,7 +268,7 @@ class LightsOutRandom(LightsOut):
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         solve_config = super().get_solve_config(key, data)
-        solve_config.TargetState = self._get_suffled_state(
+        solve_config.TargetState = self._get_shuffled_state(
             solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
         )
         return solve_config
@@ -276,6 +276,6 @@ class LightsOutRandom(LightsOut):
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> LightsOut.State:
-        return self._get_suffled_state(
+        return self._get_shuffled_state(
             solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
         )

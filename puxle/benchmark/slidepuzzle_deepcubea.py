@@ -78,39 +78,22 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         self._dataset_name = dataset_name or preset_dataset_name
         self._board_size = board_size or preset_board_size
         self._solve_config_cache = None
-        self._notation_to_action: dict[str, int] | None = None
         self._subset_indices = preset.indices if preset else None
         self._explicit_states = preset.states if preset else None
 
     def build_puzzle(self) -> SlidePuzzle:
         return SlidePuzzle(size=self._ensure_board_size())
 
+import puxle.benchmark._deepcubea as _dc
+
     def load_dataset(self) -> dict[str, Any]:
         if self._explicit_states is not None:
             return {"states": self._explicit_states, "solutions": None}
 
-        if self._dataset_path is not None:
-            if not self._dataset_path.is_file():
-                raise FileNotFoundError(
-                    f"SlidePuzzle DeepCubeA dataset not found at {self._dataset_path}"
-                )
-            with self._dataset_path.open("rb") as handle:
-                return load_deepcubea(handle)
-
-        try:
-            resource = files("puxle.data.slidepuzzle") / self._dataset_name
-            with resource.open("rb") as handle:
-                return load_deepcubea(handle)
-        except (ModuleNotFoundError, FileNotFoundError):
-            pass
-
-        fallback = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH / self._dataset_name
-        if not fallback.is_file():
-            raise FileNotFoundError(
-                f"Unable to locate {self._dataset_name} under package resources or at {fallback}"
-            )
-        with fallback.open("rb") as handle:
-            return load_deepcubea(handle)
+        fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH
+        return _dc.load_deepcubea_dataset(
+            self._dataset_path, self._dataset_name, "puxle.data.slidepuzzle", fallback_dir
+        )
 
     def sample_ids(self) -> Iterable[Hashable]:
         if self._subset_indices is not None:
@@ -180,41 +163,6 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
                 raise ValueError(f"Unsupported move '{move}' in DeepCubeA slide puzzle dataset.") from exc
         optimal_action_sequence = tuple(action_sequence)
         return optimal_action_sequence, float(len(optimal_action_sequence))
-
-    def _build_action_lookup(self) -> dict[str, int]:
-        if self._notation_to_action is None:
-            puzzle = self.puzzle
-            self._notation_to_action = {
-                puzzle.action_to_string(action): action for action in range(puzzle.action_size)
-            }
-        return self._notation_to_action
-
-    def _build_optimal_path(
-        self,
-        initial_state: PuzzleState,
-        solve_config: SlidePuzzle.SolveConfig,
-        action_sequence: Sequence[str] | None,
-    ) -> tuple[PuzzleState, ...] | None:
-        if not action_sequence:
-            return None
-
-        action_lookup = self._build_action_lookup()
-        puzzle = self.puzzle
-        current_state = initial_state
-        path: list[PuzzleState] = []
-
-        for step, notation in enumerate(action_sequence, start=1):
-            try:
-                action_idx = action_lookup[notation]
-            except KeyError as exc:
-                raise KeyError(f"Unknown action notation '{notation}' at step {step}") from exc
-
-            neighbours, _ = puzzle.get_neighbours(solve_config, current_state, filled=True)
-            next_state = neighbours[action_idx]
-            path.append(next_state)
-            current_state = next_state
-
-        return tuple(path)
 
 
 class SlidePuzzleDeepCubeA15Benchmark(SlidePuzzleDeepCubeABenchmark):

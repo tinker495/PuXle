@@ -151,7 +151,7 @@ class DotKnot(Puzzle):
 
         point_idx = selected_color
         color_idx = (point_idx - 1) % self.color_num
-        available, pos = self._getBlankPosition(state, point_idx)
+        available, pos = self._get_blank_position(state, point_idx)
         new_pos = (pos + move_vector).astype(TYPE)
         is_merge, valid_move = is_valid(new_pos, color_idx)
         valid_move = valid_move & available
@@ -179,7 +179,7 @@ class DotKnot(Puzzle):
     def _get_visualize_format(self):
         return self._grid_visualize_format(self.size)
 
-    def _getBlankPosition(self, state: "DotKnot.State", idx: int):
+    def _get_blank_position(self, state: "DotKnot.State", idx: int):
         unpacked_board = state.board_unpacked
         one_hot = unpacked_board == idx
         available = jnp.any(one_hot)

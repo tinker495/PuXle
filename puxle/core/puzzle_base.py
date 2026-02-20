@@ -574,7 +574,7 @@ class Puzzle(ABC):
                 solve_configs, states, filleds
             )
 
-    def _get_suffled_state(
+    def _get_shuffled_state(
         self, solve_config: "Puzzle.SolveConfig", init_state: "Puzzle.State", key, num_shuffle
     ):
         """Generate a scrambled state by applying random actions.

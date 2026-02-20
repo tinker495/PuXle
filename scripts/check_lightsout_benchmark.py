@@ -5,10 +5,8 @@ import argparse
 from pathlib import Path
 from typing import Iterable
 
-import numpy as np
 
 from puxle.benchmark.lightsout_deepcubea import LightsOutDeepCubeABenchmark
-from puxle.core.puzzle_state import PuzzleState
 
 
 def _summarize_dataset(benchmark: LightsOutDeepCubeABenchmark) -> None:

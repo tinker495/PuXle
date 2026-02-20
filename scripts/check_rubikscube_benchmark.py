@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import statistics
 from pathlib import Path
-import sys
 from typing import Iterable, Sequence
 from puxle.core.puzzle_state import PuzzleState
 

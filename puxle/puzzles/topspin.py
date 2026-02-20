@@ -77,7 +77,7 @@ class TopSpin(Puzzle):
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "TopSpin.State":
         # Start from solved state and apply random moves
-        return self._get_suffled_state(solve_config, solve_config.TargetState, key, 18)
+        return self._get_shuffled_state(solve_config, solve_config.TargetState, key, 18)
 
     def _get_neighbors_internal(self, state: "TopSpin.State") -> tuple["TopSpin.State", chex.Array]:
         """Internal function to compute neighbors without vmap."""

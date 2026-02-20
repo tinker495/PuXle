@@ -231,7 +231,7 @@ class Sokoban(Puzzle):
         """
         # Unpack the board so that we work on a flat representation.
         board = state.board_unpacked
-        x, y = self._getPlayerPosition(state)
+        x, y = self._get_player_position(state)
         current_pos = jnp.array([x, y])
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
         
@@ -313,7 +313,7 @@ class Sokoban(Puzzle):
         bottom_border = "┗━" + "━━" * size + "┛"
         return top_border + middle + bottom_border
 
-    def _getPlayerPosition(self, state: "Sokoban.State"):
+    def _get_player_position(self, state: "Sokoban.State"):
         board = state.board_unpacked
         flat_index = jnp.argmax(board == Sokoban.Object.PLAYER.value)
         return jnp.unravel_index(flat_index, (self.size, self.size))
@@ -536,7 +536,7 @@ class Sokoban(Puzzle):
         """
 
         board = state.board_unpacked
-        x, y = self._getPlayerPosition(state)
+        x, y = self._get_player_position(state)
         current_pos = jnp.array([x, y])
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
 
