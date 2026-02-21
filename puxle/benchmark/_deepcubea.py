@@ -54,7 +54,9 @@ def load_deepcubea_dataset(
 
     fallback = fallback_dir / dataset_name
     if not fallback.is_file():
-        raise FileNotFoundError(f"Unable to locate {dataset_name} under package resources or at {fallback}")
+        raise FileNotFoundError(
+            f"Unable to locate {dataset_name} under package resources or at {fallback}"
+        )
     with fallback.open("rb") as handle:
         return load_deepcubea(handle)
 

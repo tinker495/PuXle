@@ -21,7 +21,9 @@ def _normalize_type_options(type_tags, type_hierarchy) -> List[str]:
     return sorted(set(most_specific))
 
 
-def _objects_for_type_spec(type_spec, objects_by_type: Dict[str, List[str]]) -> List[str]:
+def _objects_for_type_spec(
+    type_spec, objects_by_type: Dict[str, List[str]]
+) -> List[str]:
     """Return candidate objects for one parameter type spec.
 
     ``type_spec`` can be either:
@@ -42,7 +44,9 @@ def _objects_for_type_spec(type_spec, objects_by_type: Dict[str, List[str]]) -> 
     return candidates
 
 
-def _get_type_combinations(param_types: List[object], objects_by_type: Dict[str, List[str]]) -> List[List[str]]:
+def _get_type_combinations(
+    param_types: List[object], objects_by_type: Dict[str, List[str]]
+) -> List[List[str]]:
     """Get all valid object combinations for given parameter types."""
     if not param_types:
         return [[]]
@@ -131,14 +135,20 @@ def _ground_formula(
         if not parts:
             # pddl parser may represent empty `()` as `Or()`; treat as tautology.
             return [], [], False
-        raise ValueError("Disjunctive preconditions `(or ...)` are not supported in STRIPS mode.")
+        raise ValueError(
+            "Disjunctive preconditions `(or ...)` are not supported in STRIPS mode."
+        )
 
     if formula_type == "OneOf":
-        raise ValueError("Non-deterministic preconditions `(oneof ...)` are not supported in STRIPS mode.")
+        raise ValueError(
+            "Non-deterministic preconditions `(oneof ...)` are not supported in STRIPS mode."
+        )
 
     # Handle Negation (Not)
     if formula_type == "Not":
-        pos, neg, impossible = _ground_formula(formula.argument, param_substitution, param_names)
+        pos, neg, impossible = _ground_formula(
+            formula.argument, param_substitution, param_names
+        )
         if impossible:
             # Not(Impossible) -> Satisfied
             return [], [], False
@@ -170,7 +180,9 @@ def _ground_formula(
         all_pos = []
         all_neg = []
         for part in parts:
-            pos, neg, impossible = _ground_formula(part, param_substitution, param_names)
+            pos, neg, impossible = _ground_formula(
+                part, param_substitution, param_names
+            )
             if impossible:
                 return [], [], True
             all_pos.extend(pos)
@@ -195,7 +207,9 @@ def _ground_formula(
     raise ValueError(f"Unsupported formula node `{formula_type}` in STRIPS grounding.")
 
 
-def _ground_effects(effect, param_substitution: List[str], param_names: List[str]) -> Dict[str, List[str]]:
+def _ground_effects(
+    effect, param_substitution: List[str], param_names: List[str]
+) -> Dict[str, List[str]]:
     """Grounds effects into add/delete lists."""
     add_effects = []
     delete_effects = []
@@ -220,13 +234,17 @@ def _ground_effects(effect, param_substitution: List[str], param_names: List[str
             if not parts:
                 # pddl parser may represent empty `()` as `Or()`; treat as no-op.
                 continue
-            raise ValueError(f"Unsupported effect node `{eff_type}` in STRIPS grounding.")
+            raise ValueError(
+                f"Unsupported effect node `{eff_type}` in STRIPS grounding."
+            )
 
         # Check for negation
         if eff_type == "Not":
             # Negative effect (delete)
             # argument is implicitly atomic in STRIPS
-            pos, neg, imp = _ground_formula(eff.argument, param_substitution, param_names)
+            pos, neg, imp = _ground_formula(
+                eff.argument, param_substitution, param_names
+            )
             if not imp and pos:
                 delete_effects.extend(pos)
                 # _ground_formula returns list[str], we extend
@@ -262,11 +280,15 @@ def ground_actions(
         param_combinations = _get_type_combinations(param_types, objects_by_type)
 
         for param_combo in param_combinations:
-            param_names = [param.name for param in getattr(action, "parameters", []) or []]
+            param_names = [
+                param.name for param in getattr(action, "parameters", []) or []
+            ]
 
             # Ground Preconditions
             # Result: (pos, neg, impossible)
-            pre_pos, pre_neg, impossible = _ground_formula(action.precondition, param_combo, param_names)
+            pre_pos, pre_neg, impossible = _ground_formula(
+                action.precondition, param_combo, param_names
+            )
 
             if impossible:
                 continue

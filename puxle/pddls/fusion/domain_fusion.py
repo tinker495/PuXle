@@ -132,7 +132,12 @@ class DomainFusion:
                 new_pre = self._rename_predicates_in_formula(a.precondition, prefix)
                 new_eff = self._rename_predicates_in_formula(a.effect, prefix)
 
-                renamed_action = Action(name=new_name, parameters=a.parameters, precondition=new_pre, effect=new_eff)
+                renamed_action = Action(
+                    name=new_name,
+                    parameters=a.parameters,
+                    precondition=new_pre,
+                    effect=new_eff,
+                )
                 merged_actions.append(renamed_action)
 
         return merged_actions
@@ -149,11 +154,16 @@ class DomainFusion:
 
         if hasattr(formula, "operands"):  # And, Or
             # Reconstruct same type
-            new_ops = [self._rename_predicates_in_formula(op, prefix) for op in formula.operands]
+            new_ops = [
+                self._rename_predicates_in_formula(op, prefix)
+                for op in formula.operands
+            ]
             return type(formula)(*new_ops)
 
         if hasattr(formula, "argument"):  # Not
-            return type(formula)(self._rename_predicates_in_formula(formula.argument, prefix))
+            return type(formula)(
+                self._rename_predicates_in_formula(formula.argument, prefix)
+            )
 
         if hasattr(formula, "name") and hasattr(formula, "terms"):  # Predicate
             # Rename!

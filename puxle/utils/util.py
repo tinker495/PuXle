@@ -46,9 +46,13 @@ def to_uint8(input: chex.Array, active_bits: int = 1) -> chex.Array:
         if active_bits == 8:
             return values_flat.astype(jnp.uint8)
         values_per_byte = 8 // active_bits
-        padding_needed = (values_per_byte - (len(values_flat) % values_per_byte)) % values_per_byte
+        padding_needed = (
+            values_per_byte - (len(values_flat) % values_per_byte)
+        ) % values_per_byte
         if padding_needed > 0:
-            values_flat = jnp.concatenate([values_flat, jnp.zeros(padding_needed, dtype=values_flat.dtype)])
+            values_flat = jnp.concatenate(
+                [values_flat, jnp.zeros(padding_needed, dtype=values_flat.dtype)]
+            )
         grouped_values = values_flat.reshape(-1, values_per_byte)
 
         def pack_group(group):
@@ -67,9 +71,13 @@ def to_uint8(input: chex.Array, active_bits: int = 1) -> chex.Array:
         L = np.lcm(active_bits, 8)  # total bits per block
         num_values_per_block = L // active_bits
         num_bytes_per_block = L // 8
-        padding_needed = (num_values_per_block - (len(values_flat) % num_values_per_block)) % num_values_per_block
+        padding_needed = (
+            num_values_per_block - (len(values_flat) % num_values_per_block)
+        ) % num_values_per_block
         if padding_needed > 0:
-            values_flat = jnp.concatenate([values_flat, jnp.zeros(padding_needed, dtype=values_flat.dtype)])
+            values_flat = jnp.concatenate(
+                [values_flat, jnp.zeros(padding_needed, dtype=values_flat.dtype)]
+            )
         grouped_values = values_flat.reshape(-1, num_values_per_block)
         if L <= 32:
             # Can use a single uint32 accumulator
@@ -77,7 +85,10 @@ def to_uint8(input: chex.Array, active_bits: int = 1) -> chex.Array:
                 acc = jnp.uint32(0)
                 for i in range(num_values_per_block):
                     acc = acc | (group[i].astype(jnp.uint32) << (i * active_bits))
-                return jnp.array([(acc >> (8 * j)) & 0xFF for j in range(num_bytes_per_block)], dtype=jnp.uint8)
+                return jnp.array(
+                    [(acc >> (8 * j)) & 0xFF for j in range(num_bytes_per_block)],
+                    dtype=jnp.uint8,
+                )
 
             packed_blocks = jax.vmap(pack_block)(grouped_values)
             return packed_blocks.reshape(-1)
@@ -104,20 +115,28 @@ def to_uint8(input: chex.Array, active_bits: int = 1) -> chex.Array:
             return packed_blocks.reshape(-1)
 
 
-def from_uint8(packed_bytes: chex.Array, target_shape: tuple[int, ...], active_bits: int = 1) -> chex.Array:
+def from_uint8(
+    packed_bytes: chex.Array, target_shape: tuple[int, ...], active_bits: int = 1
+) -> chex.Array:
     """
     Efficiently unpack uint8 array back to original format.
     Now supports all bit widths (1-8) efficiently, including 3,5,6,7 bits, using only uint32 accumulators.
     """
-    assert packed_bytes.dtype == jnp.uint8, f"Input must be uint8, got {packed_bytes.dtype}"
+    assert packed_bytes.dtype == jnp.uint8, (
+        f"Input must be uint8, got {packed_bytes.dtype}"
+    )
     assert 1 <= active_bits <= 8, f"active_bits must be 1-8, got {active_bits}"
 
     num_target_elements = np.prod(target_shape)
-    assert num_target_elements > 0, f"num_target_elements={num_target_elements} must be positive"
+    assert num_target_elements > 0, (
+        f"num_target_elements={num_target_elements} must be positive"
+    )
 
     if active_bits == 1:
         # Unpack to boolean array
-        all_unpacked_bits = jnp.unpackbits(packed_bytes, count=num_target_elements, bitorder="little")
+        all_unpacked_bits = jnp.unpackbits(
+            packed_bytes, count=num_target_elements, bitorder="little"
+        )
         return all_unpacked_bits.reshape(target_shape).astype(jnp.bool_)
     elif active_bits in (2, 4, 8):
         # Direct copy for 8-bit values, or efficient unpack for 2,4 bits
@@ -143,10 +162,14 @@ def from_uint8(packed_bytes: chex.Array, target_shape: tuple[int, ...], active_b
         L = np.lcm(active_bits, 8)
         num_values_per_block = L // active_bits
         num_bytes_per_block = L // 8
-        total_blocks = (len(packed_bytes) + num_bytes_per_block - 1) // num_bytes_per_block
+        total_blocks = (
+            len(packed_bytes) + num_bytes_per_block - 1
+        ) // num_bytes_per_block
         padding_needed = total_blocks * num_bytes_per_block - len(packed_bytes)
         if padding_needed > 0:
-            packed_bytes = jnp.concatenate([packed_bytes, jnp.zeros(padding_needed, dtype=packed_bytes.dtype)])
+            packed_bytes = jnp.concatenate(
+                [packed_bytes, jnp.zeros(padding_needed, dtype=packed_bytes.dtype)]
+            )
         grouped_bytes = packed_bytes.reshape(-1, num_bytes_per_block)
         mask = (1 << active_bits) - 1
         if L <= 32:
@@ -155,13 +178,18 @@ def from_uint8(packed_bytes: chex.Array, target_shape: tuple[int, ...], active_b
                 acc = jnp.uint32(0)
                 for j in range(num_bytes_per_block):
                     acc = acc | (byte_group[j].astype(jnp.uint32) << (8 * j))
-                values = [(acc >> (i * active_bits)) & mask for i in range(num_values_per_block)]
+                values = [
+                    (acc >> (i * active_bits)) & mask
+                    for i in range(num_values_per_block)
+                ]
                 return jnp.array(values, dtype=jnp.uint8)
 
             unpacked_blocks = jax.vmap(unpack_block)(grouped_bytes)
             all_values = unpacked_blocks.flatten()
             assert len(all_values) >= num_target_elements, "Not enough unpacked values"
-            return all_values[:num_target_elements].reshape(target_shape).astype(jnp.uint8)
+            return (
+                all_values[:num_target_elements].reshape(target_shape).astype(jnp.uint8)
+            )
         else:
 
             def unpack_block(byte_group):
@@ -172,7 +200,9 @@ def from_uint8(packed_bytes: chex.Array, target_shape: tuple[int, ...], active_b
                 for i in range(num_values_per_block):
                     while bits_in_acc < active_bits:
                         if byte_idx < num_bytes_per_block:
-                            acc = acc | (byte_group[byte_idx].astype(jnp.uint32) << bits_in_acc)
+                            acc = acc | (
+                                byte_group[byte_idx].astype(jnp.uint32) << bits_in_acc
+                            )
                             bits_in_acc += 8
                             byte_idx += 1
                     values = values.at[i].set(acc & mask)
@@ -183,7 +213,9 @@ def from_uint8(packed_bytes: chex.Array, target_shape: tuple[int, ...], active_b
             unpacked_blocks = jax.vmap(unpack_block)(grouped_bytes)
             all_values = unpacked_blocks.flatten()
             assert len(all_values) >= num_target_elements, "Not enough unpacked values"
-            return all_values[:num_target_elements].reshape(target_shape).astype(jnp.uint8)
+            return (
+                all_values[:num_target_elements].reshape(target_shape).astype(jnp.uint8)
+            )
 
 
 def pack_variable_bits(values_and_bits: list[tuple[chex.Array, int]]) -> chex.Array:
@@ -227,7 +259,9 @@ def pack_variable_bits(values_and_bits: list[tuple[chex.Array, int]]) -> chex.Ar
     return jnp.concatenate([metadata_packed] + packed_arrays)
 
 
-def unpack_variable_bits(packed_data: chex.Array, target_shapes: list[tuple[int, ...]]) -> list[chex.Array]:
+def unpack_variable_bits(
+    packed_data: chex.Array, target_shapes: list[tuple[int, ...]]
+) -> list[chex.Array]:
     """
     Unpack variable bit data back to original arrays.
 
@@ -245,7 +279,9 @@ def unpack_variable_bits(packed_data: chex.Array, target_shapes: list[tuple[int,
     num_arrays = int(packed_data[0])
     metadata_size = 1 + num_arrays * 2
 
-    assert len(target_shapes) == num_arrays, f"Expected {num_arrays} shapes, got {len(target_shapes)}"
+    assert len(target_shapes) == num_arrays, (
+        f"Expected {num_arrays} shapes, got {len(target_shapes)}"
+    )
 
     # Parse metadata for each array
     arrays_info = []
@@ -293,7 +329,11 @@ def add_img_parser(cls: Type[T], imgfunc: callable) -> Type[T]:
             return imgfunc(self, **kwargs)
         elif structured_type == StructuredType.BATCHED:
             batch_shape = self.batch_shape
-            batch_len = jnp.prod(jnp.array(batch_shape)) if len(batch_shape) != 1 else batch_shape[0]
+            batch_len = (
+                jnp.prod(jnp.array(batch_shape))
+                if len(batch_shape) != 1
+                else batch_shape[0]
+            )
             results = []
             for i in trange(batch_len):
                 index = jnp.unravel_index(i, batch_shape)
@@ -302,7 +342,9 @@ def add_img_parser(cls: Type[T], imgfunc: callable) -> Type[T]:
             results = np.stack(results, axis=0)
             return results
         else:
-            raise ValueError(f"State is not structured: {self.shape} != {self.default_shape}")
+            raise ValueError(
+                f"State is not structured: {self.shape} != {self.default_shape}"
+            )
 
     setattr(cls, "img", get_img)
     return cls

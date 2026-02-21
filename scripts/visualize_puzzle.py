@@ -73,9 +73,19 @@ def _select_state(puzzle: Puzzle, state_tree: Puzzle.State, index: int) -> Puzzl
 
 
 @click.command()
-@click.option("--puzzle", "puzzle_name", type=str, required=True, help="Puzzle class name to visualize.")
-@click.option("--seed", default=42, show_default=True, help="PRNG seed for reproducible sampling.")
-@click.option("--img/--no-img", default=False, help="Generate images using puzzle image parsers.")
+@click.option(
+    "--puzzle",
+    "puzzle_name",
+    type=str,
+    required=True,
+    help="Puzzle class name to visualize.",
+)
+@click.option(
+    "--seed", default=42, show_default=True, help="PRNG seed for reproducible sampling."
+)
+@click.option(
+    "--img/--no-img", default=False, help="Generate images using puzzle image parsers."
+)
 @click.option(
     "--output-dir",
     type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
@@ -99,7 +109,9 @@ def visualize_puzzle(
     puzzles = discover_puzzles()
     if puzzle_name not in puzzles:
         available = ", ".join(sorted(puzzles.keys()))
-        raise click.BadParameter(f"Unknown puzzle '{puzzle_name}'. Available puzzles: {available}")
+        raise click.BadParameter(
+            f"Unknown puzzle '{puzzle_name}'. Available puzzles: {available}"
+        )
 
     puzzle_class = puzzles[puzzle_name]
     parsed_kwargs: dict[str, object] = {}
@@ -150,7 +162,9 @@ def visualize_puzzle(
         for idx in range(puzzle.action_size):
             action_label = action_labels[idx]
             neighbour_state = _select_state(puzzle, neighbours, idx)
-            neighbour_path = _save_image(img_parser(neighbour_state), img_root / f"{action_label}.png")
+            neighbour_path = _save_image(
+                img_parser(neighbour_state), img_root / f"{action_label}.png"
+            )
             click.echo(f"Saved neighbour {action_label} image -> {neighbour_path}")
 
 

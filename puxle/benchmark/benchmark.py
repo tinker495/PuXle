@@ -102,14 +102,20 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
             - False: if invalid (not solved) or suboptimal (> optimal cost).
             - None: if valid (solved) but sample has no optimal info to compare against.
         """
-        target_sequence = action_sequence if action_sequence is not None else sample.optimal_action_sequence
+        target_sequence = (
+            action_sequence
+            if action_sequence is not None
+            else sample.optimal_action_sequence
+        )
         target_path = states if states is not None else sample.optimal_path
 
         if target_sequence is None:
             if target_path and not action_sequence:
                 # Only raise if we are validating the sample itself and it's inconsistent
                 if sample.optimal_path and not sample.optimal_action_sequence:
-                    raise ValueError("Sample has optimal_path but no optimal_action_sequence.")
+                    raise ValueError(
+                        "Sample has optimal_path but no optimal_action_sequence."
+                    )
             # If no sequence provided and sample has none, we can't verify steps.
             # But if path provided, we can check validity.
             if target_path is None:
@@ -122,13 +128,18 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         else:
             # Reconstruct path from sequence
             puzzle = self.puzzle
-            action_lookup = {puzzle.action_to_string(action): action for action in range(puzzle.action_size)}
+            action_lookup = {
+                puzzle.action_to_string(action): action
+                for action in range(puzzle.action_size)
+            }
             current_state = sample.state
             for i, notation in enumerate(target_sequence):
                 if notation not in action_lookup:
                     raise KeyError(f"Unknown action notation '{notation}' at index {i}")
                 action_idx = action_lookup[notation]
-                neighbours, _ = puzzle.get_neighbours(sample.solve_config, current_state, filled=True)
+                neighbours, _ = puzzle.get_neighbours(
+                    sample.solve_config, current_state, filled=True
+                )
                 current_state = neighbours[action_idx]
             final_state = current_state
 
@@ -165,7 +176,10 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         """Build a mapping from action notation to action index."""
         if self._notation_to_action is None:
             puzzle = self.puzzle
-            self._notation_to_action = {puzzle.action_to_string(action): action for action in range(puzzle.action_size)}
+            self._notation_to_action = {
+                puzzle.action_to_string(action): action
+                for action in range(puzzle.action_size)
+            }
         return self._notation_to_action
 
     def _build_optimal_path(
@@ -187,9 +201,13 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
             try:
                 action_idx = action_lookup[notation]
             except KeyError as exc:
-                raise KeyError(f"Unknown action notation '{notation}' at step {step}") from exc
+                raise KeyError(
+                    f"Unknown action notation '{notation}' at step {step}"
+                ) from exc
 
-            neighbours, _ = puzzle.get_neighbours(solve_config, current_state, filled=True)
+            neighbours, _ = puzzle.get_neighbours(
+                solve_config, current_state, filled=True
+            )
             next_state = neighbours[action_idx]
             path.append(next_state)
             current_state = next_state

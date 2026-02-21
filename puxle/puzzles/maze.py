@@ -90,7 +90,9 @@ class Maze(Puzzle):
                 case _:
                     raise ValueError(f"Invalid value: {x}")
 
-        def parser(state: "Maze.State", solve_config: "Maze.SolveConfig" = None, **kwargs):
+        def parser(
+            state: "Maze.State", solve_config: "Maze.SolveConfig" = None, **kwargs
+        ):
             if solve_config is None:
                 # Fallback representation when no solve_config is provided
                 return f"Maze State: Player at position {state.pos}"
@@ -114,7 +116,11 @@ class Maze(Puzzle):
 
             # 4. Place target marker (3) onto the integer maze
             # Important: only place target if it's not a wall (should always be true with DFS gen)
-            int_maze_flat = jnp.where(bool_maze_flat[target_idx], int_maze_flat, int_maze_flat.at[target_idx].set(3))
+            int_maze_flat = jnp.where(
+                bool_maze_flat[target_idx],
+                int_maze_flat,
+                int_maze_flat.at[target_idx].set(3),
+            )
 
             # 5. Check if player is on target
             is_on_target = target_idx == player_idx
@@ -133,15 +139,21 @@ class Maze(Puzzle):
 
         return parser
 
-    def get_initial_state(self, solve_config: "Maze.SolveConfig", key=jax.random.PRNGKey(0), data=None) -> "Maze.State":
+    def get_initial_state(
+        self, solve_config: "Maze.SolveConfig", key=jax.random.PRNGKey(0), data=None
+    ) -> "Maze.State":
         # Start state should also be chosen from valid path locations
         bool_maze = solve_config.Maze_unpacked.reshape((self.size, self.size))
         return self._get_random_state(bool_maze, key)
 
-    def get_solve_config(self, key=jax.random.PRNGKey(128), data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(
+        self, key=jax.random.PRNGKey(128), data=None
+    ) -> Puzzle.SolveConfig:
         # Generate maze using DFS
         key, maze_key, target_key = jax.random.split(key, 3)
-        bool_maze = self._generate_maze_dfs(maze_key, self.size)  # Returns bool array (True=wall)
+        bool_maze = self._generate_maze_dfs(
+            maze_key, self.size
+        )  # Returns bool array (True=wall)
         bool_maze = bool_maze.ravel()
 
         # Get target state on a valid path cell
@@ -158,7 +170,9 @@ class Maze(Puzzle):
         # Choose starting cell - always start at (0, 0)
         # key, start_key = jax.random.split(key) # No longer needed for random start
         start_pos = jnp.array([0, 0], dtype=TYPE)
-        maze = maze.at[start_pos[0], start_pos[1]].set(False)  # Mark start (0,0) as path
+        maze = maze.at[start_pos[0], start_pos[1]].set(
+            False
+        )  # Mark start (0,0) as path
         stack = stack.at[stack_ptr].set(start_pos)
         stack_ptr += 1
 
@@ -188,7 +202,12 @@ class Maze(Puzzle):
             potential_nc = cc + dc
 
             # Check bounds
-            in_bounds = (potential_nr >= 0) & (potential_nr < size) & (potential_nc >= 0) & (potential_nc < size)
+            in_bounds = (
+                (potential_nr >= 0)
+                & (potential_nr < size)
+                & (potential_nc >= 0)
+                & (potential_nc < size)
+            )
 
             # Check if potential neighbour is a wall (i.e., unvisited)
             # Need to handle OOB indexing safely for maze lookup
@@ -208,11 +227,18 @@ class Maze(Puzzle):
                 key, choice_key = jax.random.split(key)
 
                 # Randomly choose one valid neighbor
-                chosen_idx_in_valid = jax.random.randint(choice_key, (), 0, num_valid_neighbors, dtype=jnp.int32)
-                chosen_dir_idx = valid_indices[chosen_idx_in_valid]  # Map back to original direction index [0,1,2,3]
+                chosen_idx_in_valid = jax.random.randint(
+                    choice_key, (), 0, num_valid_neighbors, dtype=jnp.int32
+                )
+                chosen_dir_idx = valid_indices[
+                    chosen_idx_in_valid
+                ]  # Map back to original direction index [0,1,2,3]
 
                 nr, nc = potential_nr[chosen_dir_idx], potential_nc[chosen_dir_idx]
-                wall_r, wall_c = cr + wall_dr[chosen_dir_idx], cc + wall_dc[chosen_dir_idx]
+                wall_r, wall_c = (
+                    cr + wall_dr[chosen_dir_idx],
+                    cc + wall_dc[chosen_dir_idx],
+                )
 
                 # Carve path to neighbor and wall between
                 maze = maze.at[nr, nc].set(False)
@@ -254,7 +280,11 @@ class Maze(Puzzle):
         return maze  # Return the boolean maze grid
 
     def get_actions(
-        self, solve_config: "Maze.SolveConfig", state: "Maze.State", action: chex.Array, filled: bool = True
+        self,
+        solve_config: "Maze.SolveConfig",
+        state: "Maze.State",
+        action: chex.Array,
+        filled: bool = True,
     ) -> tuple["Maze.State", chex.Array]:
         """
         Returns the next state and cost for a given action.
@@ -340,7 +370,9 @@ class Maze(Puzzle):
         import cv2
         import numpy as np
 
-        def img_func(state: "Maze.State", solve_config: "Maze.SolveConfig" = None, **kwargs):
+        def img_func(
+            state: "Maze.State", solve_config: "Maze.SolveConfig" = None, **kwargs
+        ):
             assert solve_config is not None, "This puzzle requires a solve_config"
             imgsize = IMG_SIZE[0]
 
@@ -353,13 +385,17 @@ class Maze(Puzzle):
             walls_mono_np = (~maze_bool_np).astype(np.uint8) * 255
 
             # 3. Resize the NumPy array to target image size
-            img_resized = cv2.resize(walls_mono_np, (imgsize, imgsize), interpolation=cv2.INTER_NEAREST)
+            img_resized = cv2.resize(
+                walls_mono_np, (imgsize, imgsize), interpolation=cv2.INTER_NEAREST
+            )
 
             # 4. Convert to 3-channel BGR
             img = cv2.cvtColor(img_resized, cv2.COLOR_GRAY2BGR)
             # --- End Optimized Wall Rendering ---
 
-            cell_size = imgsize / self.size  # Still needed for grid lines and object placement
+            cell_size = (
+                imgsize / self.size
+            )  # Still needed for grid lines and object placement
 
             # Draw grid lines (remains the same)
             grid_color = (200, 200, 200)  # Light grey
@@ -383,13 +419,20 @@ class Maze(Puzzle):
 
             if (state.pos == solve_config.TargetState.pos).all():
                 # Player on target: Green circle
-                img = cv2.circle(img, player_center, player_radius, (0, 255, 0), thickness=-1)
+                img = cv2.circle(
+                    img, player_center, player_radius, (0, 255, 0), thickness=-1
+                )
             else:
                 # Player not on target: Red circle
-                img = cv2.circle(img, player_center, player_radius, (255, 0, 0), thickness=-1)
+                img = cv2.circle(
+                    img, player_center, player_radius, (255, 0, 0), thickness=-1
+                )
 
                 # Draw target 'X' (Red)
-                target_top_left = (int(pos_target[1] * cell_size), int(pos_target[0] * cell_size))
+                target_top_left = (
+                    int(pos_target[1] * cell_size),
+                    int(pos_target[0] * cell_size),
+                )
                 target_bottom_right = (
                     int((pos_target[1] + 1) * cell_size),
                     int((pos_target[0] + 1) * cell_size),
@@ -405,8 +448,12 @@ class Maze(Puzzle):
 
                 target_color = (255, 0, 0)  # Red in BGR
                 thickness = 2
-                img = cv2.line(img, target_top_left, target_bottom_right, target_color, thickness)
-                img = cv2.line(img, target_top_right, target_bottom_left, target_color, thickness)
+                img = cv2.line(
+                    img, target_top_left, target_bottom_right, target_color, thickness
+                )
+                img = cv2.line(
+                    img, target_top_right, target_bottom_left, target_color, thickness
+                )
 
             return img
 

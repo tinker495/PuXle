@@ -58,14 +58,22 @@ class RubiksCubeSantaBenchmark(Benchmark):
         if puzzle_type is not None:
             self.puzzle_type = puzzle_type
         else:
-            self.puzzle_type = preset.puzzle_type if preset else RubiksCubeSantaPreset.CUBE_3.puzzle_type
+            self.puzzle_type = (
+                preset.puzzle_type
+                if preset
+                else RubiksCubeSantaPreset.CUBE_3.puzzle_type
+            )
 
-        self._dataset_path = Path(dataset_path).expanduser().resolve() if dataset_path else None
+        self._dataset_path = (
+            Path(dataset_path).expanduser().resolve() if dataset_path else None
+        )
         self._solve_config_cache = None
 
         # Extract size from puzzle_type
         if not self.puzzle_type.startswith("cube_"):
-            raise ValueError(f"Invalid puzzle type '{self.puzzle_type}'. Must start with 'cube_'.")
+            raise ValueError(
+                f"Invalid puzzle type '{self.puzzle_type}'. Must start with 'cube_'."
+            )
         try:
             dims = self.puzzle_type.split("_")[1].split("/")
             self.size = int(dims[0])
@@ -75,7 +83,9 @@ class RubiksCubeSantaBenchmark(Benchmark):
     def build_puzzle(self) -> RubiksCube:
         # We enforce color embedding because Santa dataset uses colors (A, B...)
         # which we map to 0..5, rather than unique tile IDs.
-        return RubiksCube(size=self.size, initial_shuffle=0, color_embedding=True, metric="UQTM")
+        return RubiksCube(
+            size=self.size, initial_shuffle=0, color_embedding=True, metric="UQTM"
+        )
 
     def load_dataset(self) -> Dict[str, Any]:
         if self._dataset_path is not None:
@@ -95,7 +105,9 @@ class RubiksCubeSantaBenchmark(Benchmark):
         df = df[df["puzzle_type"] == self.puzzle_type]
 
         if df.empty:
-            raise ValueError(f"No puzzles found for type '{self.puzzle_type}' in {path}")
+            raise ValueError(
+                f"No puzzles found for type '{self.puzzle_type}' in {path}"
+            )
 
         # Pre-process samples
         samples = []

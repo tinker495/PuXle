@@ -20,11 +20,15 @@ class DomainValidator:
 
         # 1. Check all predicates in actions exist in domain
         for action in domain.actions:
-            action_preds = self._extract_predicates(action.precondition) + self._extract_predicates(action.effect)
+            action_preds = self._extract_predicates(
+                action.precondition
+            ) + self._extract_predicates(action.effect)
 
             for pred in action_preds:
                 if pred.name not in defined_predicates:
-                    errors.append(f"Action '{action.name}' uses undefined predicate '{pred.name}'")
+                    errors.append(
+                        f"Action '{action.name}' uses undefined predicate '{pred.name}'"
+                    )
                 elif defined_predicates[pred.name] != pred.arity:
                     errors.append(
                         f"Action '{action.name}' uses predicate '{pred.name}' with arity "

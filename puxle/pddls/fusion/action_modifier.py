@@ -29,7 +29,10 @@ class ActionModifier:
         self.rng = random.Random(params.seed)
 
     def modify_actions(
-        self, actions: List[Action], all_predicates: List[Predicate], types_map: Dict[str, Any]
+        self,
+        actions: List[Action],
+        all_predicates: List[Predicate],
+        types_map: Dict[str, Any],
     ) -> List[Action]:
         """
         Apply stochastic modifications to a list of actions.
@@ -37,11 +40,15 @@ class ActionModifier:
         type_ancestors = self._build_type_ancestor_map(types_map)
         modified_actions = []
         for action in actions:
-            modified = self._modify_single_action(action, all_predicates, type_ancestors)
+            modified = self._modify_single_action(
+                action, all_predicates, type_ancestors
+            )
             modified_actions.append(modified)
 
         if self.params.rev_flag:
-            modified_actions = self._enforce_reversibility(modified_actions, all_predicates, types_map, type_ancestors)
+            modified_actions = self._enforce_reversibility(
+                modified_actions, all_predicates, types_map, type_ancestors
+            )
 
         return modified_actions
 
@@ -63,7 +70,9 @@ class ActionModifier:
 
         # 2. Possibly add preconditions
         if self.rng.random() < self.params.prob_add_pre:
-            new_pre = self._sample_predicate_for_action(all_predicates, params, type_ancestors)
+            new_pre = self._sample_predicate_for_action(
+                all_predicates, params, type_ancestors
+            )
             if new_pre:
                 # Optionally negate
                 if self.rng.random() < self.params.prob_neg:
@@ -79,7 +88,9 @@ class ActionModifier:
 
         # 3. Possibly add effects
         if self.rng.random() < self.params.prob_add_eff:
-            new_eff = self._sample_predicate_for_action(all_predicates, params, type_ancestors)
+            new_eff = self._sample_predicate_for_action(
+                all_predicates, params, type_ancestors
+            )
             if new_eff:
                 # Check for consistency (don't add P and ~P)
                 # Simple check: if Not(new_eff) in effects, don't add
@@ -101,7 +112,12 @@ class ActionModifier:
         new_precondition = self._list_to_formula(preconditions)
         new_effect = self._list_to_formula(effects)
 
-        return Action(name=action.name, parameters=action.parameters, precondition=new_precondition, effect=new_effect)
+        return Action(
+            name=action.name,
+            parameters=action.parameters,
+            precondition=new_precondition,
+            effect=new_effect,
+        )
 
     def _enforce_reversibility(
         self,
@@ -172,7 +188,9 @@ class ActionModifier:
                 term_candidate_vars_list = []
                 possible = True
                 for term in target_pred.terms:
-                    vars_for_term = self._compatible_action_params_for_term(term, action.parameters, type_ancestors)
+                    vars_for_term = self._compatible_action_params_for_term(
+                        term, action.parameters, type_ancestors
+                    )
                     if not vars_for_term:
                         possible = False
                         break
@@ -211,7 +229,9 @@ class ActionModifier:
 
                     # Modify the action
                     original_action = new_actions[idx]
-                    current_effects = self._extract_atomic_conditions(original_action.effect)
+                    current_effects = self._extract_atomic_conditions(
+                        original_action.effect
+                    )
 
                     # Avoid adding if it contradicts? (adding P and ~P same time)
                     if self._is_consistent(new_effect_term, current_effects):
@@ -253,7 +273,9 @@ class ActionModifier:
                     continue
                 term_candidate_vars: List[List[Variable]] = []
                 for term in p.terms:
-                    compatible_vars = self._compatible_action_params_for_term(term, action_params, type_ancestors)
+                    compatible_vars = self._compatible_action_params_for_term(
+                        term, action_params, type_ancestors
+                    )
                     if not compatible_vars:
                         term_candidate_vars = []
                         break
@@ -284,7 +306,9 @@ class ActionModifier:
             return {str(tag)}
         return {"object"}
 
-    def _build_type_ancestor_map(self, types_map: Dict[str, Any]) -> Dict[str, Set[str]]:
+    def _build_type_ancestor_map(
+        self, types_map: Dict[str, Any]
+    ) -> Dict[str, Set[str]]:
         parent: Dict[str, str] = {}
         for child_raw, par_raw in (types_map or {}).items():
             child = str(child_raw)
@@ -310,7 +334,12 @@ class ActionModifier:
 
         return ancestors
 
-    def _is_subtype(self, candidate_type: str, required_type: str, type_ancestors: Dict[str, Set[str]]) -> bool:
+    def _is_subtype(
+        self,
+        candidate_type: str,
+        required_type: str,
+        type_ancestors: Dict[str, Set[str]],
+    ) -> bool:
         if required_type == "object":
             return True
         if candidate_type == required_type:
@@ -326,7 +355,10 @@ class ActionModifier:
         variable_tags = self._normalize_type_tags(variable)
         # Variable type must be equal to, or more specific than, at least one required tag.
         for v_tag in variable_tags:
-            if not any(self._is_subtype(v_tag, req_tag, type_ancestors) for req_tag in required_tags):
+            if not any(
+                self._is_subtype(v_tag, req_tag, type_ancestors)
+                for req_tag in required_tags
+            ):
                 return False
         return True
 
@@ -340,7 +372,9 @@ class ActionModifier:
         return [
             param
             for param in action_params
-            if self._is_variable_compatible_with_required_tags(param, required_tags, type_ancestors)
+            if self._is_variable_compatible_with_required_tags(
+                param, required_tags, type_ancestors
+            )
         ]
 
     def _extract_atomic_conditions(self, formula: Formula) -> List[Formula]:

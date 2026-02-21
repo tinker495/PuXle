@@ -69,7 +69,8 @@ class PancakeSorting(Puzzle):
             for i, pancake in enumerate(state.stack):
                 size_str = "=" * (2 * (int(pancake) - 1) + 1)
                 result.append(
-                    f"{i + 1:02d}:{pancake:02d} - " + colored(f"{size_str.center(self.size * 2)}", get_color(pancake))
+                    f"{i + 1:02d}:{pancake:02d} - "
+                    + colored(f"{size_str.center(self.size * 2)}", get_color(pancake))
                 )
             result.append("Plate " + "┗━" + "━━" * self.size + "┛")
             return "\n".join(result)
@@ -151,7 +152,11 @@ class PancakeSorting(Puzzle):
                     img,
                     (x_start + 5, highlight_y),
                     (x_end - 5, highlight_y + highlight_height),
-                    (min(color[0] + 40, 255), min(color[1] + 40, 255), min(color[2] + 40, 255)),
+                    (
+                        min(color[0] + 40, 255),
+                        min(color[1] + 40, 255),
+                        min(color[2] + 40, 255),
+                    ),
                     -1,
                 )
 
@@ -161,7 +166,11 @@ class PancakeSorting(Puzzle):
                     img,
                     (x_start + 5, shadow_y),
                     (x_end - 5, shadow_y + highlight_height),
-                    (max(color[0] - 40, 0), max(color[1] - 40, 0), max(color[2] - 40, 0)),
+                    (
+                        max(color[0] - 40, 0),
+                        max(color[1] - 40, 0),
+                        max(color[2] - 40, 0),
+                    ),
                     -1,
                 )
 
@@ -188,7 +197,9 @@ class PancakeSorting(Puzzle):
 
         return img_func
 
-    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "PancakeSorting.State":
+    def get_initial_state(
+        self, solve_config: Puzzle.SolveConfig, key=None, data=None
+    ) -> "PancakeSorting.State":
         """Generate a random initial state for the puzzle"""
         return self._get_random_state(key)
 
@@ -234,7 +245,9 @@ class PancakeSorting(Puzzle):
                 return new_stack.at[i].set(stack[new_pos])
 
             new_stack = jax.lax.scan(
-                lambda new_s, i: (body_fun(i, new_s), None), new_stack, jnp.arange(stack.shape[0])
+                lambda new_s, i: (body_fun(i, new_s), None),
+                new_stack,
+                jnp.arange(stack.shape[0]),
             )[0]
 
             return new_stack
@@ -246,7 +259,9 @@ class PancakeSorting(Puzzle):
         )
         return self.State(stack=next_stack), cost
 
-    def is_solved(self, solve_config: "PancakeSorting.SolveConfig", state: "PancakeSorting.State") -> bool:
+    def is_solved(
+        self, solve_config: "PancakeSorting.SolveConfig", state: "PancakeSorting.State"
+    ) -> bool:
         """Check if the current state matches the target state (sorted)"""
         return state == solve_config.TargetState
 

@@ -10,7 +10,9 @@ from __future__ import annotations
 from typing import Dict, Iterable, Set, Tuple
 
 
-def collect_type_hierarchy(domain) -> Tuple[Dict[str, str], Dict[str, Set[str]], Dict[str, Set[str]]]:
+def collect_type_hierarchy(
+    domain,
+) -> Tuple[Dict[str, str], Dict[str, Set[str]], Dict[str, Set[str]]]:
     """Extract best-effort type hierarchy from a PDDL domain object.
 
     Returns (parent, ancestors, descendants).
@@ -83,7 +85,9 @@ def select_most_specific_types(
 
 
 def extract_objects_by_type(
-    problem, hierarchy: Tuple[Dict[str, str], Dict[str, Set[str]], Dict[str, Set[str]]], domain=None
+    problem,
+    hierarchy: Tuple[Dict[str, str], Dict[str, Set[str]], Dict[str, Set[str]]],
+    domain=None,
 ) -> Dict[str, list[str]]:
     """Extract objects grouped by types, respecting hierarchy if available."""
     objects_by_type: dict[str, list[str]] = {}
@@ -154,7 +158,9 @@ def extract_objects_by_type(
                     deduped.append(o)
             objects_by_type[t] = deduped
 
-        all_types = set(direct_by_type.keys()) | set(ancestors.keys()) | set(descendants.keys())
+        all_types = (
+            set(direct_by_type.keys()) | set(ancestors.keys()) | set(descendants.keys())
+        )
         for t in sorted(all_types):
             base = list(objects_by_type.get(t, []))
             seen = set(base)

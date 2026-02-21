@@ -45,7 +45,13 @@ class SlidePuzzlePreset(Enum):
         HARD_17_STATES,
     )
 
-    def __init__(self, dataset_name: str, board_size: int, indices: Sequence[int] | None, states: Sequence[Any] | None):
+    def __init__(
+        self,
+        dataset_name: str,
+        board_size: int,
+        indices: Sequence[int] | None,
+        states: Sequence[Any] | None,
+    ):
         self.dataset_name = dataset_name
         self.board_size = board_size
         self.indices = indices
@@ -73,7 +79,9 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         preset: SlidePuzzlePreset | None = SlidePuzzlePreset.SIZE15,
     ) -> None:
         super().__init__()
-        self._dataset_path = Path(dataset_path).expanduser().resolve() if dataset_path else None
+        self._dataset_path = (
+            Path(dataset_path).expanduser().resolve() if dataset_path else None
+        )
         preset_dataset_name = preset.dataset_name if preset else DEFAULT_DATASET_NAME
         preset_board_size = preset.board_size if preset else None
         self._dataset_name = dataset_name or preset_dataset_name
@@ -90,7 +98,12 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
             return {"states": self._explicit_states, "solutions": None}
 
         fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH
-        return load_deepcubea_dataset(self._dataset_path, self._dataset_name, "puxle.data.slidepuzzle", fallback_dir)
+        return load_deepcubea_dataset(
+            self._dataset_path,
+            self._dataset_name,
+            "puxle.data.slidepuzzle",
+            fallback_dir,
+        )
 
     def sample_ids(self) -> Iterable[Hashable]:
         if self._subset_indices is not None:
@@ -108,8 +121,12 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         optimal_path = None
         optimal_cost = None
         if solutions:
-            optimal_action_sequence, optimal_cost = self._convert_solution(solutions[index])
-            optimal_path = self._build_optimal_path(state, solve_config, optimal_action_sequence)
+            optimal_action_sequence, optimal_cost = self._convert_solution(
+                solutions[index]
+            )
+            optimal_path = self._build_optimal_path(
+                state, solve_config, optimal_action_sequence
+            )
 
         return BenchmarkSample(
             state=state,
@@ -129,7 +146,9 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
             length = len(tiles)
             size = int(math.isqrt(length))
             if size * size != length:
-                raise ValueError(f"Unable to infer puzzle size from state length {length}. Expected a perfect square.")
+                raise ValueError(
+                    f"Unable to infer puzzle size from state length {length}. Expected a perfect square."
+                )
             self._board_size = size
         return self._board_size
 
@@ -155,7 +174,9 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
             try:
                 action_sequence.append(MOVE_TO_NOTATION[move.upper()])
             except KeyError as exc:
-                raise ValueError(f"Unsupported move '{move}' in DeepCubeA slide puzzle dataset.") from exc
+                raise ValueError(
+                    f"Unsupported move '{move}' in DeepCubeA slide puzzle dataset."
+                ) from exc
         optimal_action_sequence = tuple(action_sequence)
         return optimal_action_sequence, float(len(optimal_action_sequence))
 

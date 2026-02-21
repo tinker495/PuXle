@@ -34,7 +34,9 @@ class SlidePuzzle(Puzzle):
 
         @state_dataclass
         class State:
-            board: FieldDescriptor.packed_tensor(shape=(size**2,), packed_bits=packed_bits)
+            board: FieldDescriptor.packed_tensor(
+                shape=(size**2,), packed_bits=packed_bits
+            )
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -61,7 +63,9 @@ class SlidePuzzle(Puzzle):
 
         return parser
 
-    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "SlidePuzzle.State":
+    def get_initial_state(
+        self, solve_config: Puzzle.SolveConfig, key=None, data=None
+    ) -> "SlidePuzzle.State":
         return self._get_random_state(key)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
@@ -70,7 +74,11 @@ class SlidePuzzle(Puzzle):
         return self.SolveConfig(TargetState=target_state)
 
     def get_actions(
-        self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State", action: chex.Array, filled: bool = True
+        self,
+        solve_config: Puzzle.SolveConfig,
+        state: "SlidePuzzle.State",
+        action: chex.Array,
+        filled: bool = True,
     ) -> tuple["SlidePuzzle.State", chex.Array]:
         """
         This function should return a state and the cost of the move.
@@ -86,7 +94,10 @@ class SlidePuzzle(Puzzle):
         next_pos = pos + move_delta
 
         def is_valid(x, y):
-            return jnp.logical_and(x >= 0, jnp.logical_and(x < self.size, jnp.logical_and(y >= 0, y < self.size)))
+            return jnp.logical_and(
+                x >= 0,
+                jnp.logical_and(x < self.size, jnp.logical_and(y >= 0, y < self.size)),
+            )
 
         def swap(board, x, y, next_x, next_y):
             flat_index = x * self.size + y
@@ -103,7 +114,9 @@ class SlidePuzzle(Puzzle):
         )
         return state.set_unpacked(board=next_board), cost
 
-    def is_solved(self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State") -> bool:
+    def is_solved(
+        self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State"
+    ) -> bool:
         return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
@@ -172,7 +185,9 @@ class SlidePuzzle(Puzzle):
         return jax.lax.cond(
             N % 2 == 1,
             lambda inv_count: inv_count % 2 == 0,
-            lambda inv_count: jnp.logical_xor(self._get_blank_row(board) % 2 == 0, inv_count % 2 == 0),
+            lambda inv_count: jnp.logical_xor(
+                self._get_blank_row(board) % 2 == 0, inv_count % 2 == 0
+            ),
             inv_count,
         )
 
@@ -221,15 +236,31 @@ class SlidePuzzle(Puzzle):
             for idx, val in enumerate(board_flat):
                 if val == 0:
                     continue
-                stx = int(imgsize * 0.04 + (imgsize * 0.95 / self.size) * (idx % self.size))
-                sty = int(imgsize * 0.04 + (imgsize * 0.95 / self.size) * (idx // self.size))
+                stx = int(
+                    imgsize * 0.04 + (imgsize * 0.95 / self.size) * (idx % self.size)
+                )
+                sty = int(
+                    imgsize * 0.04 + (imgsize * 0.95 / self.size) * (idx // self.size)
+                )
                 bs = int(imgsize * 0.87 / self.size)
                 txt = str(val)
-                textsize = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, fontsize, 5)[0]
+                textsize = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, fontsize, 5)[
+                    0
+                ]
                 textX = int(stx + (bs - textsize[0]) / 2)
                 textY = int(sty + (bs + textsize[1]) / 2)
-                img = cv2.rectangle(img, (stx, sty), (stx + bs, sty + bs), (240, 240, 232), -1)
-                img = cv2.putText(img, txt, (textX, textY), cv2.FONT_HERSHEY_SIMPLEX, fontsize, (10, 10, 10), 5)
+                img = cv2.rectangle(
+                    img, (stx, sty), (stx + bs, sty + bs), (240, 240, 232), -1
+                )
+                img = cv2.putText(
+                    img,
+                    txt,
+                    (textX, textY),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    fontsize,
+                    (10, 10, 10),
+                    5,
+                )
             return img
 
         return img_func
@@ -249,10 +280,14 @@ class SlidePuzzleHard(SlidePuzzle):
             board = jnp.array([3, 1, 2, 0, 4, 5, 6, 7, 8], dtype=TYPE)
             self.hardest_state = self.State.from_unpacked(board=board)
         elif size == 4:
-            board = jnp.array([0, 12, 9, 13, 15, 11, 10, 14, 3, 7, 2, 5, 4, 8, 6, 1], dtype=TYPE)
+            board = jnp.array(
+                [0, 12, 9, 13, 15, 11, 10, 14, 3, 7, 2, 5, 4, 8, 6, 1], dtype=TYPE
+            )
             self.hardest_state = self.State.from_unpacked(board=board)
 
-    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> SlidePuzzle.State:
+    def get_initial_state(
+        self, solve_config: Puzzle.SolveConfig, key=None, data=None
+    ) -> SlidePuzzle.State:
         return self.hardest_state
 
 
@@ -270,5 +305,7 @@ class SlidePuzzleRandom(SlidePuzzle):
         solve_config.TargetState = self._get_random_state(key)
         return solve_config
 
-    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> SlidePuzzle.State:
+    def get_initial_state(
+        self, solve_config: Puzzle.SolveConfig, key=None, data=None
+    ) -> SlidePuzzle.State:
         return self._get_random_state(key)

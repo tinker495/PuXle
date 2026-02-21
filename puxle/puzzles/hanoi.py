@@ -95,7 +95,10 @@ class TowerOfHanoi(Puzzle):
                         # Get the disk at this position (index 1 + pos_from_top has the disk size)
                         disk_size = int(peg[1 + pos_from_top])
                         disk_str = "=" * (2 * disk_size - 1)
-                        colored_disk = colored(disk_str.center(2 * self.num_disks + 1), get_color(disk_size))
+                        colored_disk = colored(
+                            disk_str.center(2 * self.num_disks + 1),
+                            get_color(disk_size),
+                        )
                         row.append(colored_disk)
                     else:
                         # No disk, just show the peg
@@ -156,7 +159,10 @@ class TowerOfHanoi(Puzzle):
             )
 
             # Calculate peg positions
-            peg_xs = [base_x + base_width * (i + 1) / (self.num_pegs + 1) for i in range(self.num_pegs)]
+            peg_xs = [
+                base_x + base_width * (i + 1) / (self.num_pegs + 1)
+                for i in range(self.num_pegs)
+            ]
 
             # Draw pegs
             for peg_x in peg_xs:
@@ -207,13 +213,17 @@ class TowerOfHanoi(Puzzle):
                     text_size = cv2.getTextSize(text, font, 0.5, 1)[0]
                     text_x = int(peg_x - text_size[0] / 2)
                     text_y = int(disk_y + disk_height - 5)
-                    cv2.putText(image, text, (text_x, text_y), font, 0.5, (255, 255, 255), 1)
+                    cv2.putText(
+                        image, text, (text_x, text_y), font, 0.5, (255, 255, 255), 1
+                    )
 
             return image
 
         return img_func
 
-    def get_initial_state(self, solve_config: "TowerOfHanoi.SolveConfig", key=None, data=None) -> "TowerOfHanoi.State":
+    def get_initial_state(
+        self, solve_config: "TowerOfHanoi.SolveConfig", key=None, data=None
+    ) -> "TowerOfHanoi.State":
         """Generate the initial state for the puzzle with all disks on the first peg"""
         # Create an array with all disks on the first peg
         pegs = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
@@ -346,10 +356,14 @@ class TowerOfHanoi(Puzzle):
             valid = is_valid_move(pegs, from_peg, to_peg)
 
             # If valid, make the move; otherwise, keep the original pegs
-            new_pegs = jax.lax.cond(valid, lambda: make_move(pegs, from_peg, to_peg), lambda: pegs)
+            new_pegs = jax.lax.cond(
+                valid, lambda: make_move(pegs, from_peg, to_peg), lambda: pegs
+            )
 
             # Cost is 1 if valid, infinity if invalid
-            cost = jax.lax.cond(valid, lambda: jnp.array(1.0), lambda: jnp.array(jnp.inf))
+            cost = jax.lax.cond(
+                valid, lambda: jnp.array(1.0), lambda: jnp.array(jnp.inf)
+            )
 
             return self.State(pegs=new_pegs), cost
 
@@ -358,7 +372,9 @@ class TowerOfHanoi(Puzzle):
 
         return jax.lax.cond(filled, move_disk, no_move)
 
-    def is_solved(self, solve_config: "TowerOfHanoi.SolveConfig", state: "TowerOfHanoi.State") -> bool:
+    def is_solved(
+        self, solve_config: "TowerOfHanoi.SolveConfig", state: "TowerOfHanoi.State"
+    ) -> bool:
         """Check if the current state matches the target state"""
         return state == solve_config.TargetState
 

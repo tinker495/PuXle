@@ -26,7 +26,9 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         size: int | None = None,
     ) -> None:
         super().__init__()
-        self._dataset_path = Path(dataset_path).expanduser().resolve() if dataset_path else None
+        self._dataset_path = (
+            Path(dataset_path).expanduser().resolve() if dataset_path else None
+        )
         self._dataset_name = dataset_name
         self._size = size
         self._solve_config_cache = None
@@ -36,7 +38,9 @@ class LightsOutDeepCubeABenchmark(Benchmark):
 
     def load_dataset(self) -> dict[str, Any]:
         fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH
-        return load_deepcubea_dataset(self._dataset_path, self._dataset_name, "puxle.data.lightsout", fallback_dir)
+        return load_deepcubea_dataset(
+            self._dataset_path, self._dataset_name, "puxle.data.lightsout", fallback_dir
+        )
 
     def sample_ids(self) -> Iterable[Hashable]:
         return range(len(self.dataset["states"]))
@@ -65,7 +69,9 @@ class LightsOutDeepCubeABenchmark(Benchmark):
             length = len(tiles)
             size = int(math.isqrt(length))
             if size * size != length:
-                raise ValueError(f"Unable to infer puzzle size from state length {length}. Expected a perfect square.")
+                raise ValueError(
+                    f"Unable to infer puzzle size from state length {length}. Expected a perfect square."
+                )
             self._size = size
         return self._size
 

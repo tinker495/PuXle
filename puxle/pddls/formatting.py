@@ -72,7 +72,10 @@ def build_label_color_maps(domain) -> Tuple[Dict[str, str], Dict[str, str]]:
 
 
 def action_to_string(
-    grounded_actions: List[Dict], index: int, label_termcolor_map: Dict[str, str], colored: bool = True
+    grounded_actions: List[Dict],
+    index: int,
+    label_termcolor_map: Dict[str, str],
+    colored: bool = True,
 ) -> str:
     if 0 <= index < len(grounded_actions):
         action_data = grounded_actions[index]
@@ -105,7 +108,9 @@ def build_state_string_parser(env) -> Callable:
             except (TypeError, IndexError, ValueError):
                 gm = [bool(goal_mask[i]) for i in range(env.num_atoms)]
                 goal_count = sum(gm)
-                goals_satisfied = sum(1 for i in range(env.num_atoms) if gm[i] and bool(atoms[i]))
+                goals_satisfied = sum(
+                    1 for i in range(env.num_atoms) if gm[i] and bool(atoms[i])
+                )
 
         max_show = int(kwargs.get("max_show", 12))
         if goal_mask is not None:
@@ -123,7 +128,11 @@ def build_state_string_parser(env) -> Callable:
         sample_indices = ordered_true_indices[:max_show]
         sample_atoms = [env.grounded_atoms[i] for i in sample_indices]
         truncated = true_count > len(sample_atoms)
-        raw_sample_line = "Raw sample atoms: " + ", ".join(sample_atoms) if sample_atoms else "Raw sample atoms: <none>"
+        raw_sample_line = (
+            "Raw sample atoms: " + ", ".join(sample_atoms)
+            if sample_atoms
+            else "Raw sample atoms: <none>"
+        )
 
         show_summary = bool(kwargs.get("show_summary", False))
         show_more = bool(kwargs.get("show_more", False))
@@ -136,7 +145,9 @@ def build_state_string_parser(env) -> Callable:
             width = int(kwargs.get("width", 100))
             console = Console(width=width, highlight=False, soft_wrap=True)
 
-            table = Table(title="PDDL State", header_style="bold magenta", show_lines=False)
+            table = Table(
+                title="PDDL State", header_style="bold magenta", show_lines=False
+            )
             table.add_column("Field", style="bold cyan", no_wrap=True)
             table.add_column("Value")
 
@@ -151,7 +162,9 @@ def build_state_string_parser(env) -> Callable:
             sample_table = Table(show_header=True, header_style="bold green")
             sample_table.add_column("#", justify="right", no_wrap=True)
             sample_table.add_column("Atom")
-            for row_idx, (idx, atom_str) in enumerate(zip(sample_indices, sample_atoms), start=1):
+            for row_idx, (idx, atom_str) in enumerate(
+                zip(sample_indices, sample_atoms), start=1
+            ):
                 label, args = split_atom(atom_str)
                 color = getattr(env, "_label_color_map", {}).get(label, "white")
                 text = Text()
@@ -184,7 +197,9 @@ def build_state_string_parser(env) -> Callable:
 
             show_header = bool(kwargs.get("header", False))
             show_raw = bool(kwargs.get("raw", False))
-            header_line = f"State: {true_count}/{env.num_atoms} true atoms ({density:.2f}%)"
+            header_line = (
+                f"State: {true_count}/{env.num_atoms} true atoms ({density:.2f}%)"
+            )
             with console.capture() as capture:
                 if show_summary:
                     console.print(table)
@@ -200,7 +215,9 @@ def build_state_string_parser(env) -> Callable:
         except Exception:  # fallback if rich unavailable or rendering fails
             pieces: list[str] = []
             if kwargs.get("header", False):
-                pieces.append(f"State: {true_count}/{env.num_atoms} true atoms ({density:.2f}%)")
+                pieces.append(
+                    f"State: {true_count}/{env.num_atoms} true atoms ({density:.2f}%)"
+                )
             if show_summary:
                 pieces.append(f"Summary: true={true_count}, total={env.num_atoms}")
                 if goal_mask is not None:
@@ -232,7 +249,11 @@ def build_solve_config_string_parser(env) -> Callable:
         max_show = int(kwargs.get("max_show", 12))
         sample_indices = goal_indices[:max_show]
         sample_atoms = [env.grounded_atoms[i] for i in sample_indices]
-        raw_sample_line = "Raw sample goals: " + ", ".join(sample_atoms) if sample_atoms else "Raw sample goals: <none>"
+        raw_sample_line = (
+            "Raw sample goals: " + ", ".join(sample_atoms)
+            if sample_atoms
+            else "Raw sample goals: <none>"
+        )
 
         show_summary = bool(kwargs.get("show_summary", False))
         show_more = bool(kwargs.get("show_more", False))
@@ -245,7 +266,9 @@ def build_solve_config_string_parser(env) -> Callable:
             width = int(kwargs.get("width", 100))
             console = Console(width=width, highlight=False, soft_wrap=True)
 
-            table = Table(title="PDDL Solve Config (Goal Mask)", header_style="bold magenta")
+            table = Table(
+                title="PDDL Solve Config (Goal Mask)", header_style="bold magenta"
+            )
             table.add_column("Field", style="bold cyan", no_wrap=True)
             table.add_column("Value")
 

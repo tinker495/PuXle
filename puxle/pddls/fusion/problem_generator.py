@@ -24,7 +24,11 @@ class ProblemGenerator:
         self.rng = random.Random(seed)
 
     def generate_problem(
-        self, domain: Domain, num_objects: int = 5, walk_length: int = 10, problem_name: str = "generated-problem"
+        self,
+        domain: Domain,
+        num_objects: int = 5,
+        walk_length: int = 10,
+        problem_name: str = "generated-problem",
     ) -> Problem:
         """
         Generates a random problem for the given domain.
@@ -85,12 +89,18 @@ class ProblemGenerator:
 
                 # Build variable mapping {param_name: constant}
                 # args correspond to action.parameters in order
-                var_map = {param.name: arg for param, arg in zip(action.parameters, args)}
+                var_map = {
+                    param.name: arg for param, arg in zip(action.parameters, args)
+                }
 
                 # Check preconditions
-                if self._check_preconditions(action.precondition, var_map, current_state):
+                if self._check_preconditions(
+                    action.precondition, var_map, current_state
+                ):
                     # Apply effects
-                    current_state = self._apply_effects(action.effect, var_map, current_state)
+                    current_state = self._apply_effects(
+                        action.effect, var_map, current_state
+                    )
                     trace.append((action.name, [a.name for a in args]))
                     found = True
                     break
@@ -106,12 +116,22 @@ class ProblemGenerator:
             # Fallback if nothing happened
             goal = And()  # Empty goal
         else:
-            goal_atoms = self.rng.sample(list(current_state), min(3, len(current_state)))
+            goal_atoms = self.rng.sample(
+                list(current_state), min(3, len(current_state))
+            )
             goal = And(*goal_atoms)
 
-        return Problem(name=problem_name, domain_name=domain.name, objects=objects, init=init_state, goal=goal)
+        return Problem(
+            name=problem_name,
+            domain_name=domain.name,
+            objects=objects,
+            init=init_state,
+            goal=goal,
+        )
 
-    def _sample_args(self, action: Action, objects: List[Constant]) -> Optional[List[Constant]]:
+    def _sample_args(
+        self, action: Action, objects: List[Constant]
+    ) -> Optional[List[Constant]]:
         """Samples objects matching action parameter types."""
         args = []
         for param in action.parameters:
@@ -134,7 +154,9 @@ class ProblemGenerator:
             args.append(self.rng.choice(valid_objs))
         return args
 
-    def _sample_args_for_predicate(self, predicate: Predicate, objects: List[Constant]) -> Optional[List[Constant]]:
+    def _sample_args_for_predicate(
+        self, predicate: Predicate, objects: List[Constant]
+    ) -> Optional[List[Constant]]:
         """Sample objects for a predicate's terms."""
         args = []
         for term in predicate.terms:
@@ -157,7 +179,9 @@ class ProblemGenerator:
             args.append(self.rng.choice(valid_objs))
         return args
 
-    def _generate_initial_state(self, domain: Domain, objects: List[Constant]) -> Set[Predicate]:
+    def _generate_initial_state(
+        self, domain: Domain, objects: List[Constant]
+    ) -> Set[Predicate]:
         """Generate a random initial state."""
         init_state = set()
 
@@ -174,7 +198,9 @@ class ProblemGenerator:
                         init_state.add(atom)
         return init_state
 
-    def _generate_domain_specific_init(self, domain: Domain, objects: List[Constant]) -> Optional[Set[Predicate]]:
+    def _generate_domain_specific_init(
+        self, domain: Domain, objects: List[Constant]
+    ) -> Optional[Set[Predicate]]:
         """Try to generate domain-specific initial state based on name heuristics."""
         name = domain.name.lower()
         init_state = set()
@@ -184,11 +210,23 @@ class ProblemGenerator:
             # All blocks on table and clear
             # Find predicates matching 'on-table' or 'ontable'
             ontable_p = next(
-                (p for p in domain.predicates if "ontable" in p.name.lower() or "on-table" in p.name.lower()), None
+                (
+                    p
+                    for p in domain.predicates
+                    if "ontable" in p.name.lower() or "on-table" in p.name.lower()
+                ),
+                None,
             )
-            clear_p = next((p for p in domain.predicates if "clear" in p.name.lower()), None)
+            clear_p = next(
+                (p for p in domain.predicates if "clear" in p.name.lower()), None
+            )
             handempty_p = next(
-                (p for p in domain.predicates if "handempty" in p.name.lower() or "hand-empty" in p.name.lower()), None
+                (
+                    p
+                    for p in domain.predicates
+                    if "handempty" in p.name.lower() or "hand-empty" in p.name.lower()
+                ),
+                None,
             )
 
             if ontable_p and clear_p:
@@ -207,7 +245,9 @@ class ProblemGenerator:
 
         return None
 
-    def _check_preconditions(self, precondition, var_map: Dict[str, Constant], state: Set[Predicate]) -> bool:
+    def _check_preconditions(
+        self, precondition, var_map: Dict[str, Constant], state: Set[Predicate]
+    ) -> bool:
         """
         Checks if grounded preconditions hold in state.
         """
@@ -229,7 +269,9 @@ class ProblemGenerator:
 
         return False  # Unsupported complex precondition
 
-    def _apply_effects(self, effect, var_map: Dict[str, Constant], state: Set[Predicate]) -> Set[Predicate]:
+    def _apply_effects(
+        self, effect, var_map: Dict[str, Constant], state: Set[Predicate]
+    ) -> Set[Predicate]:
         """
         Applies grounded effects to state.
         """

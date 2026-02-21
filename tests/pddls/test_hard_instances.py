@@ -9,7 +9,9 @@ import pytest
 from puxle.pddls.pddl import PDDL
 
 
-def _bfs_with_time_budget(env: PDDL, solve_config, initial_state, max_depth: int, time_budget_s: float) -> bool:
+def _bfs_with_time_budget(
+    env: PDDL, solve_config, initial_state, max_depth: int, time_budget_s: float
+) -> bool:
     # Warmup JIT to avoid counting compile time in the budget
     _ = env.get_neighbours(solve_config, initial_state, filled=True)
 
@@ -59,10 +61,14 @@ def test_hard_instances_run_with_timeout(domain, problem, max_depth, time_budget
     env = PDDL.from_preset(domain=domain, problem_basename=problem)
     solve_config, initial_state = env.get_inits(jax.random.PRNGKey(0))
 
-    solved_in_budget = _bfs_with_time_budget(env, solve_config, initial_state, max_depth, time_budget_s)
+    solved_in_budget = _bfs_with_time_budget(
+        env, solve_config, initial_state, max_depth, time_budget_s
+    )
 
     # Contract: this test should never fail due to hardness; it passes whether or not
     # a solution is found within the time budget, but logs outcome for visibility.
     if not solved_in_budget:
-        print(f"[INFO] Hard instance {domain}/{problem}: no solution found within {time_budget_s}s (allowed).")
+        print(
+            f"[INFO] Hard instance {domain}/{problem}: no solution found within {time_budget_s}s (allowed)."
+        )
     assert True

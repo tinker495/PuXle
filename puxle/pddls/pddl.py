@@ -137,12 +137,16 @@ class PDDL(Puzzle):
             PDDL: Initialized PDDL environment.
         """
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        data_dir = os.path.normpath(os.path.join(base_dir, "..", "data", "pddls", domain))
+        data_dir = os.path.normpath(
+            os.path.join(base_dir, "..", "data", "pddls", domain)
+        )
 
         domain_path = os.path.abspath(os.path.join(data_dir, "domain.pddl"))
 
         if problem is None and problem_basename is None:
-            raise ValueError("Provide `problem` or `problem_basename` to locate a problem file.")
+            raise ValueError(
+                "Provide `problem` or `problem_basename` to locate a problem file."
+            )
 
         if problem is None and problem_basename is not None:
             problem = f"{problem_basename}.pddl"
@@ -168,7 +172,9 @@ class PDDL(Puzzle):
         self.num_actions = len(self.grounded_actions)
 
         # Build masks for JAX operations
-        self.pre_mask, self.pre_neg_mask, self.add_mask, self.del_mask = self._build_masks()
+        self.pre_mask, self.pre_neg_mask, self.add_mask, self.del_mask = (
+            self._build_masks()
+        )
         self._build_initial_state()
         self._build_goal_mask()
 
@@ -208,7 +214,9 @@ class PDDL(Puzzle):
         """Extract objects grouped by types, respecting hierarchy (delegated)."""
         if not hasattr(self, "_type_hierarchy_cache"):
             self._type_hierarchy_cache = self._collect_type_hierarchy()
-        return ts_extract_objects_by_type(self.problem, self._type_hierarchy_cache, domain=self.domain)
+        return ts_extract_objects_by_type(
+            self.problem, self._type_hierarchy_cache, domain=self.domain
+        )
 
     def _ground_predicates(self) -> Tuple[List[str], Dict[str, int]]:
         """Ground all predicates to create atom universe (delegated)."""
@@ -256,7 +264,9 @@ class PDDL(Puzzle):
             self._type_hierarchy_cache,
         )
 
-    def _ground_formula(self, formula, param_substitution: List[str], param_names: List[str]) -> List[str]:
+    def _ground_formula(
+        self, formula, param_substitution: List[str], param_names: List[str]
+    ) -> List[str]:
         """Deprecated: delegated to grounding module; retained for safety."""
         from .grounding import _ground_formula as _gf
 
@@ -278,11 +288,15 @@ class PDDL(Puzzle):
 
     def _build_initial_state(self):
         """Build initial state as boolean array (delegated)."""
-        self.init_state = mk_build_initial_state(self.problem, self.atom_to_idx, self.num_atoms)
+        self.init_state = mk_build_initial_state(
+            self.problem, self.atom_to_idx, self.num_atoms
+        )
 
     def _build_goal_mask(self):
         """Build goal mask for conjunctive positive goals (delegated)."""
-        self.goal_mask = mk_build_goal_mask(self.problem, self.atom_to_idx, self.num_atoms)
+        self.goal_mask = mk_build_goal_mask(
+            self.problem, self.atom_to_idx, self.num_atoms
+        )
 
     def _extract_goal_conditions(self, goal) -> List[str]:
         """Extract atomic conditions from goal formula (delegated)."""
@@ -300,7 +314,9 @@ class PDDL(Puzzle):
         str_parser = self.get_solve_config_string_parser()
         return build_solve_config_class(self, self.goal_mask, str_parser)
 
-    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "PDDL.State":
+    def get_initial_state(
+        self, solve_config: Puzzle.SolveConfig, key=None, data=None
+    ) -> "PDDL.State":
         """Return initial state."""
         return self.State.from_unpacked(atoms=self.init_state)
 
@@ -330,7 +346,9 @@ class PDDL(Puzzle):
         # Check applicability
         # Positive preconditions: (~pre | s)
         # Negative preconditions: (~pre_neg | ~s)
-        applicable = jnp.all(jnp.logical_or(~pre, s)) & jnp.all(jnp.logical_or(~pre_neg, ~s))
+        applicable = jnp.all(jnp.logical_or(~pre, s)) & jnp.all(
+            jnp.logical_or(~pre_neg, ~s)
+        )
 
         # Compute next state: (s & ~del) | add
         s_next = jnp.logical_or(jnp.logical_and(s, ~dele), add)
@@ -362,7 +380,9 @@ class PDDL(Puzzle):
     def get_img_parser(self) -> Callable:
         """Return image parser for states. If a solve_config is provided, annotate goal atoms."""
 
-        def img_parser(state: "PDDL.State", solve_config: "PDDL.SolveConfig" = None, **kwargs):
+        def img_parser(
+            state: "PDDL.State", solve_config: "PDDL.SolveConfig" = None, **kwargs
+        ):
             # Create a simple visualization: grid showing atom values
             atoms = state.unpacked_atoms
 
@@ -384,11 +404,17 @@ class PDDL(Puzzle):
                         color = (
                             jnp.array([0.0, 0.0, 1.0])  # blue for goal satisfied
                             if atoms[i]
-                            else jnp.array([1.0, 1.0, 0.0])  # yellow for goal not yet satisfied
+                            else jnp.array(
+                                [1.0, 1.0, 0.0]
+                            )  # yellow for goal not yet satisfied
                         )
                     else:
                         # Green for true atoms, red for false
-                        color = jnp.array([0.0, 1.0, 0.0]) if atoms[i] else jnp.array([1.0, 0.0, 0.0])
+                        color = (
+                            jnp.array([0.0, 1.0, 0.0])
+                            if atoms[i]
+                            else jnp.array([1.0, 0.0, 0.0])
+                        )
                     img = img.at[row, col].set(color)
 
             return img
@@ -397,7 +423,12 @@ class PDDL(Puzzle):
 
     def action_to_string(self, action: int, colored: bool = True) -> str:
         """Return string representation of action (delegated)."""
-        return fmt_action_to_string(self.grounded_actions, action, getattr(self, "_label_termcolor_map", {}), colored)
+        return fmt_action_to_string(
+            self.grounded_actions,
+            action,
+            getattr(self, "_label_termcolor_map", {}),
+            colored,
+        )
 
     @property
     def has_target(self) -> bool:
@@ -435,7 +466,11 @@ class PDDL(Puzzle):
                 col = i % grid_size
                 if row < grid_size and col < grid_size:
                     # Blue for goal atoms, gray for non-goal
-                    color = jnp.array([0.0, 0.0, 1.0]) if goal_mask[i] else jnp.array([0.5, 0.5, 0.5])
+                    color = (
+                        jnp.array([0.0, 0.0, 1.0])
+                        if goal_mask[i]
+                        else jnp.array([0.5, 0.5, 0.5])
+                    )
                     img = img.at[row, col].set(color)
 
             return img
@@ -447,7 +482,9 @@ class PDDL(Puzzle):
         s = state.unpacked_atoms
         return {self.grounded_atoms[i] for i in range(self.num_atoms) if bool(s[i])}
 
-    def static_predicate_profile(self, state: "PDDL.State", pred_name: str) -> list[bool]:
+    def static_predicate_profile(
+        self, state: "PDDL.State", pred_name: str
+    ) -> list[bool]:
         """Get truth values of all grounded atoms for a predicate in given state."""
         s = state.unpacked_atoms
         vals = []

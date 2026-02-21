@@ -143,20 +143,28 @@ class Puzzle(ABC):
         self.State = self.define_state_class()
         self.SolveConfig = self.define_solve_config_class()
         self.State = add_img_parser(self.State, self.get_img_parser())
-        self.SolveConfig = add_img_parser(self.SolveConfig, self.get_solve_config_img_parser())
+        self.SolveConfig = add_img_parser(
+            self.SolveConfig, self.get_solve_config_img_parser()
+        )
 
         self.get_initial_state = jax.jit(self.get_initial_state)
         self.get_solve_config = jax.jit(self.get_solve_config)
         self.get_inits = jax.jit(self.get_inits)
         self.get_actions = jax.jit(self.get_actions)
-        self.batched_get_actions = jax.jit(self.batched_get_actions, static_argnums=(4,))
+        self.batched_get_actions = jax.jit(
+            self.batched_get_actions, static_argnums=(4,)
+        )
         self.get_neighbours = jax.jit(self.get_neighbours)
-        self.batched_get_neighbours = jax.jit(self.batched_get_neighbours, static_argnums=(3,))
+        self.batched_get_neighbours = jax.jit(
+            self.batched_get_neighbours, static_argnums=(3,)
+        )
         self.is_solved = jax.jit(self.is_solved)
         self.batched_is_solved = jax.jit(self.batched_is_solved, static_argnums=(2,))
 
         if self.action_size is None:
-            raise ValueError(f"{self.__class__.__name__} must define `action_size` before calling Puzzle.__init__")
+            raise ValueError(
+                f"{self.__class__.__name__} must define `action_size` before calling Puzzle.__init__"
+            )
 
         inv_map = self.inverse_action_map
         if inv_map is not None:
@@ -263,7 +271,9 @@ class Puzzle(ABC):
         pass
 
     @abstractmethod
-    def get_initial_state(self, solve_config: SolveConfig, key=None, data=None) -> State:
+    def get_initial_state(
+        self, solve_config: SolveConfig, key=None, data=None
+    ) -> State:
         """Build and return the initial (scrambled) state for a given goal.
 
         Args:
@@ -316,13 +326,21 @@ class Puzzle(ABC):
             ``(next_states, costs)`` with shapes matching the input batch.
         """
         if multi_solve_config:
-            return jax.vmap(self.get_actions, in_axes=(0, 0, 0, 0))(solve_configs, states, actions, filleds)
+            return jax.vmap(self.get_actions, in_axes=(0, 0, 0, 0))(
+                solve_configs, states, actions, filleds
+            )
         else:
-            return jax.vmap(self.get_actions, in_axes=(None, 0, 0, 0))(solve_configs, states, actions, filleds)
+            return jax.vmap(self.get_actions, in_axes=(None, 0, 0, 0))(
+                solve_configs, states, actions, filleds
+            )
 
     @abstractmethod
     def get_actions(
-        self, solve_config: SolveConfig, state: State, actions: chex.Array, filled: bool = True
+        self,
+        solve_config: SolveConfig,
+        state: State,
+        actions: chex.Array,
+        filled: bool = True,
     ) -> tuple[State, chex.Array]:
         """Apply a single action to a state and return the result.
 
@@ -359,11 +377,17 @@ class Puzzle(ABC):
             ``(action_size, batch, ...)`` and ``(action_size, batch)``.
         """
         if multi_solve_config:
-            return jax.vmap(self.get_neighbours, in_axes=(0, 0, 0), out_axes=(1, 1))(solve_configs, states, filleds)
+            return jax.vmap(self.get_neighbours, in_axes=(0, 0, 0), out_axes=(1, 1))(
+                solve_configs, states, filleds
+            )
         else:
-            return jax.vmap(self.get_neighbours, in_axes=(None, 0, 0), out_axes=(1, 1))(solve_configs, states, filleds)
+            return jax.vmap(self.get_neighbours, in_axes=(None, 0, 0), out_axes=(1, 1))(
+                solve_configs, states, filleds
+            )
 
-    def get_neighbours(self, solve_config: SolveConfig, state: State, filled: bool = True) -> tuple[State, chex.Array]:
+    def get_neighbours(
+        self, solve_config: SolveConfig, state: State, filled: bool = True
+    ) -> tuple[State, chex.Array]:
         """Compute all successor states for every action.
 
         Equivalent to calling :meth:`get_actions` for each action index and
@@ -382,12 +406,17 @@ class Puzzle(ABC):
             ``(action_size,)``.
         """
         actions = jnp.arange(self.action_size)
-        states, costs = jax.vmap(self.get_actions, in_axes=(None, None, 0, None), out_axes=(0, 0))(
-            solve_config, state, actions, filled
-        )
+        states, costs = jax.vmap(
+            self.get_actions, in_axes=(None, None, 0, None), out_axes=(0, 0)
+        )(solve_config, state, actions, filled)
         return states, costs
 
-    def batched_is_solved(self, solve_configs: SolveConfig, states: State, multi_solve_config: bool = False) -> bool:
+    def batched_is_solved(
+        self,
+        solve_configs: SolveConfig,
+        states: State,
+        multi_solve_config: bool = False,
+    ) -> bool:
         """Vectorised version of :meth:`is_solved`.
 
         Args:
@@ -455,7 +484,9 @@ class Puzzle(ABC):
             form += "━━" if i != size - 1 else "━━┛"
         return form
 
-    def batched_hindsight_transform(self, solve_configs: SolveConfig, states: State) -> SolveConfig:
+    def batched_hindsight_transform(
+        self, solve_configs: SolveConfig, states: State
+    ) -> SolveConfig:
         """Vectorised version of :meth:`hindsight_transform`.
 
         Args:
@@ -467,7 +498,9 @@ class Puzzle(ABC):
         """
         return jax.vmap(self.hindsight_transform)(solve_configs, states)
 
-    def solve_config_to_state_transform(self, solve_config: SolveConfig, key: jax.random.PRNGKey = None) -> State:
+    def solve_config_to_state_transform(
+        self, solve_config: SolveConfig, key: jax.random.PRNGKey = None
+    ) -> State:
         """Convert a ``SolveConfig`` into the corresponding target ``State``.
 
         The default implementation simply extracts ``solve_config.TargetState``.
@@ -490,7 +523,9 @@ class Puzzle(ABC):
         )
         return solve_config.TargetState
 
-    def hindsight_transform(self, solve_config: SolveConfig, states: State) -> SolveConfig:
+    def hindsight_transform(
+        self, solve_config: SolveConfig, states: State
+    ) -> SolveConfig:
         """Hindsight experience replay: rewrite the goal to match *states*.
 
         Creates a new ``SolveConfig`` whose ``TargetState`` equals the given
@@ -559,15 +594,21 @@ class Puzzle(ABC):
             ``(inverse_neighbour_states, costs)``.
         """
         if multi_solve_config:
-            return jax.vmap(self.get_inverse_neighbours, in_axes=(0, 0, 0), out_axes=(1, 1))(
-                solve_configs, states, filleds
-            )
+            return jax.vmap(
+                self.get_inverse_neighbours, in_axes=(0, 0, 0), out_axes=(1, 1)
+            )(solve_configs, states, filleds)
         else:
-            return jax.vmap(self.get_inverse_neighbours, in_axes=(None, 0, 0), out_axes=(1, 1))(
-                solve_configs, states, filleds
-            )
+            return jax.vmap(
+                self.get_inverse_neighbours, in_axes=(None, 0, 0), out_axes=(1, 1)
+            )(solve_configs, states, filleds)
 
-    def _get_shuffled_state(self, solve_config: "Puzzle.SolveConfig", init_state: "Puzzle.State", key, num_shuffle):
+    def _get_shuffled_state(
+        self,
+        solve_config: "Puzzle.SolveConfig",
+        init_state: "Puzzle.State",
+        key,
+        num_shuffle,
+    ):
         """Generate a scrambled state by applying random actions.
 
         Uses a ``while_loop`` to apply ``num_shuffle`` (±1) random actions,
@@ -583,7 +624,9 @@ class Puzzle(ABC):
             A scrambled ``State``.
         """
         key, subkey = jax.random.split(key)
-        num_shuffle += jax.random.randint(subkey, (), 0, 2)  # add a random 1 to 0 to the initial shuffle.
+        num_shuffle += jax.random.randint(
+            subkey, (), 0, 2
+        )  # add a random 1 to 0 to the initial shuffle.
 
         def cond_fun(loop_state):
             iteration_count, _, _, _ = loop_state
@@ -591,8 +634,12 @@ class Puzzle(ABC):
 
         def body_fun(loop_state):
             iteration_count, current_state, previous_state, key = loop_state
-            neighbor_states, costs = self.get_neighbours(solve_config, current_state, filled=True)
-            old_eq = jax.vmap(lambda x, y: x == y, in_axes=(None, 0))(previous_state, neighbor_states)
+            neighbor_states, costs = self.get_neighbours(
+                solve_config, current_state, filled=True
+            )
+            old_eq = jax.vmap(lambda x, y: x == y, in_axes=(None, 0))(
+                previous_state, neighbor_states
+            )
             valid_mask = jnp.where(old_eq, 0.0, 1.0)
 
             valid_mask_sum = jnp.sum(valid_mask)
@@ -607,7 +654,9 @@ class Puzzle(ABC):
             next_state = neighbor_states[idx]
             return (iteration_count + 1, next_state, current_state, key)
 
-        _, final_state, _, _ = jax.lax.while_loop(cond_fun, body_fun, (0, init_state, init_state, key))
+        _, final_state, _, _ = jax.lax.while_loop(
+            cond_fun, body_fun, (0, init_state, init_state, key)
+        )
         return final_state
 
     def __repr__(self):

@@ -99,15 +99,24 @@ class DotKnot(Puzzle):
         return parser
 
     def get_initial_state(
-        self, solve_config: "DotKnot.SolveConfig", key=jax.random.PRNGKey(128), data=None
+        self,
+        solve_config: "DotKnot.SolveConfig",
+        key=jax.random.PRNGKey(128),
+        data=None,
     ) -> "DotKnot.State":
         return self._get_random_state(key)
 
-    def get_solve_config(self, key=jax.random.PRNGKey(128), data=None) -> "DotKnot.SolveConfig":
+    def get_solve_config(
+        self, key=jax.random.PRNGKey(128), data=None
+    ) -> "DotKnot.SolveConfig":
         return self.SolveConfig()
 
     def get_actions(
-        self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State", action: chex.Array, filled: bool = True
+        self,
+        solve_config: "DotKnot.SolveConfig",
+        state: "DotKnot.State",
+        action: chex.Array,
+        filled: bool = True,
     ) -> tuple["DotKnot.State", chex.Array]:
         """
         This function returns the next state and cost for a given action.
@@ -132,8 +141,15 @@ class DotKnot(Puzzle):
             not_blocked = unpacked_board[index] == 0
             new_pos_color_idx = (unpacked_board[index] - 1) % self.color_num
             new_pos_is_point = unpacked_board[index] <= 2 * self.color_num
-            is_merge = (new_pos_color_idx == color_idx) & new_pos_is_point & ~not_blocked
-            valid = (new_pos >= 0).all() & (new_pos < self.size).all() & (not_blocked | is_merge) & filled
+            is_merge = (
+                (new_pos_color_idx == color_idx) & new_pos_is_point & ~not_blocked
+            )
+            valid = (
+                (new_pos >= 0).all()
+                & (new_pos < self.size).all()
+                & (not_blocked | is_merge)
+                & filled
+            )
             return is_merge, valid
 
         def point_move(board, pos, new_pos, point_idx, color_idx, is_merge):
@@ -154,18 +170,24 @@ class DotKnot(Puzzle):
         valid_move = valid_move & available
         new_board = jax.lax.cond(
             valid_move,
-            lambda: point_move(unpacked_board, pos, new_pos, point_idx, color_idx, is_merge),
+            lambda: point_move(
+                unpacked_board, pos, new_pos, point_idx, color_idx, is_merge
+            ),
             lambda: unpacked_board,
         )
         new_state = state.set_unpacked(board=new_board)
         cost = jnp.where(valid_move, 1.0, jnp.inf)
         return new_state, cost
 
-    def is_solved(self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State") -> bool:
+    def is_solved(
+        self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State"
+    ) -> bool:
         unpacked = state.board_unpacked
         empty = jnp.all(unpacked == 0)  # ALL empty is not solved condition
         gr = jnp.greater_equal(unpacked, 1)  # ALL point a is solved condition
-        le = jnp.less_equal(unpacked, self.color_num * 2)  # ALL point b is solved condition
+        le = jnp.less_equal(
+            unpacked, self.color_num * 2
+        )  # ALL point b is solved condition
         points = gr & le
         no_point = ~jnp.any(points)  # if there is no point, it is solved
         return no_point & ~empty
@@ -193,7 +215,9 @@ class DotKnot(Puzzle):
         def _while_loop(val):
             board, key, idx = val
             key, subkey = jax.random.split(key)
-            pos = jax.random.randint(subkey, minval=0, maxval=self.size - 2, shape=(2,)) + jnp.array([1, 1])
+            pos = jax.random.randint(
+                subkey, minval=0, maxval=self.size - 2, shape=(2,)
+            ) + jnp.array([1, 1])
             random_index = pos[0] * self.size + pos[1]
             is_already_filled = board[random_index] != 0
             board = jax.lax.cond(
@@ -204,7 +228,11 @@ class DotKnot(Puzzle):
             next_idx = jnp.where(is_already_filled, idx, idx + 1)
             return board, key, next_idx
 
-        board, _, _ = jax.lax.while_loop(lambda val: val[2] < self.color_num * 2 + 1, _while_loop, (init_board, key, 1))
+        board, _, _ = jax.lax.while_loop(
+            lambda val: val[2] < self.color_num * 2 + 1,
+            _while_loop,
+            (init_board, key, 1),
+        )
         return self.State.from_unpacked(board=board)
 
     def get_solve_config_img_parser(self) -> Callable:
@@ -236,8 +264,12 @@ class DotKnot(Puzzle):
             for idx, val in enumerate(board_flat):
                 if val == 0:
                     continue
-                stx = int(imgsize * 0.04 + (imgsize * 0.95 / self.size) * (idx % self.size))
-                sty = int(imgsize * 0.04 + (imgsize * 0.95 / self.size) * (idx // self.size))
+                stx = int(
+                    imgsize * 0.04 + (imgsize * 0.95 / self.size) * (idx % self.size)
+                )
+                sty = int(
+                    imgsize * 0.04 + (imgsize * 0.95 / self.size) * (idx // self.size)
+                )
                 bs = int(imgsize * 0.87 / self.size)
                 center = (stx + bs // 2, sty + bs // 2)
                 color = COLOR_MAP[(int(val) - 1) % len(COLOR_MAP)]
@@ -247,7 +279,9 @@ class DotKnot(Puzzle):
                     img = cv2.circle(img, center, radius, color, -1)
                 else:
                     # Draw path as a filled rectangle
-                    img = cv2.rectangle(img, (stx, sty), (stx + bs, sty + bs), color, -1)
+                    img = cv2.rectangle(
+                        img, (stx, sty), (stx + bs, sty + bs), color, -1
+                    )
             return img
 
         return img_func

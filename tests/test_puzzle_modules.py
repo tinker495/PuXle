@@ -78,7 +78,9 @@ class TestMaze:
 
         # Initial state may or may not be solved (random)
         result = maze.is_solved(sc, state)
-        assert isinstance(result, (bool, jnp.bool_)) or (hasattr(result, "dtype") and result.dtype == jnp.bool_)
+        assert isinstance(result, (bool, jnp.bool_)) or (
+            hasattr(result, "dtype") and result.dtype == jnp.bool_
+        )
 
         # Target state should always be solved
         assert maze.is_solved(sc, sc.TargetState)
@@ -91,7 +93,9 @@ class TestMaze:
 
         # Test all actions
         for action in range(maze.action_size):
-            next_state, cost = maze.get_actions(sc, state, jnp.asarray(action), filled=True)
+            next_state, cost = maze.get_actions(
+                sc, state, jnp.asarray(action), filled=True
+            )
 
             # Cost should be either 1.0 (valid) or inf (invalid)
             assert jnp.isfinite(cost) or jnp.isinf(cost)
@@ -182,7 +186,9 @@ class TestPancakeSorting:
         state = pancake.get_initial_state(sc, key=rng_key)
         # Just verify is_solved returns boolean
         result = pancake.is_solved(sc, state)
-        assert isinstance(result, (bool, jnp.bool_)) or (hasattr(result, "dtype") and result.dtype == jnp.bool_)
+        assert isinstance(result, (bool, jnp.bool_)) or (
+            hasattr(result, "dtype") and result.dtype == jnp.bool_
+        )
 
     def test_flip_action(self, rng_key):
         """Test that flip actions correctly reverse stack prefixes."""
@@ -282,7 +288,8 @@ class TestRoom:
                 room_r_start = (room_dim + 1) * r_idx
                 room_c_start = (room_dim + 1) * c_idx
                 room_interior = maze_grid[
-                    room_r_start : room_r_start + room_dim, room_c_start : room_c_start + room_dim
+                    room_r_start : room_r_start + room_dim,
+                    room_c_start : room_c_start + room_dim,
                 ]
                 # Room interior should be paths (False)
                 assert jnp.all(~room_interior)
@@ -346,11 +353,15 @@ class TestSokoban:
 
         # Just verify is_solved returns boolean
         result = sokoban.is_solved(sc, state)
-        assert isinstance(result, (bool, jnp.bool_)) or (hasattr(result, "dtype") and result.dtype == jnp.bool_)
+        assert isinstance(result, (bool, jnp.bool_)) or (
+            hasattr(result, "dtype") and result.dtype == jnp.bool_
+        )
 
     def test_is_solved_all_boxes_and_player(self, rng_key):
         """Test is_solved with ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET condition."""
-        sokoban = Sokoban(solve_condition=Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET)
+        sokoban = Sokoban(
+            solve_condition=Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET
+        )
         sc = sokoban.get_solve_config(key=rng_key)
 
         # Target state should be solved
@@ -393,7 +404,9 @@ class TestSokoban:
 
         # Test all actions
         for action in range(sokoban.action_size):
-            next_state, cost = sokoban.get_actions(sc, state, jnp.asarray(action), filled=True)
+            next_state, cost = sokoban.get_actions(
+                sc, state, jnp.asarray(action), filled=True
+            )
 
             # Cost should be either 1.0 (valid) or inf (invalid)
             assert jnp.isfinite(cost) or jnp.isinf(cost)
@@ -453,7 +466,9 @@ class TestPuzzleIntegration:
 
             result = puzzle.is_solved(sc, state)
             # Should return boolean-like value
-            assert isinstance(result, (bool, jnp.bool_)) or (hasattr(result, "dtype") and result.dtype == jnp.bool_)
+            assert isinstance(result, (bool, jnp.bool_)) or (
+                hasattr(result, "dtype") and result.dtype == jnp.bool_
+            )
 
 
 class TestDotKnot:
@@ -503,7 +518,9 @@ class TestDotKnot:
 
         # Initial state should not be solved (has unmerged dots)
         result = dotknot.is_solved(sc, state)
-        assert isinstance(result, (bool, jnp.bool_)) or (hasattr(result, "dtype") and result.dtype == jnp.bool_)
+        assert isinstance(result, (bool, jnp.bool_)) or (
+            hasattr(result, "dtype") and result.dtype == jnp.bool_
+        )
 
     def test_valid_moves(self, rng_key):
         """Test that get_actions returns valid moves."""
@@ -513,7 +530,9 @@ class TestDotKnot:
 
         # Test all actions
         for action in range(dotknot.action_size):
-            next_state, cost = dotknot.get_actions(sc, state, jnp.asarray(action), filled=True)
+            next_state, cost = dotknot.get_actions(
+                sc, state, jnp.asarray(action), filled=True
+            )
 
             # Cost should be either 1.0 (valid) or inf (invalid)
             assert jnp.isfinite(cost) or jnp.isinf(cost)
@@ -599,7 +618,9 @@ class TestTowerOfHanoi:
 
         # Test all actions
         for action in range(hanoi.action_size):
-            next_state, cost = hanoi.get_actions(sc, state, jnp.asarray(action), filled=True)
+            next_state, cost = hanoi.get_actions(
+                sc, state, jnp.asarray(action), filled=True
+            )
 
             # Cost should be either 1.0 (valid) or inf (invalid)
             assert jnp.isfinite(cost) or jnp.isinf(cost)
@@ -672,7 +693,9 @@ class TestLightsOut:
 
         # Test first few actions
         for action in range(min(5, lightsout.action_size)):
-            next_state, cost = lightsout.get_actions(sc, state, jnp.asarray(action), filled=True)
+            next_state, cost = lightsout.get_actions(
+                sc, state, jnp.asarray(action), filled=True
+            )
 
             # All moves should be valid with cost 1.0
             assert cost == 1.0
@@ -762,7 +785,9 @@ class TestSlidePuzzle:
 
         # Test all actions
         for action in range(slide.action_size):
-            next_state, cost = slide.get_actions(sc, state, jnp.asarray(action), filled=True)
+            next_state, cost = slide.get_actions(
+                sc, state, jnp.asarray(action), filled=True
+            )
 
             # Cost should be either 1.0 (valid) or inf (invalid)
             assert jnp.isfinite(cost) or jnp.isinf(cost)
@@ -857,7 +882,9 @@ class TestTopSpin:
 
         # Test all actions
         for action in range(topspin.action_size):
-            next_state, cost = topspin.get_actions(sc, state, jnp.asarray(action), filled=True)
+            next_state, cost = topspin.get_actions(
+                sc, state, jnp.asarray(action), filled=True
+            )
 
             # All moves should be valid with cost 1.0
             assert cost == 1.0
@@ -956,7 +983,9 @@ class TestTSP:
 
         # Test all actions
         for action in range(tsp.action_size):
-            next_state, cost = tsp.get_actions(sc, state, jnp.asarray(action), filled=True)
+            next_state, cost = tsp.get_actions(
+                sc, state, jnp.asarray(action), filled=True
+            )
 
             # Visiting the already-visited start city should have infinite cost
             if action == state.point:

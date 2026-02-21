@@ -52,11 +52,15 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
 
         # 2. Get neighbors in batch
         # env.batched_get_neighbours is pre-jitted in Puzzle.__init__
-        neighbors, costs = env.batched_get_neighbours(solve_config, stacked_state, filleds=filleds_batch)
+        neighbors, costs = env.batched_get_neighbours(
+            solve_config, stacked_state, filleds=filleds_batch
+        )
 
         # 3. Check for solutions in batch
         # Flatten neighbors to (Batch*Actions, ...) for solved check
-        flat_neighbors = jax.tree_util.tree_map(lambda x: x.reshape((-1,) + x.shape[2:]), neighbors)
+        flat_neighbors = jax.tree_util.tree_map(
+            lambda x: x.reshape((-1,) + x.shape[2:]), neighbors
+        )
 
         # env.batched_is_solved is pre-jitted
         solved_mask = env.batched_is_solved(solve_config, flat_neighbors)
@@ -155,14 +159,20 @@ def test_presets_jit_and_batch(domain, problem):
 
     jitted_is_solved = jax.jit(env.is_solved)
     solved = jitted_is_solved(solve_config, initial_state)
-    assert isinstance(solved, (bool, jnp.bool_)) or (hasattr(solved, "dtype") and solved.dtype == jnp.bool_)
+    assert isinstance(solved, (bool, jnp.bool_)) or (
+        hasattr(solved, "dtype") and solved.dtype == jnp.bool_
+    )
 
     # Batched
     keys = jax.random.split(rng, 4)
     solve_configs = jax.vmap(lambda k: env.get_solve_config(k))(keys)
-    initial_states = jax.vmap(lambda sc, k: env.get_initial_state(sc, k))(solve_configs, keys)
+    initial_states = jax.vmap(lambda sc, k: env.get_initial_state(sc, k))(
+        solve_configs, keys
+    )
 
-    solved_mask = env.batched_is_solved(solve_configs, initial_states, multi_solve_config=True)
+    solved_mask = env.batched_is_solved(
+        solve_configs, initial_states, multi_solve_config=True
+    )
     assert solved_mask.shape[0] == 4
 
     filleds = jnp.array([True, True, True, True])

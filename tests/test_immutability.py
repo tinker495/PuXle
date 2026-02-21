@@ -27,7 +27,11 @@ def get_all_puzzles():
         try:
             module = importlib.import_module(name)
             for name, obj in inspect.getmembers(module):
-                if inspect.isclass(obj) and issubclass(obj, Puzzle) and obj is not Puzzle:
+                if (
+                    inspect.isclass(obj)
+                    and issubclass(obj, Puzzle)
+                    and obj is not Puzzle
+                ):
                     puzzles.append(obj)
         except Exception as e:
             print(f"Skipping module {name}: {e}")
@@ -68,14 +72,18 @@ def test_hindsight_transform_immutability(puzzle_instance, puzzle_init):
     Verifies that hindsight_transform does not mutate the input solve_config in-place.
     """
     if not (puzzle_instance.has_target and puzzle_instance.only_target):
-        pytest.skip("Puzzle does not support hindsight_transform (requires has_target and only_target)")
+        pytest.skip(
+            "Puzzle does not support hindsight_transform (requires has_target and only_target)"
+        )
 
     solve_config, state = puzzle_init
 
     # Snapshot original target state leaves
     original_target_leaves = jax.tree_util.tree_leaves(solve_config.TargetState)
     # Deep copy needed for array comparison later
-    original_target_leaves_copy = [jnp.array(x) if hasattr(x, "copy") else x for x in original_target_leaves]
+    original_target_leaves_copy = [
+        jnp.array(x) if hasattr(x, "copy") else x for x in original_target_leaves
+    ]
 
     # Store ID to check for object Identity
     original_id = id(solve_config)
@@ -100,7 +108,9 @@ def test_hindsight_transform_immutability(puzzle_instance, puzzle_init):
     for old, new in zip(original_target_leaves_copy, current_target_leaves):
         # Using exact equality for arrays
         if hasattr(old, "shape") and hasattr(new, "shape"):
-            assert jnp.array_equal(old, new), "Original solve_config.TargetState was mutated in place!"
+            assert jnp.array_equal(old, new), (
+                "Original solve_config.TargetState was mutated in place!"
+            )
         else:
             assert old == new, "Original solve_config.TargetState was mutated in place!"
 
@@ -113,7 +123,9 @@ def test_get_actions_immutability(puzzle_instance, puzzle_init):
 
     # Snapshot state
     original_state_leaves = jax.tree_util.tree_leaves(state)
-    original_state_leaves_copy = [jnp.array(x) if hasattr(x, "copy") else x for x in original_state_leaves]
+    original_state_leaves_copy = [
+        jnp.array(x) if hasattr(x, "copy") else x for x in original_state_leaves
+    ]
 
     action = jnp.array(0)
 
@@ -131,7 +143,9 @@ def test_get_actions_immutability(puzzle_instance, puzzle_init):
 
     for old, new in zip(original_state_leaves_copy, current_state_leaves):
         if hasattr(old, "shape") and hasattr(new, "shape"):
-            assert jnp.array_equal(old, new), "Original state was mutated in place by get_actions!"
+            assert jnp.array_equal(old, new), (
+                "Original state was mutated in place by get_actions!"
+            )
         else:
             assert old == new, "Original state was mutated in place by get_actions!"
 
@@ -143,9 +157,13 @@ def test_get_neighbours_immutability(puzzle_instance, puzzle_init):
     solve_config, state = puzzle_init
 
     original_state_leaves = jax.tree_util.tree_leaves(state)
-    original_state_leaves_copy = [jnp.array(x) if hasattr(x, "copy") else x for x in original_state_leaves]
+    original_state_leaves_copy = [
+        jnp.array(x) if hasattr(x, "copy") else x for x in original_state_leaves
+    ]
     original_config_leaves = jax.tree_util.tree_leaves(solve_config)
-    original_config_leaves_copy = [jnp.array(x) if hasattr(x, "copy") else x for x in original_config_leaves]
+    original_config_leaves_copy = [
+        jnp.array(x) if hasattr(x, "copy") else x for x in original_config_leaves
+    ]
 
     try:
         neighbours, costs = puzzle_instance.get_neighbours(solve_config, state)
@@ -156,7 +174,9 @@ def test_get_neighbours_immutability(puzzle_instance, puzzle_init):
     current_state_leaves = jax.tree_util.tree_leaves(state)
     for old, new in zip(original_state_leaves_copy, current_state_leaves):
         if hasattr(old, "shape") and hasattr(new, "shape"):
-            assert jnp.array_equal(old, new), "Original state was mutated in place by get_neighbours!"
+            assert jnp.array_equal(old, new), (
+                "Original state was mutated in place by get_neighbours!"
+            )
         else:
             assert old == new, "Original state was mutated in place by get_neighbours!"
 
@@ -164,9 +184,13 @@ def test_get_neighbours_immutability(puzzle_instance, puzzle_init):
     current_config_leaves = jax.tree_util.tree_leaves(solve_config)
     for old, new in zip(original_config_leaves_copy, current_config_leaves):
         if hasattr(old, "shape") and hasattr(new, "shape"):
-            assert jnp.array_equal(old, new), "Original solve_config was mutated in place by get_neighbours!"
+            assert jnp.array_equal(old, new), (
+                "Original solve_config was mutated in place by get_neighbours!"
+            )
         else:
-            assert old == new, "Original solve_config was mutated in place by get_neighbours!"
+            assert old == new, (
+                "Original solve_config was mutated in place by get_neighbours!"
+            )
 
 
 def test_get_inverse_neighbours_immutability(puzzle_instance, puzzle_init):
@@ -183,9 +207,13 @@ def test_get_inverse_neighbours_immutability(puzzle_instance, puzzle_init):
     solve_config, state = puzzle_init
 
     original_state_leaves = jax.tree_util.tree_leaves(state)
-    original_state_leaves_copy = [jnp.array(x) if hasattr(x, "copy") else x for x in original_state_leaves]
+    original_state_leaves_copy = [
+        jnp.array(x) if hasattr(x, "copy") else x for x in original_state_leaves
+    ]
     original_config_leaves = jax.tree_util.tree_leaves(solve_config)
-    original_config_leaves_copy = [jnp.array(x) if hasattr(x, "copy") else x for x in original_config_leaves]
+    original_config_leaves_copy = [
+        jnp.array(x) if hasattr(x, "copy") else x for x in original_config_leaves
+    ]
 
     try:
         neighbours, costs = puzzle_instance.get_inverse_neighbours(solve_config, state)
@@ -198,17 +226,25 @@ def test_get_inverse_neighbours_immutability(puzzle_instance, puzzle_init):
     current_state_leaves = jax.tree_util.tree_leaves(state)
     for old, new in zip(original_state_leaves_copy, current_state_leaves):
         if hasattr(old, "shape") and hasattr(new, "shape"):
-            assert jnp.array_equal(old, new), "Original state was mutated in place by get_inverse_neighbours!"
+            assert jnp.array_equal(old, new), (
+                "Original state was mutated in place by get_inverse_neighbours!"
+            )
         else:
-            assert old == new, "Original state was mutated in place by get_inverse_neighbours!"
+            assert old == new, (
+                "Original state was mutated in place by get_inverse_neighbours!"
+            )
 
     # Check config mutation
     current_config_leaves = jax.tree_util.tree_leaves(solve_config)
     for old, new in zip(original_config_leaves_copy, current_config_leaves):
         if hasattr(old, "shape") and hasattr(new, "shape"):
-            assert jnp.array_equal(old, new), "Original solve_config was mutated in place by get_inverse_neighbours!"
+            assert jnp.array_equal(old, new), (
+                "Original solve_config was mutated in place by get_inverse_neighbours!"
+            )
         else:
-            assert old == new, "Original solve_config was mutated in place by get_inverse_neighbours!"
+            assert old == new, (
+                "Original solve_config was mutated in place by get_inverse_neighbours!"
+            )
 
 
 def test_is_solved_immutability(puzzle_instance, puzzle_init):
@@ -218,9 +254,13 @@ def test_is_solved_immutability(puzzle_instance, puzzle_init):
     solve_config, state = puzzle_init
 
     original_state_leaves = jax.tree_util.tree_leaves(state)
-    original_state_leaves_copy = [jnp.array(x) if hasattr(x, "copy") else x for x in original_state_leaves]
+    original_state_leaves_copy = [
+        jnp.array(x) if hasattr(x, "copy") else x for x in original_state_leaves
+    ]
     original_config_leaves = jax.tree_util.tree_leaves(solve_config)
-    original_config_leaves_copy = [jnp.array(x) if hasattr(x, "copy") else x for x in original_config_leaves]
+    original_config_leaves_copy = [
+        jnp.array(x) if hasattr(x, "copy") else x for x in original_config_leaves
+    ]
 
     try:
         puzzle_instance.is_solved(solve_config, state)
@@ -231,7 +271,9 @@ def test_is_solved_immutability(puzzle_instance, puzzle_init):
     current_state_leaves = jax.tree_util.tree_leaves(state)
     for old, new in zip(original_state_leaves_copy, current_state_leaves):
         if hasattr(old, "shape") and hasattr(new, "shape"):
-            assert jnp.array_equal(old, new), "Original state was mutated in place by is_solved!"
+            assert jnp.array_equal(old, new), (
+                "Original state was mutated in place by is_solved!"
+            )
         else:
             assert old == new, "Original state was mutated in place by is_solved!"
 
@@ -239,9 +281,13 @@ def test_is_solved_immutability(puzzle_instance, puzzle_init):
     current_config_leaves = jax.tree_util.tree_leaves(solve_config)
     for old, new in zip(original_config_leaves_copy, current_config_leaves):
         if hasattr(old, "shape") and hasattr(new, "shape"):
-            assert jnp.array_equal(old, new), "Original solve_config was mutated in place by is_solved!"
+            assert jnp.array_equal(old, new), (
+                "Original solve_config was mutated in place by is_solved!"
+            )
         else:
-            assert old == new, "Original solve_config was mutated in place by is_solved!"
+            assert old == new, (
+                "Original solve_config was mutated in place by is_solved!"
+            )
 
 
 def test_initialization_immutability(puzzle_instance):
@@ -258,7 +304,9 @@ def test_initialization_immutability(puzzle_instance):
 
     # Check if get_initial_state mutates solve_config
     original_config_leaves = jax.tree_util.tree_leaves(solve_config)
-    original_config_leaves_copy = [jnp.array(x) if hasattr(x, "copy") else x for x in original_config_leaves]
+    original_config_leaves_copy = [
+        jnp.array(x) if hasattr(x, "copy") else x for x in original_config_leaves
+    ]
 
     try:
         puzzle_instance.get_initial_state(solve_config, key, data)
@@ -268,6 +316,8 @@ def test_initialization_immutability(puzzle_instance):
     current_config_leaves = jax.tree_util.tree_leaves(solve_config)
     for old, new in zip(original_config_leaves_copy, current_config_leaves):
         if hasattr(old, "shape") and hasattr(new, "shape"):
-            assert jnp.array_equal(old, new), "solve_config was mutated in place by get_initial_state!"
+            assert jnp.array_equal(old, new), (
+                "solve_config was mutated in place by get_initial_state!"
+            )
         else:
             assert old == new, "solve_config was mutated in place by get_initial_state!"

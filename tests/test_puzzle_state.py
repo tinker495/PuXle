@@ -29,7 +29,9 @@ def test_state_dataclass_fallback_properties():
 
 def test_state_dataclass_partial_packing_error():
     # Test that providing only one of packed/unpacked raises an error
-    with pytest.raises(ValueError, match="State class must implement both packing and unpacking"):
+    with pytest.raises(
+        ValueError, match="State class must implement both packing and unpacking"
+    ):
 
         @state_dataclass(bitpack="off")
         class PartialState:

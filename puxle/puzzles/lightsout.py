@@ -77,8 +77,15 @@ class LightsOut(Puzzle):
 
         return parser
 
-    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "LightsOut.State":
-        return self._get_shuffled_state(solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle)
+    def get_initial_state(
+        self, solve_config: Puzzle.SolveConfig, key=None, data=None
+    ) -> "LightsOut.State":
+        return self._get_shuffled_state(
+            solve_config,
+            solve_config.TargetState,
+            key,
+            num_shuffle=self.initial_shuffle,
+        )
 
     def get_target_state(self, key=None) -> "LightsOut.State":
         board = jnp.zeros(self.size**2, dtype=jnp.bool_)
@@ -88,7 +95,11 @@ class LightsOut(Puzzle):
         return self.SolveConfig(TargetState=self.get_target_state(key))
 
     def get_actions(
-        self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State", action: chex.Array, filled: bool = True
+        self,
+        solve_config: Puzzle.SolveConfig,
+        state: "LightsOut.State",
+        action: chex.Array,
+        filled: bool = True,
     ) -> tuple["LightsOut.State", chex.Array]:
         """
         This function returns the next state and cost for a given action.
@@ -107,7 +118,9 @@ class LightsOut(Puzzle):
 
         def flip(board, x, y):
             # Create coordinate grids
-            i, j = jnp.meshgrid(jnp.arange(self.size), jnp.arange(self.size), indexing="ij")
+            i, j = jnp.meshgrid(
+                jnp.arange(self.size), jnp.arange(self.size), indexing="ij"
+            )
 
             # Manhattan distance from center (x,y)
             dist = jnp.abs(i - x) + jnp.abs(j - y)
@@ -118,11 +131,15 @@ class LightsOut(Puzzle):
             # XOR flip where mask is true
             return jnp.where(mask, jnp.logical_not(board), board)
 
-        next_board, cost = jax.lax.cond(filled, lambda: (flip(board, x, y), 1.0), lambda: (board, jnp.inf))
+        next_board, cost = jax.lax.cond(
+            filled, lambda: (flip(board, x, y), 1.0), lambda: (board, jnp.inf)
+        )
         next_state = state.set_unpacked(board=next_board)
         return next_state, cost
 
-    def is_solved(self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State") -> bool:
+    def is_solved(
+        self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State"
+    ) -> bool:
         return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
@@ -184,7 +201,9 @@ class LightsOut(Puzzle):
                 if r != rank and augmented[r, col]:
                     augmented[r] ^= augmented[rank]
             rank += 1
-        inconsistent = np.logical_and(np.all(augmented[:, :-1] == 0, axis=1), augmented[:, -1] == 1)
+        inconsistent = np.logical_and(
+            np.all(augmented[:, :-1] == 0, axis=1), augmented[:, -1] == 1
+        )
         return not bool(np.any(inconsistent))
 
     def is_state_solvable(self, state: "LightsOut.State") -> bool:
@@ -242,8 +261,12 @@ class LightsOut(Puzzle):
                     top_left = (j * cell_size, i * cell_size)
                     bottom_right = ((j + 1) * cell_size, (i + 1) * cell_size)
                     cell_color = on_color if board[i, j] else off_color
-                    img = cv2.rectangle(img, top_left, bottom_right, cell_color, thickness=-1)
-                    img = cv2.rectangle(img, top_left, bottom_right, grid_color, thickness=1)
+                    img = cv2.rectangle(
+                        img, top_left, bottom_right, cell_color, thickness=-1
+                    )
+                    img = cv2.rectangle(
+                        img, top_left, bottom_right, grid_color, thickness=1
+                    )
             return img
 
         return img_func
@@ -261,9 +284,19 @@ class LightsOutRandom(LightsOut):
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         solve_config = super().get_solve_config(key, data)
         solve_config.TargetState = self._get_shuffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
+            solve_config,
+            solve_config.TargetState,
+            key,
+            num_shuffle=self.initial_shuffle,
         )
         return solve_config
 
-    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> LightsOut.State:
-        return self._get_shuffled_state(solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle)
+    def get_initial_state(
+        self, solve_config: Puzzle.SolveConfig, key=None, data=None
+    ) -> LightsOut.State:
+        return self._get_shuffled_state(
+            solve_config,
+            solve_config.TargetState,
+            key,
+            num_shuffle=self.initial_shuffle,
+        )

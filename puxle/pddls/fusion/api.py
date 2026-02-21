@@ -27,7 +27,10 @@ def _domain_type_parent_map(domain: Domain) -> dict[str, str]:
 
 
 def fuse_and_load(
-    domain_paths: List[str], params: Optional[FusionParams] = None, name: str = "fused-domain", **kwargs
+    domain_paths: List[str],
+    params: Optional[FusionParams] = None,
+    name: str = "fused-domain",
+    **kwargs,
 ) -> PDDL:
     """
     Fuses multiple PDDL domains and returns a PuXle PDDL environment.
@@ -57,7 +60,9 @@ def fuse_and_load(
     types_map = _domain_type_parent_map(fused_domain)
 
     modifier = ActionModifier(params)
-    modified_actions = modifier.modify_actions(list(fused_domain.actions), all_predicates, types_map)
+    modified_actions = modifier.modify_actions(
+        list(fused_domain.actions), all_predicates, types_map
+    )
 
     # Replace actions in domain
     # pddl.Domain is immutable-ish but we can construct new one
@@ -108,7 +113,9 @@ def generate_benchmark(
     all_predicates = list(fused_domain.predicates)
     types_map = _domain_type_parent_map(fused_domain)
     modifier = ActionModifier(params)
-    modified_actions = modifier.modify_actions(list(fused_domain.actions), all_predicates, types_map)
+    modified_actions = modifier.modify_actions(
+        list(fused_domain.actions), all_predicates, types_map
+    )
 
     final_domain = Domain(
         name=fused_domain.name,
@@ -134,7 +141,10 @@ def generate_benchmark(
         depth = int(start_depth + i * step)
         prob_name = f"prob-{i:02d}"
         problem = rng.generate_problem(
-            final_domain, num_objects=5 + (i // 3), walk_length=depth, problem_name=prob_name
+            final_domain,
+            num_objects=5 + (i // 3),
+            walk_length=depth,
+            problem_name=prob_name,
         )
 
         prob_file = os.path.join(output_dir, f"{prob_name}.pddl")
@@ -144,7 +154,12 @@ def generate_benchmark(
     print(f"Generated benchmark in {output_dir}: 1 domain, {count} problems.")
 
 
-def iterative_fusion(base_domains: List[str], depth: int, params: FusionParams, name_prefix: str = "fused") -> Domain:
+def iterative_fusion(
+    base_domains: List[str],
+    depth: int,
+    params: FusionParams,
+    name_prefix: str = "fused",
+) -> Domain:
     """
     Performs iterative fusion to increase complexity.
 
@@ -169,7 +184,9 @@ def iterative_fusion(base_domains: List[str], depth: int, params: FusionParams, 
     all_predicates = list(current_domain.predicates)
     types_map = _domain_type_parent_map(current_domain)
     modifier = ActionModifier(params)
-    modified_actions = modifier.modify_actions(list(current_domain.actions), all_predicates, types_map)
+    modified_actions = modifier.modify_actions(
+        list(current_domain.actions), all_predicates, types_map
+    )
 
     current_domain = Domain(
         name=current_domain.name,
@@ -189,12 +206,16 @@ def iterative_fusion(base_domains: List[str], depth: int, params: FusionParams, 
         # We fuse the current domain with itself.
         # Since we implemented renaming, this doubles the actions (original + renamed copy).
         # This rapidly increases domain size.
-        current_domain = fusion_engine.fuse_domains([current_domain, current_domain], name=f"{name_prefix}-d{i}")
+        current_domain = fusion_engine.fuse_domains(
+            [current_domain, current_domain], name=f"{name_prefix}-d{i}"
+        )
 
         # Re-apply modifications to the larger set
         all_predicates = list(current_domain.predicates)
         types_map = _domain_type_parent_map(current_domain)
-        modified_actions = modifier.modify_actions(list(current_domain.actions), all_predicates, types_map)
+        modified_actions = modifier.modify_actions(
+            list(current_domain.actions), all_predicates, types_map
+        )
 
         current_domain = Domain(
             name=current_domain.name,
@@ -241,7 +262,9 @@ def generate_benchmark_with_varying_depth(
         # We use iterative fusion
         # Note: iterative_fusion parses domains inside.
         print(f"Generating depth {d} domain...")
-        fused_domain = iterative_fusion(base_domains, depth=d, params=params, name_prefix=f"fused_d{d}")
+        fused_domain = iterative_fusion(
+            base_domains, depth=d, params=params, name_prefix=f"fused_d{d}"
+        )
 
         # Save domain
         domain_path = depth_dir / "domain.pddl"
@@ -263,7 +286,10 @@ def generate_benchmark_with_varying_depth(
 
             p_name = f"prob_d{d}_{i:02d}"
             problem = generator.generate_problem(
-                fused_domain, num_objects=num_objs, walk_length=walk_len, problem_name=p_name
+                fused_domain,
+                num_objects=num_objs,
+                walk_length=walk_len,
+                problem_name=p_name,
             )
 
             p_path = depth_dir / f"problem_{i:02d}.pddl"

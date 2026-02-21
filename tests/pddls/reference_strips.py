@@ -93,7 +93,9 @@ class ReferenceSTRIPS:
 
         for params in param_combinations:
             # Create parameter substitution
-            param_map = {param.name: value for param, value in zip(action.parameters, params)}
+            param_map = {
+                param.name: value for param, value in zip(action.parameters, params)
+            }
 
             # Ground preconditions
             preconditions = set()
@@ -104,7 +106,9 @@ class ReferenceSTRIPS:
             add_effects = set()
             delete_effects = set()
             if action.effect:
-                self._ground_effect(action.effect, param_map, add_effects, delete_effects)
+                self._ground_effect(
+                    action.effect, param_map, add_effects, delete_effects
+                )
 
             grounded_action = {
                 "name": action.name,
@@ -201,7 +205,11 @@ class ReferenceSTRIPS:
 
     def get_applicable_actions(self, state: Set[str]) -> List[Dict]:
         """Get all applicable actions in given state."""
-        return [action for action in self.grounded_actions if self.is_applicable(action, state)]
+        return [
+            action
+            for action in self.grounded_actions
+            if self.is_applicable(action, state)
+        ]
 
     def bfs_search(self, max_depth: int = 6) -> Optional[List[Dict]]:
         """Breadth-first search for a plan."""

@@ -202,7 +202,9 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         states: Sequence[Any] | None = None,
     ) -> None:
         super().__init__()
-        self._dataset_path = Path(dataset_path).expanduser().resolve() if dataset_path else None
+        self._dataset_path = (
+            Path(dataset_path).expanduser().resolve() if dataset_path else None
+        )
         self._solve_config_cache = None
         self._use_color_embedding = use_color_embedding
         self._explicit_states = states
@@ -210,14 +212,21 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
     def build_puzzle(self):
         from puxle.puzzles.rubikscube import RubiksCube
 
-        return RubiksCube(size=3, initial_shuffle=100, color_embedding=self._use_color_embedding)
+        return RubiksCube(
+            size=3, initial_shuffle=100, color_embedding=self._use_color_embedding
+        )
 
     def load_dataset(self) -> dict[str, Any]:
         if self._explicit_states is not None:
             return {"states": self._explicit_states, "solutions": None}
 
         fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH.parent
-        return load_deepcubea_dataset(self._dataset_path, DEFAULT_DATASET_NAME, "puxle.data.rubikscube", fallback_dir)
+        return load_deepcubea_dataset(
+            self._dataset_path,
+            DEFAULT_DATASET_NAME,
+            "puxle.data.rubikscube",
+            fallback_dir,
+        )
 
     def sample_ids(self) -> Iterable[Hashable]:
         return range(len(self.dataset["states"]))
@@ -236,8 +245,12 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         optimal_path = None
 
         if dataset.get("solutions") is not None:
-            optimal_action_sequence, optimal_path_costs = self._convert_solution(dataset["solutions"][index])
-            optimal_path = self._build_optimal_path(state, solve_config, optimal_action_sequence)
+            optimal_action_sequence, optimal_path_costs = self._convert_solution(
+                dataset["solutions"][index]
+            )
+            optimal_path = self._build_optimal_path(
+                state, solve_config, optimal_action_sequence
+            )
 
         return BenchmarkSample(
             state=state,
@@ -252,7 +265,9 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
 
         total_tiles = 6 * size * size
         if faces.size != total_tiles:
-            raise ValueError(f"Expected {total_tiles} tiles for a size-{size} cube, received {faces.size}.")
+            raise ValueError(
+                f"Expected {total_tiles} tiles for a size-{size} cube, received {faces.size}."
+            )
 
         pos_map = jnp.asarray(POS_MAP, dtype=jnp.int32)
         faces = jnp.zeros_like(faces).at[pos_map].set(faces)
@@ -282,7 +297,9 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         action_sequence: list[str] = []
         for face, direction in moves:
             if direction not in (-1, 1):
-                raise ValueError(f"Unsupported rotation direction {direction} for move {face}.")
+                raise ValueError(
+                    f"Unsupported rotation direction {direction} for move {face}."
+                )
             notation = face if direction == 1 else f"{face}'"
             action_sequence.append(notation)
         optimal_action_sequence = tuple(action_sequence)
@@ -292,7 +309,9 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
 class RubiksCubeDeepCubeAHardBenchmark(RubiksCubeDeepCubeABenchmark):
     """Benchmark exposing the DeepCubeA 3x3 Rubik's Cube hard cases (26 moves)."""
 
-    def __init__(self, dataset_path: str | Path | None = None, use_color_embedding: bool = True) -> None:
+    def __init__(
+        self, dataset_path: str | Path | None = None, use_color_embedding: bool = True
+    ) -> None:
         super().__init__(dataset_path, use_color_embedding, states=HARD_26_STATES)
 
     def _convert_state(self, raw_state: Any):

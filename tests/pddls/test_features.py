@@ -59,7 +59,9 @@ class TestPDDLFeatures:
         # If that's the case, toggle-on is NOT applicable in empty state.
 
         cost_on = costs[toggle_on_idx]
-        assert jnp.isfinite(cost_on), "toggle-on should be applicable in empty state (requires not on)"
+        assert jnp.isfinite(cost_on), (
+            "toggle-on should be applicable in empty state (requires not on)"
+        )
 
         # Now emulate state where (on s1) is true
         # We can construct it manually if needed, or take the step if supported
@@ -81,7 +83,9 @@ class TestPDDLFeatures:
                     found_self_loop = True
                     break
 
-        assert not found_self_loop, "Equality constraint 'not =' should prevent self-loop action"
+        assert not found_self_loop, (
+            "Equality constraint 'not =' should prevent self-loop action"
+        )
 
     def test_zero_arity_formatting(self):
         domain_file = str(BASE_DIR / "zero_arity" / "domain.pddl")
@@ -103,7 +107,10 @@ class TestPDDLFeatures:
         assert "(at r1)" in set(puzzle.grounded_atoms)
         assert "(at h1)" in set(puzzle.grounded_atoms)
 
-        grounded_action_strs = {f"({a['name']} {' '.join(a['parameters'])})" for a in puzzle.grounded_actions}
+        grounded_action_strs = {
+            f"({a['name']} {' '.join(a['parameters'])})"
+            for a in puzzle.grounded_actions
+        }
         assert "(mark r1)" in grounded_action_strs
         assert "(mark h1)" in grounded_action_strs
 

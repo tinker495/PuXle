@@ -108,7 +108,9 @@ class Sokoban(Puzzle):
         idx = jax.random.randint(key, (), 0, self.num_puzzles)
         return self.target_puzzles[idx, ...], self.init_puzzles[idx, ...]
 
-    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "Sokoban.State":
+    def get_initial_state(
+        self, solve_config: Puzzle.SolveConfig, key=None, data=None
+    ) -> "Sokoban.State":
         # NOTE: The Boxoban dataset (init.npy, target.npy) contains already bit-packed
         # board data (2 bits per cell, 10x10 -> 25 bytes).
         # We pass it directly to the State constructor as the underlying packed buffer.
@@ -123,7 +125,10 @@ class Sokoban(Puzzle):
             # When no data is provided, generate data using get_data method
             data = self.get_data(key)
         target_data, _ = data
-        if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET:
+        if (
+            self.solve_condition
+            == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET
+        ):
             # If we need to modify the board (e.g. place agent randomly),
             # we first unpack the data to work with logical values.
             board = self.State(board=target_data).board_unpacked
@@ -134,15 +139,22 @@ class Sokoban(Puzzle):
             target_state = self.State(board=target_data)
         return self.SolveConfig(TargetState=target_state)
 
-    def is_solved(self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State") -> bool:
+    def is_solved(
+        self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State"
+    ) -> bool:
         # Unpack boards for comparison.
         board = state.board_unpacked
         t_board = solve_config.TargetState.board_unpacked
         # Remove the player from the current board.
-        if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET:
+        if (
+            self.solve_condition
+            == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET
+        ):
             return jnp.all(board == t_board)
         else:
-            rm_player = jnp.where(board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board)
+            rm_player = jnp.where(
+                board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board
+            )
             return jnp.all(rm_player == t_board)
 
     def action_to_string(self, action: int) -> str:
@@ -178,7 +190,9 @@ class Sokoban(Puzzle):
                 case _:
                     return "?"
 
-        def parser(state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs):
+        def parser(
+            state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs
+        ):
             # Unpack the board before visualization.
             board = state.board_unpacked
             if solve_config is not None:
@@ -188,19 +202,31 @@ class Sokoban(Puzzle):
                         if goal[i * self.size + j] == Sokoban.Object.BOX.value:
                             match board[i * self.size + j]:
                                 case Sokoban.Object.PLAYER.value:
-                                    board = board.at[i * self.size + j].set(Sokoban.Object.PLAYER_ON_TARGET.value)
+                                    board = board.at[i * self.size + j].set(
+                                        Sokoban.Object.PLAYER_ON_TARGET.value
+                                    )
                                 case Sokoban.Object.BOX.value:
-                                    board = board.at[i * self.size + j].set(Sokoban.Object.BOX_ON_TARGET.value)
+                                    board = board.at[i * self.size + j].set(
+                                        Sokoban.Object.BOX_ON_TARGET.value
+                                    )
                                 case Sokoban.Object.EMPTY.value:
-                                    board = board.at[i * self.size + j].set(Sokoban.Object.TARGET.value)
+                                    board = board.at[i * self.size + j].set(
+                                        Sokoban.Object.TARGET.value
+                                    )
                         if goal[i * self.size + j] == Sokoban.Object.PLAYER.value:
                             match board[i * self.size + j]:
                                 case Sokoban.Object.PLAYER.value:
-                                    board = board.at[i * self.size + j].set(Sokoban.Object.PLAYER.value)
+                                    board = board.at[i * self.size + j].set(
+                                        Sokoban.Object.PLAYER.value
+                                    )
                                 case Sokoban.Object.BOX.value:
-                                    board = board.at[i * self.size + j].set(Sokoban.Object.BOX.value)
+                                    board = board.at[i * self.size + j].set(
+                                        Sokoban.Object.BOX.value
+                                    )
                                 case Sokoban.Object.EMPTY.value:
-                                    board = board.at[i * self.size + j].set(Sokoban.Object.TARGET_PLAYER.value)
+                                    board = board.at[i * self.size + j].set(
+                                        Sokoban.Object.TARGET_PLAYER.value
+                                    )
                                 case _:
                                     pass
 
@@ -209,7 +235,11 @@ class Sokoban(Puzzle):
         return parser
 
     def get_actions(
-        self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State", action: chex.Array, filled: bool = True
+        self,
+        solve_config: Puzzle.SolveConfig,
+        state: "Sokoban.State",
+        action: chex.Array,
+        filled: bool = True,
     ) -> tuple["Sokoban.State", chex.Array]:
         """
         Returns the next state and cost for a given action.
@@ -230,7 +260,10 @@ class Sokoban(Puzzle):
             return board[flat_idx(i, j)] == Sokoban.Object.EMPTY.value
 
         def is_valid_pos(i, j):
-            return jnp.logical_and(jnp.logical_and(i >= 0, i < self.size), jnp.logical_and(j >= 0, j < self.size))
+            return jnp.logical_and(
+                jnp.logical_and(i >= 0, i < self.size),
+                jnp.logical_and(j >= 0, j < self.size),
+            )
 
         new_pos = (current_pos + direction).astype(current_pos.dtype)
         new_x, new_y = new_pos[0], new_pos[1]
@@ -244,21 +277,33 @@ class Sokoban(Puzzle):
             # Case when target cell is empty: simply move the player.
 
             def move_empty():
-                new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(Sokoban.Object.EMPTY.value)
-                new_board = new_board.at[flat_idx(new_x, new_y)].set(Sokoban.Object.PLAYER.value)
+                new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
+                    Sokoban.Object.EMPTY.value
+                )
+                new_board = new_board.at[flat_idx(new_x, new_y)].set(
+                    Sokoban.Object.PLAYER.value
+                )
                 return state.set_unpacked(board=new_board), 1.0
 
             # Case when target cell contains a box: attempt to push it.
             def push_box():
                 push_pos = (new_pos + direction).astype(current_pos.dtype)
                 push_x, push_y = push_pos[0], push_pos[1]
-                valid_push = jnp.logical_and(is_valid_pos(push_x, push_y), is_empty(push_x, push_y))
+                valid_push = jnp.logical_and(
+                    is_valid_pos(push_x, push_y), is_empty(push_x, push_y)
+                )
                 valid_push = jnp.logical_and(valid_push, filled)
 
                 def do_push():
-                    new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(Sokoban.Object.EMPTY.value)
-                    new_board = new_board.at[flat_idx(new_x, new_y)].set(Sokoban.Object.PLAYER.value)
-                    new_board = new_board.at[flat_idx(push_x, push_y)].set(Sokoban.Object.BOX.value)
+                    new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
+                        Sokoban.Object.EMPTY.value
+                    )
+                    new_board = new_board.at[flat_idx(new_x, new_y)].set(
+                        Sokoban.Object.PLAYER.value
+                    )
+                    new_board = new_board.at[flat_idx(push_x, push_y)].set(
+                        Sokoban.Object.BOX.value
+                    )
                     return state.set_unpacked(board=new_board), 1.0
 
                 return jax.lax.cond(valid_push, do_push, invalid_case)
@@ -266,7 +311,9 @@ class Sokoban(Puzzle):
             return jax.lax.cond(
                 jnp.equal(target, Sokoban.Object.EMPTY.value),
                 move_empty,
-                lambda: jax.lax.cond(jnp.equal(target, Sokoban.Object.BOX.value), push_box, invalid_case),
+                lambda: jax.lax.cond(
+                    jnp.equal(target, Sokoban.Object.BOX.value), push_box, invalid_case
+                ),
             )
 
         next_state, cost = jax.lax.cond(valid_move, process_move, invalid_case)
@@ -341,7 +388,9 @@ class Sokoban(Puzzle):
             ),
             4: cv2.resize(
                 cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "box_target.png"), cv2.IMREAD_COLOR),
+                    cv2.imread(
+                        os.path.join(image_dir, "box_target.png"), cv2.IMREAD_COLOR
+                    ),
                     cv2.COLOR_BGR2RGB,
                 ),
                 (cell_w, cell_h),
@@ -349,7 +398,9 @@ class Sokoban(Puzzle):
             ),
             5: cv2.resize(
                 cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "agent_on_target.png"), cv2.IMREAD_COLOR),
+                    cv2.imread(
+                        os.path.join(image_dir, "agent_on_target.png"), cv2.IMREAD_COLOR
+                    ),
                     cv2.COLOR_BGR2RGB,
                 ),
                 (cell_w, cell_h),
@@ -357,7 +408,9 @@ class Sokoban(Puzzle):
             ),
             6: cv2.resize(
                 cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "box_on_target.png"), cv2.IMREAD_COLOR),
+                    cv2.imread(
+                        os.path.join(image_dir, "box_on_target.png"), cv2.IMREAD_COLOR
+                    ),
                     cv2.COLOR_BGR2RGB,
                 ),
                 (cell_w, cell_h),
@@ -374,7 +427,9 @@ class Sokoban(Puzzle):
             ),
         }
 
-        def img_func(state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs):
+        def img_func(
+            state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs
+        ):
             img = np.zeros(IMG_SIZE + (3,), np.uint8)
 
             board = np.array(state.board_unpacked)
@@ -386,18 +441,28 @@ class Sokoban(Puzzle):
                 for j in range(self.size):
                     cell_val = int(board[i * self.size + j])
                     if (
-                        goal is not None and goal[i * self.size + j] == Sokoban.Object.BOX.value
+                        goal is not None
+                        and goal[i * self.size + j] == Sokoban.Object.BOX.value
                     ):  # If this cell is marked as a target
                         match cell_val:
                             case Sokoban.Object.PLAYER.value:
-                                asset = assets.get(Sokoban.Object.PLAYER_ON_TARGET.value)  # agent on target
+                                asset = assets.get(
+                                    Sokoban.Object.PLAYER_ON_TARGET.value
+                                )  # agent on target
                             case Sokoban.Object.BOX.value:
-                                asset = assets.get(Sokoban.Object.BOX_ON_TARGET.value)  # box on target
+                                asset = assets.get(
+                                    Sokoban.Object.BOX_ON_TARGET.value
+                                )  # box on target
                             case Sokoban.Object.EMPTY.value:
-                                asset = assets.get(Sokoban.Object.TARGET.value)  # target floor (box target)
+                                asset = assets.get(
+                                    Sokoban.Object.TARGET.value
+                                )  # target floor (box target)
                             case _:
                                 asset = assets.get(cell_val)
-                    elif goal is not None and goal[i * self.size + j] == Sokoban.Object.PLAYER.value:
+                    elif (
+                        goal is not None
+                        and goal[i * self.size + j] == Sokoban.Object.PLAYER.value
+                    ):
                         match board[i * self.size + j]:
                             case Sokoban.Object.BOX.value:
                                 asset = assets.get(Sokoban.Object.BOX.value)
@@ -410,10 +475,14 @@ class Sokoban(Puzzle):
                     else:
                         asset = assets.get(cell_val)
                     if asset is not None:
-                        img[i * cell_h : (i + 1) * cell_h, j * cell_w : (j + 1) * cell_w] = asset
+                        img[
+                            i * cell_h : (i + 1) * cell_h, j * cell_w : (j + 1) * cell_w
+                        ] = asset
                     else:
                         # Fallback: fill with a gray square if image not found
-                        img[i * cell_h : (i + 1) * cell_h, j * cell_w : (j + 1) * cell_w] = (
+                        img[
+                            i * cell_h : (i + 1) * cell_h, j * cell_w : (j + 1) * cell_w
+                        ] = (
                             127,
                             127,
                             127,
@@ -422,20 +491,28 @@ class Sokoban(Puzzle):
 
         return img_func
 
-    def _get_box_positions(self, board: jnp.ndarray, number_of_boxes: int = 4) -> jnp.ndarray:
+    def _get_box_positions(
+        self, board: jnp.ndarray, number_of_boxes: int = 4
+    ) -> jnp.ndarray:
         """
         Get the positions of all boxes on the board.
         """
         flat_index = jnp.argsort(board == Sokoban.Object.BOX.value)[-number_of_boxes:]
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
-    def _place_agent_randomly(self, board: jnp.ndarray, key: jax.random.PRNGKey) -> jnp.ndarray:
+    def _place_agent_randomly(
+        self, board: jnp.ndarray, key: jax.random.PRNGKey
+    ) -> jnp.ndarray:
         """
         Place the agent randomly on the board.
         """
         box_xs, box_ys = self._get_box_positions(board)
-        box_positions = jnp.expand_dims(jnp.stack([box_xs, box_ys], axis=1), 0)  # shape: (1, 4, 2)
-        _near = jnp.expand_dims(jnp.array([[-1, 0], [1, 0], [0, -1], [0, 1]]), 1)  # shape: (4, 1, 2)
+        box_positions = jnp.expand_dims(
+            jnp.stack([box_xs, box_ys], axis=1), 0
+        )  # shape: (1, 4, 2)
+        _near = jnp.expand_dims(
+            jnp.array([[-1, 0], [1, 0], [0, -1], [0, 1]]), 1
+        )  # shape: (4, 1, 2)
         near_positions = box_positions + _near  # shape: (4, 4, 2)
         near_positions = near_positions.reshape((-1, 2))  # shape: (16, 2)
         mask = jnp.ones(near_positions.shape[0])
@@ -444,15 +521,16 @@ class Sokoban(Puzzle):
         mask = jnp.where(near_positions[:, 1] < 0, 0, mask)
         mask = jnp.where(near_positions[:, 1] >= self.size, 0, mask)
         mask = jnp.where(
-            board[near_positions[:, 0] * self.size + near_positions[:, 1]] != Sokoban.Object.EMPTY.value,
+            board[near_positions[:, 0] * self.size + near_positions[:, 1]]
+            != Sokoban.Object.EMPTY.value,
             0,
             mask,
         )
         prob = mask / jnp.sum(mask)
         idx = jax.random.choice(key, jnp.arange(near_positions.shape[0]), p=prob)
-        new_board = board.at[near_positions[idx, 0] * self.size + near_positions[idx, 1]].set(
-            Sokoban.Object.PLAYER.value
-        )
+        new_board = board.at[
+            near_positions[idx, 0] * self.size + near_positions[idx, 1]
+        ].set(Sokoban.Object.PLAYER.value)
         return new_board
 
     def solve_config_to_state_transform(
@@ -467,20 +545,31 @@ class Sokoban(Puzzle):
 
         return self.State.from_unpacked(board=board)
 
-    def hindsight_transform(self, solve_config: "Sokoban.SolveConfig", state: "Sokoban.State") -> "Sokoban.SolveConfig":
+    def hindsight_transform(
+        self, solve_config: "Sokoban.SolveConfig", state: "Sokoban.State"
+    ) -> "Sokoban.SolveConfig":
         """
         This function shoulde transformt the state to the solve config.
         """
         board = state.board_unpacked
         if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET:
-            rm_player = jnp.where(board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board)
-            solve_config = solve_config.replace(TargetState=self.State.from_unpacked(board=rm_player))
+            rm_player = jnp.where(
+                board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board
+            )
+            solve_config = solve_config.replace(
+                TargetState=self.State.from_unpacked(board=rm_player)
+            )
         else:
-            solve_config = solve_config.replace(TargetState=self.State.from_unpacked(board=board))
+            solve_config = solve_config.replace(
+                TargetState=self.State.from_unpacked(board=board)
+            )
         return solve_config
 
     def get_inverse_neighbours(
-        self, solve_config: "Sokoban.SolveConfig", state: "Sokoban.State", filled: bool = True
+        self,
+        solve_config: "Sokoban.SolveConfig",
+        state: "Sokoban.State",
+        filled: bool = True,
     ) -> tuple["Sokoban.State", chex.Array]:
         """
         Returns possible previous states and their associated costs.
@@ -501,7 +590,10 @@ class Sokoban(Puzzle):
             return board[flat_idx(i, j)] == Sokoban.Object.EMPTY.value
 
         def is_valid_pos(i, j):
-            return jnp.logical_and(jnp.logical_and(i >= 0, i < self.size), jnp.logical_and(j >= 0, j < self.size))
+            return jnp.logical_and(
+                jnp.logical_and(i >= 0, i < self.size),
+                jnp.logical_and(j >= 0, j < self.size),
+            )
 
         def inv_move(direction):
             direction = direction.astype(current_pos.dtype)
@@ -512,7 +604,8 @@ class Sokoban(Puzzle):
             front_pos = current_pos + direction
             valid_front = is_valid_pos(front_pos[0], front_pos[1])
             box_at_front = jnp.logical_and(
-                valid_front, board[flat_idx(front_pos[0], front_pos[1])] == Sokoban.Object.BOX.value
+                valid_front,
+                board[flat_idx(front_pos[0], front_pos[1])] == Sokoban.Object.BOX.value,
             )
             empty_prev = jnp.logical_and(valid_prev, is_empty(prev_pos[0], prev_pos[1]))
 
@@ -525,16 +618,26 @@ class Sokoban(Puzzle):
             # Here, we "pull" the box from front_pos back into current_pos while moving the player to prev_pos.
             def do_pull():
                 new_board = board
-                new_board = new_board.at[flat_idx(front_pos[0], front_pos[1])].set(Sokoban.Object.EMPTY.value)
-                new_board = new_board.at[flat_idx(current_pos[0], current_pos[1])].set(Sokoban.Object.BOX.value)
-                new_board = new_board.at[flat_idx(prev_pos[0], prev_pos[1])].set(Sokoban.Object.PLAYER.value)
+                new_board = new_board.at[flat_idx(front_pos[0], front_pos[1])].set(
+                    Sokoban.Object.EMPTY.value
+                )
+                new_board = new_board.at[flat_idx(current_pos[0], current_pos[1])].set(
+                    Sokoban.Object.BOX.value
+                )
+                new_board = new_board.at[flat_idx(prev_pos[0], prev_pos[1])].set(
+                    Sokoban.Object.PLAYER.value
+                )
                 return state.set_unpacked(board=new_board), 1.0
 
             # Inverse simple move: simply move the player back if no box is involved.
             def do_simple():
                 new_board = board
-                new_board = new_board.at[flat_idx(current_pos[0], current_pos[1])].set(Sokoban.Object.EMPTY.value)
-                new_board = new_board.at[flat_idx(prev_pos[0], prev_pos[1])].set(Sokoban.Object.PLAYER.value)
+                new_board = new_board.at[flat_idx(current_pos[0], current_pos[1])].set(
+                    Sokoban.Object.EMPTY.value
+                )
+                new_board = new_board.at[flat_idx(prev_pos[0], prev_pos[1])].set(
+                    Sokoban.Object.PLAYER.value
+                )
                 return state.set_unpacked(board=new_board), 1.0
 
             def branch_fn():

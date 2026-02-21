@@ -4,7 +4,10 @@ from typing import Iterable, Sequence
 
 from .benchmark import Benchmark, BenchmarkSample
 from .lightsout_deepcubea import LightsOutDeepCubeABenchmark
-from .rubikscube_deepcubea import RubiksCubeDeepCubeABenchmark, RubiksCubeDeepCubeAHardBenchmark
+from .rubikscube_deepcubea import (
+    RubiksCubeDeepCubeABenchmark,
+    RubiksCubeDeepCubeAHardBenchmark,
+)
 from .rubikscube_santa import (
     RubiksCubeSanta222Benchmark,
     RubiksCubeSanta333Benchmark,

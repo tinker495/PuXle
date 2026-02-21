@@ -51,7 +51,9 @@ class TopSpin(Puzzle):
 
     def __init__(self, size: int = 20, turnstile_size: int = 4, **kwargs):
         if turnstile_size > size:
-            raise ValueError("Turnstile size cannot be larger than the number of discs.")
+            raise ValueError(
+                "Turnstile size cannot be larger than the number of discs."
+            )
         self.n_discs = size
         self.turnstile_size = turnstile_size
         self.action_size = 3
@@ -60,22 +62,32 @@ class TopSpin(Puzzle):
     def get_string_parser(self) -> Callable:
         def parser(state: "TopSpin.State", **kwargs):
             # Highlight the turnstile
-            turnstile_str = " ".join(map(lambda x: f"{x:2d}", state.permutation[: self.turnstile_size]))
-            rest_str = " ".join(map(lambda x: f"{x:2d}", state.permutation[self.turnstile_size :]))
+            turnstile_str = " ".join(
+                map(lambda x: f"{x:2d}", state.permutation[: self.turnstile_size])
+            )
+            rest_str = " ".join(
+                map(lambda x: f"{x:2d}", state.permutation[self.turnstile_size :])
+            )
             return f"[{turnstile_str}] {rest_str}"
 
         return parser
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         # The target state is the sorted permutation
-        target_state = self.State(permutation=jnp.arange(1, self.n_discs + 1, dtype=TYPE))
+        target_state = self.State(
+            permutation=jnp.arange(1, self.n_discs + 1, dtype=TYPE)
+        )
         return self.SolveConfig(TargetState=target_state)
 
-    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "TopSpin.State":
+    def get_initial_state(
+        self, solve_config: Puzzle.SolveConfig, key=None, data=None
+    ) -> "TopSpin.State":
         # Start from solved state and apply random moves
         return self._get_shuffled_state(solve_config, solve_config.TargetState, key, 18)
 
-    def _get_neighbors_internal(self, state: "TopSpin.State") -> tuple["TopSpin.State", chex.Array]:
+    def _get_neighbors_internal(
+        self, state: "TopSpin.State"
+    ) -> tuple["TopSpin.State", chex.Array]:
         """Internal function to compute neighbors without vmap."""
         p = state.permutation
 
@@ -92,14 +104,20 @@ class TopSpin(Puzzle):
         state_reversed = self.State(permutation=perm_reversed)
 
         # Combine states - use jax.tree_util.tree_map to stack arrays within the dataclass
-        all_states = jax.tree_util.tree_map(lambda *args: jnp.stack(args), state_left, state_right, state_reversed)
+        all_states = jax.tree_util.tree_map(
+            lambda *args: jnp.stack(args), state_left, state_right, state_reversed
+        )
 
         costs = jnp.ones(3)  # All moves have cost 1
 
         return all_states, costs
 
     def get_actions(
-        self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State", action: chex.Array, filled: bool = True
+        self,
+        solve_config: Puzzle.SolveConfig,
+        state: "TopSpin.State",
+        action: chex.Array,
+        filled: bool = True,
     ) -> tuple["TopSpin.State", chex.Array]:
         """
         Returns the next state and cost for a given action.
@@ -112,7 +130,11 @@ class TopSpin(Puzzle):
                 [
                     lambda: self.State(permutation=jnp.roll(p, -1)),
                     lambda: self.State(permutation=jnp.roll(p, 1)),
-                    lambda: self.State(permutation=p.at[: self.turnstile_size].set(jnp.flip(p[: self.turnstile_size]))),
+                    lambda: self.State(
+                        permutation=p.at[: self.turnstile_size].set(
+                            jnp.flip(p[: self.turnstile_size])
+                        )
+                    ),
                 ],
             )
 
@@ -121,7 +143,9 @@ class TopSpin(Puzzle):
 
         return next_state, cost
 
-    def is_solved(self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State") -> bool:
+    def is_solved(
+        self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State"
+    ) -> bool:
         return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
@@ -163,23 +187,31 @@ class TopSpin(Puzzle):
 
             # Find the position of the first turnstile element to align it at the top
             # This ensures the turnstile is always at the top (12 o'clock position)
-            offset = -(self.turnstile_size // 2)  # No offset needed as we'll place the first ts elements at the top
+            offset = -(
+                self.turnstile_size // 2
+            )  # No offset needed as we'll place the first ts elements at the top
 
             # Draw the ring and discs
             for i, val in enumerate(state.permutation):
                 # Calculate angle to place turnstile at the top (12 o'clock position)
                 # First ts elements will be in the turnstile area
-                angle = (2 * np.pi * ((i + offset + 0.5) / n)) - (np.pi / 2)  # Start from top (12 o'clock)
+                angle = (2 * np.pi * ((i + offset + 0.5) / n)) - (
+                    np.pi / 2
+                )  # Start from top (12 o'clock)
                 x = int(center_x + radius * np.cos(angle))
                 y = int(center_y + radius * np.sin(angle))
 
                 # Determine if this position is part of the turnstile
                 is_turnstile = i < ts
-                color = (0, 0, 200) if is_turnstile else (50, 50, 50)  # Blue for turnstile, gray otherwise
+                color = (
+                    (0, 0, 200) if is_turnstile else (50, 50, 50)
+                )  # Blue for turnstile, gray otherwise
                 cv2.circle(img, (x, y), disc_radius, color, -1)
 
                 text = str(val)
-                text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)[0]
+                text_size = cv2.getTextSize(
+                    text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
+                )[0]
                 text_x = x - text_size[0] // 2
                 text_y = y + text_size[1] // 2
                 cv2.putText(
@@ -193,8 +225,12 @@ class TopSpin(Puzzle):
                 )
 
             # Draw the turnstile area indicator at the top
-            start_angle_rad = -np.pi / 2 - (np.pi * ts / n)  # Start angle for turnstile area
-            end_angle_rad = -np.pi / 2 + (np.pi * ts / n)  # End angle for turnstile area
+            start_angle_rad = -np.pi / 2 - (
+                np.pi * ts / n
+            )  # Start angle for turnstile area
+            end_angle_rad = -np.pi / 2 + (
+                np.pi * ts / n
+            )  # End angle for turnstile area
             cv2.ellipse(
                 img,
                 (center_x, center_y),

@@ -52,7 +52,9 @@ def test_removal_logic():
     # Test that removal happens if prob is high
     from puxle.pddls.fusion.action_modifier import ActionModifier
 
-    params = FusionParams(prob_rem_pre=1.0, prob_rem_eff=1.0, prob_add_pre=0.0, prob_add_eff=0.0)
+    params = FusionParams(
+        prob_rem_pre=1.0, prob_rem_eff=1.0, prob_add_pre=0.0, prob_add_eff=0.0
+    )
     modifier = ActionModifier(params)
 
     pre = Predicate("p")
@@ -123,7 +125,10 @@ def test_varying_depth_benchmark(tmp_path):
         "(:action a1 :parameters () :precondition (p) :effect ()))"
     )
 
-    from puxle.pddls.fusion.api import FusionParams, generate_benchmark_with_varying_depth
+    from puxle.pddls.fusion.api import (
+        FusionParams,
+        generate_benchmark_with_varying_depth,
+    )
 
     generate_benchmark_with_varying_depth(
         base_domains=[str(d1_path)],

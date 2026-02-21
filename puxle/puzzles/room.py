@@ -58,7 +58,9 @@ class Room(Maze):
         """Initialize with a specified size, calculating room dimension and
         adjusting to the nearest valid size if necessary."""
         if size < 5:
-            raise ValueError(f"Input size {size} is too small. Minimum valid size is 5 (for 1x1 rooms).")
+            raise ValueError(
+                f"Input size {size} is too small. Minimum valid size is 5 (for 1x1 rooms)."
+            )
 
         # Check if size fits the 3*N+2 formula
         if (size - 2) % 3 == 0:
@@ -81,7 +83,9 @@ class Room(Maze):
 
     # --- Map Generation --- #
 
-    def _generate_maze_dfs(self, key: jax.random.PRNGKey, size_param: int) -> jnp.ndarray:
+    def _generate_maze_dfs(
+        self, key: jax.random.PRNGKey, size_param: int
+    ) -> jnp.ndarray:
         """
         Generates the 3x3 room structure map with randomly opened/closed doors.
         Ensures all rooms are connected using a Kruskal-like algorithm on the room graph.
@@ -100,9 +104,10 @@ class Room(Maze):
             for c_idx in range(num_rooms_dim):
                 room_r_start = (room_dim + 1) * r_idx
                 room_c_start = (room_dim + 1) * c_idx
-                maze = maze.at[room_r_start : room_r_start + room_dim, room_c_start : room_c_start + room_dim].set(
-                    False
-                )
+                maze = maze.at[
+                    room_r_start : room_r_start + room_dim,
+                    room_c_start : room_c_start + room_dim,
+                ].set(False)
 
         # 2. Define all potential doors and their properties
         # Each entry: ((door_r, door_c), room_idx1_flat, room_idx2_flat)
@@ -120,7 +125,9 @@ class Room(Maze):
 
                 idx1 = room_to_flat_idx(r_idx, c_idx)
                 idx2 = room_to_flat_idx(r_idx, c_idx + 1)
-                _potential_doors_list_py.append(((door_r_coord, door_c_coord), idx1, idx2))
+                _potential_doors_list_py.append(
+                    ((door_r_coord, door_c_coord), idx1, idx2)
+                )
 
         # Vertical doors (connecting rooms in the same col, e.g., (0,0) to (1,0))
         for c_idx in range(num_rooms_dim):
@@ -131,18 +138,26 @@ class Room(Maze):
 
                 idx1 = room_to_flat_idx(r_idx, c_idx)
                 idx2 = room_to_flat_idx(r_idx + 1, c_idx)
-                _potential_doors_list_py.append(((door_r_coord, door_c_coord), idx1, idx2))
+                _potential_doors_list_py.append(
+                    ((door_r_coord, door_c_coord), idx1, idx2)
+                )
 
         num_potential_doors = len(_potential_doors_list_py)
         # Convert Python list of door data to JAX arrays
-        door_maze_coords_jax = jnp.array([d[0] for d in _potential_doors_list_py], dtype=jnp.int32)
-        door_room_pairs_jax = jnp.array([d[1:] for d in _potential_doors_list_py], dtype=jnp.int32)
+        door_maze_coords_jax = jnp.array(
+            [d[0] for d in _potential_doors_list_py], dtype=jnp.int32
+        )
+        door_room_pairs_jax = jnp.array(
+            [d[1:] for d in _potential_doors_list_py], dtype=jnp.int32
+        )
 
         # 3. Ensure all rooms are connected using a Kruskal-like algorithm (DSU)
         key_shuffle, key_extra_doors = jax.random.split(key)
 
         # Shuffle the order of considering potential doors
-        shuffled_door_indices = jax.random.permutation(key_shuffle, jnp.arange(num_potential_doors))
+        shuffled_door_indices = jax.random.permutation(
+            key_shuffle, jnp.arange(num_potential_doors)
+        )
 
         # Initialize DSU state for rooms
         # parent_array[i] = parent of room i. Initially each room is its own parent.
@@ -153,7 +168,11 @@ class Room(Maze):
         initial_edges_count = 0
 
         # State for scan: (parent_array, st_doors_mask, edges_added_count)
-        initial_kruskal_carry = (initial_parent_array, initial_st_doors_mask, initial_edges_count)
+        initial_kruskal_carry = (
+            initial_parent_array,
+            initial_st_doors_mask,
+            initial_edges_count,
+        )
 
         # Kruskal's algorithm: iterate through shuffled doors, add if connects different components
         def kruskal_scan_body(carry_state, current_shuffled_door_idx):
@@ -197,7 +216,9 @@ class Room(Maze):
             ), None  # No per-iteration output needed
 
         # Run the scan to determine which doors form the spanning tree
-        final_kruskal_state, _ = jax.lax.scan(kruskal_scan_body, initial_kruskal_carry, shuffled_door_indices)
+        final_kruskal_state, _ = jax.lax.scan(
+            kruskal_scan_body, initial_kruskal_carry, shuffled_door_indices
+        )
         _, spanning_tree_doors_mask, _ = final_kruskal_state
 
         # Open the doors identified for the spanning tree
@@ -213,11 +234,15 @@ class Room(Maze):
                 current_maze_state,
             )
 
-        maze_after_st = jax.lax.fori_loop(0, num_potential_doors, open_st_doors_loop_body, maze_after_st)
+        maze_after_st = jax.lax.fori_loop(
+            0, num_potential_doors, open_st_doors_loop_body, maze_after_st
+        )
 
         # 4. Randomly open additional doors (those not in the spanning tree)
         # Generate random numbers for each potential door
-        extra_door_rand_probs = jax.random.uniform(key_extra_doors, (num_potential_doors,))
+        extra_door_rand_probs = jax.random.uniform(
+            key_extra_doors, (num_potential_doors,)
+        )
 
         final_maze = maze_after_st
 
@@ -235,7 +260,9 @@ class Room(Maze):
                 current_maze_state,
             )
 
-        final_maze = jax.lax.fori_loop(0, num_potential_doors, open_extra_doors_loop_body, final_maze)
+        final_maze = jax.lax.fori_loop(
+            0, num_potential_doors, open_extra_doors_loop_body, final_maze
+        )
 
         return final_maze
 

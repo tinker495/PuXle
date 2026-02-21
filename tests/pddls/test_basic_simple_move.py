@@ -130,7 +130,9 @@ class TestPDDLWrapper:
         solve_config, initial_state = puzzle.get_inits(rng_key)
 
         # Get neighbors
-        neighbors, costs = puzzle.get_neighbours(solve_config, initial_state, filled=True)
+        neighbors, costs = puzzle.get_neighbours(
+            solve_config, initial_state, filled=True
+        )
 
         # Check structure
         assert neighbors is not None
@@ -194,17 +196,23 @@ class TestPDDLWrapper:
         # Create multiple states and configs for batching
         keys = jax.random.split(rng_key, 4)
         solve_configs = jax.vmap(lambda k: puzzle.get_solve_config(k))(keys)
-        initial_states = jax.vmap(lambda sc, k: puzzle.get_initial_state(sc, k))(solve_configs, keys)
+        initial_states = jax.vmap(lambda sc, k: puzzle.get_initial_state(sc, k))(
+            solve_configs, keys
+        )
 
         # Test batched is_solved
-        solved_mask = puzzle.batched_is_solved(solve_configs, initial_states, multi_solve_config=True)
+        solved_mask = puzzle.batched_is_solved(
+            solve_configs, initial_states, multi_solve_config=True
+        )
         assert solved_mask.shape[0] == 4
         assert isinstance(solved_mask, jnp.ndarray)
 
         # Test batched neighbors with single solve config
         solve_config = puzzle.get_solve_config(rng_key)
         # Create filleds as a batch of boolean values
-        filleds = jnp.array([True, True, True, True])  # All actions available for all states
+        filleds = jnp.array(
+            [True, True, True, True]
+        )  # All actions available for all states
         batched_neighbors, batched_costs = puzzle.batched_get_neighbours(
             solve_config, initial_states, filleds=filleds, multi_solve_config=False
         )
@@ -217,16 +225,27 @@ class TestPDDLWrapper:
         # Test with different filleds values for each batch element
         mixed_filleds = jnp.array([True, False, True, False])  # Mixed availability
         mixed_neighbors, mixed_costs = puzzle.batched_get_neighbours(
-            solve_config, initial_states, filleds=mixed_filleds, multi_solve_config=False
+            solve_config,
+            initial_states,
+            filleds=mixed_filleds,
+            multi_solve_config=False,
         )
 
         # Check that costs are finite for True filleds and infinite for False filleds
         # Note: Even with filled=True, some actions may be inapplicable (inf cost)
         # So we check that at least some actions are applicable when filled=True
-        assert jnp.any(jnp.isfinite(mixed_costs[:, 0]))  # First batch: True -> some finite costs
-        assert jnp.all(jnp.isinf(mixed_costs[:, 1]))  # Second batch: False -> all infinite costs
-        assert jnp.any(jnp.isfinite(mixed_costs[:, 2]))  # Third batch: True -> some finite costs
-        assert jnp.all(jnp.isinf(mixed_costs[:, 3]))  # Fourth batch: False -> all infinite costs
+        assert jnp.any(
+            jnp.isfinite(mixed_costs[:, 0])
+        )  # First batch: True -> some finite costs
+        assert jnp.all(
+            jnp.isinf(mixed_costs[:, 1])
+        )  # Second batch: False -> all infinite costs
+        assert jnp.any(
+            jnp.isfinite(mixed_costs[:, 2])
+        )  # Third batch: True -> some finite costs
+        assert jnp.all(
+            jnp.isinf(mixed_costs[:, 3])
+        )  # Fourth batch: False -> all infinite costs
 
     def test_action_to_string(self, puzzle):
         """Test action string conversion."""
@@ -327,7 +346,9 @@ class TestPDDLWrapper:
                 path_found = True
                 break
 
-            neighbors, costs = puzzle.get_neighbours(solve_config, current_state, filled=True)
+            neighbors, costs = puzzle.get_neighbours(
+                solve_config, current_state, filled=True
+            )
             applicable = jnp.isfinite(costs)
 
             if not jnp.any(applicable):
@@ -342,5 +363,9 @@ class TestPDDLWrapper:
         # If not, at least verify that some progress was made
         if not path_found:
             # Check if we made any progress (state changed from initial)
-            assert current_state != initial_state, "No progress made in solving the puzzle"
-            print(f"Warning: Goal not reached in {max_steps} steps, but progress was made")
+            assert current_state != initial_state, (
+                "No progress made in solving the puzzle"
+            )
+            print(
+                f"Warning: Goal not reached in {max_steps} steps, but progress was made"
+            )

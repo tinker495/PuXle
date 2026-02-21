@@ -74,7 +74,9 @@ def test_action_modifier():
     # Setup simple data
     # Use a new predicate "p_new" not in action to ensure modification is visible
     preds = [Predicate("p_new")]
-    act = Action("act", parameters=[], precondition=Predicate("p1"), effect=Predicate("p1"))
+    act = Action(
+        "act", parameters=[], precondition=Predicate("p1"), effect=Predicate("p1")
+    )
 
     # Force addition of precondition
     params = FusionParams(prob_add_pre=1.0, prob_add_eff=0.0, prob_neg=0.0, seed=42)
@@ -96,7 +98,9 @@ def test_action_modifier_type_compatibility():
     truck_var = Variable("t", type_tags={"truck"})
 
     requires_truck = Predicate("requires-truck", Variable("x", type_tags={"truck"}))
-    requires_vehicle = Predicate("requires-vehicle", Variable("x", type_tags={"vehicle"}))
+    requires_vehicle = Predicate(
+        "requires-vehicle", Variable("x", type_tags={"vehicle"})
+    )
 
     params = FusionParams(
         prob_add_pre=1.0,
@@ -110,12 +114,22 @@ def test_action_modifier_type_compatibility():
     types_map = {"vehicle": "object", "truck": "vehicle"}
 
     # Supertype variable should NOT be used where a subtype is required.
-    act_vehicle = Action("act-veh", parameters=[vehicle_var], precondition=Predicate("p1"), effect=Predicate("p1"))
+    act_vehicle = Action(
+        "act-veh",
+        parameters=[vehicle_var],
+        precondition=Predicate("p1"),
+        effect=Predicate("p1"),
+    )
     m_vehicle = modifier.modify_actions([act_vehicle], [requires_truck], types_map)[0]
     assert "requires-truck" not in str(m_vehicle.precondition)
 
     # Subtype variable can be used where a supertype is required.
-    act_truck = Action("act-truck", parameters=[truck_var], precondition=Predicate("p1"), effect=Predicate("p1"))
+    act_truck = Action(
+        "act-truck",
+        parameters=[truck_var],
+        precondition=Predicate("p1"),
+        effect=Predicate("p1"),
+    )
     m_truck = modifier.modify_actions([act_truck], [requires_vehicle], types_map)[0]
     assert "requires-vehicle" in str(m_truck.precondition)
 

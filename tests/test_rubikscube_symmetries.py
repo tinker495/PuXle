@@ -72,7 +72,9 @@ def test_rubikscube_state_symmetries_works_for_scrambled_state() -> None:
 def test_rubikscube_state_symmetries_match_reference_for_sizes() -> None:
     key = jax.random.PRNGKey(123)
     for size in (3, 4, 5):
-        cube = RubiksCube(size=size, initial_shuffle=3, color_embedding=True, metric="UQTM")
+        cube = RubiksCube(
+            size=size, initial_shuffle=3, color_embedding=True, metric="UQTM"
+        )
         k = jax.random.fold_in(key, size)
         solve_config = cube.get_solve_config(key=k)
         state = cube.get_initial_state(solve_config, key=k)
