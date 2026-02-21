@@ -60,9 +60,7 @@ class TopSpin(Puzzle):
     def get_string_parser(self) -> Callable:
         def parser(state: "TopSpin.State", **kwargs):
             # Highlight the turnstile
-            turnstile_str = " ".join(
-                map(lambda x: f"{x:2d}", state.permutation[: self.turnstile_size])
-            )
+            turnstile_str = " ".join(map(lambda x: f"{x:2d}", state.permutation[: self.turnstile_size]))
             rest_str = " ".join(map(lambda x: f"{x:2d}", state.permutation[self.turnstile_size :]))
             return f"[{turnstile_str}] {rest_str}"
 
@@ -73,9 +71,7 @@ class TopSpin(Puzzle):
         target_state = self.State(permutation=jnp.arange(1, self.n_discs + 1, dtype=TYPE))
         return self.SolveConfig(TargetState=target_state)
 
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "TopSpin.State":
+    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "TopSpin.State":
         # Start from solved state and apply random moves
         return self._get_shuffled_state(solve_config, solve_config.TargetState, key, 18)
 
@@ -96,9 +92,7 @@ class TopSpin(Puzzle):
         state_reversed = self.State(permutation=perm_reversed)
 
         # Combine states - use jax.tree_util.tree_map to stack arrays within the dataclass
-        all_states = jax.tree_util.tree_map(
-            lambda *args: jnp.stack(args), state_left, state_right, state_reversed
-        )
+        all_states = jax.tree_util.tree_map(lambda *args: jnp.stack(args), state_left, state_right, state_reversed)
 
         costs = jnp.ones(3)  # All moves have cost 1
 
@@ -118,17 +112,14 @@ class TopSpin(Puzzle):
                 [
                     lambda: self.State(permutation=jnp.roll(p, -1)),
                     lambda: self.State(permutation=jnp.roll(p, 1)),
-                    lambda: self.State(
-                        permutation=p.at[: self.turnstile_size].set(jnp.flip(p[: self.turnstile_size]))
-                    ),
+                    lambda: self.State(permutation=p.at[: self.turnstile_size].set(jnp.flip(p[: self.turnstile_size]))),
                 ],
             )
 
         next_state = get_next_state(action)
         cost = jnp.where(filled, 1.0, jnp.inf)
-        
-        return next_state, cost
 
+        return next_state, cost
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State") -> bool:
         return state == solve_config.TargetState
@@ -172,31 +163,23 @@ class TopSpin(Puzzle):
 
             # Find the position of the first turnstile element to align it at the top
             # This ensures the turnstile is always at the top (12 o'clock position)
-            offset = -(
-                self.turnstile_size // 2
-            )  # No offset needed as we'll place the first ts elements at the top
+            offset = -(self.turnstile_size // 2)  # No offset needed as we'll place the first ts elements at the top
 
             # Draw the ring and discs
             for i, val in enumerate(state.permutation):
                 # Calculate angle to place turnstile at the top (12 o'clock position)
                 # First ts elements will be in the turnstile area
-                angle = (2 * np.pi * ((i + offset + 0.5) / n)) - (
-                    np.pi / 2
-                )  # Start from top (12 o'clock)
+                angle = (2 * np.pi * ((i + offset + 0.5) / n)) - (np.pi / 2)  # Start from top (12 o'clock)
                 x = int(center_x + radius * np.cos(angle))
                 y = int(center_y + radius * np.sin(angle))
 
                 # Determine if this position is part of the turnstile
                 is_turnstile = i < ts
-                color = (
-                    (0, 0, 200) if is_turnstile else (50, 50, 50)
-                )  # Blue for turnstile, gray otherwise
+                color = (0, 0, 200) if is_turnstile else (50, 50, 50)  # Blue for turnstile, gray otherwise
                 cv2.circle(img, (x, y), disc_radius, color, -1)
 
                 text = str(val)
-                text_size = cv2.getTextSize(
-                    text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
-                )[0]
+                text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness)[0]
                 text_x = x - text_size[0] // 2
                 text_y = y + text_size[1] // 2
                 cv2.putText(

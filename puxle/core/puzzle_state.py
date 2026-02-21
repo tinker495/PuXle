@@ -18,6 +18,7 @@ class PuzzleState(Xtructurable):
     - In-memory bitpacking is handled by xtructure (FieldDescriptor.packed_tensor / aggregate bitpack),
       not by overriding this base class.
     """
+
     pass
 
 
@@ -57,9 +58,7 @@ def state_dataclass(cls: Type[T] | None = None, **kwargs: Any):
 
         elif hasattr(dc_cls, "packed") ^ hasattr(dc_cls, "unpacked"):
             # Packing and unpacking must be implemented together.
-            raise ValueError(
-                "State class must implement both packing and unpacking (or neither)."
-            )
+            raise ValueError("State class must implement both packing and unpacking (or neither).")
 
         return dc_cls
 

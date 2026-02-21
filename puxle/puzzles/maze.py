@@ -107,18 +107,14 @@ class Maze(Puzzle):
             player_pos = state.pos
 
             if self.size > 30:
-                return (
-                    f"Is too big to visualize - player at {player_pos} and target at {target_pos}"
-                )
+                return f"Is too big to visualize - player at {player_pos} and target at {target_pos}"
 
             target_idx = target_pos[0] * self.size + target_pos[1]
             player_idx = player_pos[0] * self.size + player_pos[1]
 
             # 4. Place target marker (3) onto the integer maze
             # Important: only place target if it's not a wall (should always be true with DFS gen)
-            int_maze_flat = jnp.where(
-                bool_maze_flat[target_idx], int_maze_flat, int_maze_flat.at[target_idx].set(3)
-            )
+            int_maze_flat = jnp.where(bool_maze_flat[target_idx], int_maze_flat, int_maze_flat.at[target_idx].set(3))
 
             # 5. Check if player is on target
             is_on_target = target_idx == player_idx
@@ -137,9 +133,7 @@ class Maze(Puzzle):
 
         return parser
 
-    def get_initial_state(
-        self, solve_config: "Maze.SolveConfig", key=jax.random.PRNGKey(0), data=None
-    ) -> "Maze.State":
+    def get_initial_state(self, solve_config: "Maze.SolveConfig", key=jax.random.PRNGKey(0), data=None) -> "Maze.State":
         # Start state should also be chosen from valid path locations
         bool_maze = solve_config.Maze_unpacked.reshape((self.size, self.size))
         return self._get_random_state(bool_maze, key)
@@ -194,12 +188,7 @@ class Maze(Puzzle):
             potential_nc = cc + dc
 
             # Check bounds
-            in_bounds = (
-                (potential_nr >= 0)
-                & (potential_nr < size)
-                & (potential_nc >= 0)
-                & (potential_nc < size)
-            )
+            in_bounds = (potential_nr >= 0) & (potential_nr < size) & (potential_nc >= 0) & (potential_nc < size)
 
             # Check if potential neighbour is a wall (i.e., unvisited)
             # Need to handle OOB indexing safely for maze lookup
@@ -219,12 +208,8 @@ class Maze(Puzzle):
                 key, choice_key = jax.random.split(key)
 
                 # Randomly choose one valid neighbor
-                chosen_idx_in_valid = jax.random.randint(
-                    choice_key, (), 0, num_valid_neighbors, dtype=jnp.int32
-                )
-                chosen_dir_idx = valid_indices[
-                    chosen_idx_in_valid
-                ]  # Map back to original direction index [0,1,2,3]
+                chosen_idx_in_valid = jax.random.randint(choice_key, (), 0, num_valid_neighbors, dtype=jnp.int32)
+                chosen_dir_idx = valid_indices[chosen_idx_in_valid]  # Map back to original direction index [0,1,2,3]
 
                 nr, nc = potential_nr[chosen_dir_idx], potential_nc[chosen_dir_idx]
                 wall_r, wall_c = cr + wall_dr[chosen_dir_idx], cc + wall_dc[chosen_dir_idx]
@@ -277,7 +262,7 @@ class Maze(Puzzle):
         # Define possible moves: up, down, left, right
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
         bool_maze = solve_config.Maze_unpacked.reshape((self.size, self.size))
-        
+
         move_vec = moves[action]
         new_pos = (state.pos + move_vec).astype(TYPE)
 
@@ -368,9 +353,7 @@ class Maze(Puzzle):
             walls_mono_np = (~maze_bool_np).astype(np.uint8) * 255
 
             # 3. Resize the NumPy array to target image size
-            img_resized = cv2.resize(
-                walls_mono_np, (imgsize, imgsize), interpolation=cv2.INTER_NEAREST
-            )
+            img_resized = cv2.resize(walls_mono_np, (imgsize, imgsize), interpolation=cv2.INTER_NEAREST)
 
             # 4. Convert to 3-channel BGR
             img = cv2.cvtColor(img_resized, cv2.COLOR_GRAY2BGR)

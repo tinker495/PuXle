@@ -1,6 +1,6 @@
-import numpy as np
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from puxle.puzzles.rubikscube import RubiksCube
 
@@ -80,4 +80,3 @@ def test_rubikscube_state_symmetries_match_reference_for_sizes() -> None:
         got = cube.state_symmetries(state).faces
         ref = _ref_state_symmetries(cube, state)
         assert bool(jnp.all(got == ref))
-

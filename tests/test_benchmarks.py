@@ -52,16 +52,12 @@ def _assert_sample_valid(benchmark: Benchmark, sample_id: int) -> bool:
         )
         return True
 
-    assert not sample.optimal_path, (
-        f"{benchmark.__class__.__name__} provided optimal_path without action sequence."
-    )
+    assert not sample.optimal_path, f"{benchmark.__class__.__name__} provided optimal_path without action sequence."
     return False
 
 
 @pytest.mark.parametrize("benchmark_cls,has_optimal_paths", _benchmark_cases())
-def test_benchmarks_produce_sane_samples(
-    benchmark_cls: Type[Benchmark], has_optimal_paths: bool
-) -> None:
+def test_benchmarks_produce_sane_samples(benchmark_cls: Type[Benchmark], has_optimal_paths: bool) -> None:
     benchmark = benchmark_cls()
     ids = _sample_ids(benchmark)
     validated = False
@@ -69,6 +65,4 @@ def test_benchmarks_produce_sane_samples(
         validated = _assert_sample_valid(benchmark, sample_id) or validated
 
     if has_optimal_paths:
-        assert validated, (
-            f"{benchmark_cls.__name__} was expected to contain optimal paths but none were validated."
-        )
+        assert validated, f"{benchmark_cls.__name__} was expected to contain optimal paths but none were validated."

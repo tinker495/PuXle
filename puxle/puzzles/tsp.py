@@ -88,9 +88,7 @@ class TSP(Puzzle):
 
         return parser
 
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=jax.random.PRNGKey(0), data=None
-    ) -> Puzzle.State:
+    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=jax.random.PRNGKey(0), data=None) -> Puzzle.State:
         mask = jnp.zeros(self.size, dtype=jnp.bool_)
         point = solve_config.start
         mask = mask.at[point].set(True)
@@ -100,12 +98,8 @@ class TSP(Puzzle):
         # Split PRNG key so that the start index is independent of point positions.
         key_points, key_start = jax.random.split(key)
 
-        points = jax.random.uniform(
-            key_points, shape=(self.size, 2), minval=0, maxval=1, dtype=jnp.float32
-        )
-        distance_matrix = jnp.linalg.norm(points[:, None] - points[None, :], axis=-1).astype(
-            jnp.float32
-        )
+        points = jax.random.uniform(key_points, shape=(self.size, 2), minval=0, maxval=1, dtype=jnp.float32)
+        distance_matrix = jnp.linalg.norm(points[:, None] - points[None, :], axis=-1).astype(jnp.float32)
         start = jax.random.randint(key_start, shape=(), minval=0, maxval=self.size, dtype=TYPE)
         return self.SolveConfig(points=points, distance_matrix=distance_matrix, start=start)
 
@@ -126,9 +120,7 @@ class TSP(Puzzle):
         cost = solve_config.distance_matrix[point, idx]
         cost = jnp.where(masked, jnp.inf, cost) + jnp.where(
             all_visited,
-            jnp.linalg.norm(
-                solve_config.points[solve_config.start] - solve_config.points[idx], axis=-1
-            ),
+            jnp.linalg.norm(solve_config.points[solve_config.start] - solve_config.points[idx], axis=-1),
             0,
         )
         new_state = self.State.from_unpacked(mask=new_mask, point=idx.astype(TYPE))
@@ -235,15 +227,11 @@ class TSP(Puzzle):
                     cv2.circle(img, (x, y), 8, (0, 0, 0), 2)
 
                 # Optionally, label the point with its index
-                cv2.putText(
-                    img, str(i), (x + 5, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50, 50, 50), 1
-                )
+                cv2.putText(img, str(i), (x + 5, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50, 50, 50), 1)
 
             # If all points are visited, draw a line from the current point to the start point to close the tour
             if np.all(visited):
-                cv2.line(
-                    img, scaled_points[state.point], scaled_points[solve_config.start], (0, 0, 0), 2
-                )
+                cv2.line(img, scaled_points[state.point], scaled_points[solve_config.start], (0, 0, 0), 2)
 
             return img
 

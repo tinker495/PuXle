@@ -1,16 +1,20 @@
-import pytest
 import jax.numpy as jnp
+import pytest
+
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, state_dataclass
+
 
 @state_dataclass(bitpack="off")
 class MockState:
     val: FieldDescriptor.scalar(dtype=jnp.int32)
 
+
 @state_dataclass(bitpack="off")
 class MockSolveConfig:
     TargetState: FieldDescriptor.scalar(dtype=MockState)
+
 
 class MockPuzzle(Puzzle):
     def define_state_class(self):
@@ -46,18 +50,21 @@ class MockPuzzle(Puzzle):
     def action_to_string(self, action):
         return "add1" if action == 0 else "add2"
 
+
 class MockBenchmark(Benchmark):
     def build_puzzle(self):
         return MockPuzzle()
 
     def load_dataset(self):
-        return {"test1": BenchmarkSample(
-            state=MockState(val=0),
-            solve_config=MockSolveConfig(TargetState=MockState(val=10)),
-            optimal_action_sequence=["add2"] * 5,
-            optimal_path=None,
-            optimal_path_costs=5.0
-        )}
+        return {
+            "test1": BenchmarkSample(
+                state=MockState(val=0),
+                solve_config=MockSolveConfig(TargetState=MockState(val=10)),
+                optimal_action_sequence=["add2"] * 5,
+                optimal_path=None,
+                optimal_path_costs=5.0,
+            )
+        }
 
     def sample_ids(self):
         return ["test1"]
@@ -65,11 +72,13 @@ class MockBenchmark(Benchmark):
     def get_sample(self, sample_id):
         return self.dataset[sample_id]
 
+
 def test_verify_solution_valid_optimal():
     bm = MockBenchmark()
     sample = bm.get_sample("test1")
     # Exact optimal
     assert bm.verify_solution(sample, action_sequence=["add2"] * 5) is True
+
 
 def test_verify_solution_valid_suboptimal():
     bm = MockBenchmark()
@@ -77,11 +86,13 @@ def test_verify_solution_valid_suboptimal():
     # Suboptimal taking 10 steps (optimal is 5)
     assert bm.verify_solution(sample, action_sequence=["add1"] * 10) is False
 
+
 def test_verify_solution_invalid_unsolved():
     bm = MockBenchmark()
     sample = bm.get_sample("test1")
     # Only adds to 8, not 10
     assert bm.verify_solution(sample, action_sequence=["add2"] * 4) is False
+
 
 def test_verify_solution_unknown_action():
     bm = MockBenchmark()
@@ -89,12 +100,14 @@ def test_verify_solution_unknown_action():
     with pytest.raises(KeyError):
         bm.verify_solution(sample, action_sequence=["unknown"])
 
+
 def test_verify_solution_with_states_instead_of_actions():
     bm = MockBenchmark()
     sample = bm.get_sample("test1")
     # Construct sequence of states
-    states = [MockState(val=i*2) for i in range(6)] # 0, 2, 4, 6, 8, 10
+    states = [MockState(val=i * 2) for i in range(6)]  # 0, 2, 4, 6, 8, 10
     assert bm.verify_solution(sample, states=states) is True
+
 
 def test_verify_solution_no_optimal_info():
     bm = MockBenchmark()
@@ -105,7 +118,7 @@ def test_verify_solution_no_optimal_info():
         solve_config=sample.solve_config,
         optimal_action_sequence=None,
         optimal_path=None,
-        optimal_path_costs=None
+        optimal_path_costs=None,
     )
     # Since there's no optimal sequence, it just checks validity and returns None
     assert bm.verify_solution(sample_no_opt, action_sequence=["add2"] * 5) is None

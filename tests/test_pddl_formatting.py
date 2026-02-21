@@ -3,12 +3,13 @@
 Tests the pretty-printing utilities in puxle.pddls.formatting without requiring
 actual PDDL parsing or JAX dependencies where possible.
 """
+
 from unittest.mock import Mock
 
 from puxle.pddls.formatting import (
-    split_atom,
-    build_label_color_maps,
     action_to_string,
+    build_label_color_maps,
+    split_atom,
 )
 
 

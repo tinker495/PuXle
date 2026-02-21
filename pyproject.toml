@@ -46,6 +46,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pre-commit>=3.0.0",
+    "ruff>=0.15.0",
 ]
 docs = [
     "sphinx>=7.0",
@@ -82,3 +83,11 @@ puxle = [
 testpaths = ["tests", "."]
 pythonpath = ["."]
 addopts = "-v --tb=short --maxfail=1"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+per-file-ignores = { "__init__.py" = ["F401"] }

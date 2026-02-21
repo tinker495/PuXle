@@ -10,27 +10,43 @@ from pddl.core import Domain, Problem
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import PuzzleState
 
-# Refactored helpers
-from .type_system import (
-    collect_type_hierarchy,
-    extract_objects_by_type as ts_extract_objects_by_type,
-    select_most_specific_types as ts_select_most_specific_types,
-)
-from .grounding import ground_actions as gr_ground_actions, ground_predicates as gr_ground_predicates
-from .masks import (
-    build_goal_mask as mk_build_goal_mask,
-    build_initial_state as mk_build_initial_state,
-    build_masks as mk_build_masks,
-    extract_goal_conditions as mk_extract_goal_conditions,
-)
 from .formatting import (
     action_to_string as fmt_action_to_string,
+)
+from .formatting import (
     build_label_color_maps,
     build_solve_config_string_parser,
     build_state_string_parser,
+)
+from .formatting import (
     split_atom as fmt_split_atom,
 )
+from .grounding import ground_actions as gr_ground_actions
+from .grounding import ground_predicates as gr_ground_predicates
+from .masks import (
+    build_goal_mask as mk_build_goal_mask,
+)
+from .masks import (
+    build_initial_state as mk_build_initial_state,
+)
+from .masks import (
+    build_masks as mk_build_masks,
+)
+from .masks import (
+    extract_goal_conditions as mk_extract_goal_conditions,
+)
 from .state_defs import build_solve_config_class, build_state_class
+
+# Refactored helpers
+from .type_system import (
+    collect_type_hierarchy,
+)
+from .type_system import (
+    extract_objects_by_type as ts_extract_objects_by_type,
+)
+from .type_system import (
+    select_most_specific_types as ts_select_most_specific_types,
+)
 
 
 class PDDL(Puzzle):
@@ -240,9 +256,7 @@ class PDDL(Puzzle):
             self._type_hierarchy_cache,
         )
 
-    def _ground_formula(
-        self, formula, param_substitution: List[str], param_names: List[str]
-    ) -> List[str]:
+    def _ground_formula(self, formula, param_substitution: List[str], param_names: List[str]) -> List[str]:
         """Deprecated: delegated to grounding module; retained for safety."""
         from .grounding import _ground_formula as _gf
 
@@ -286,9 +300,7 @@ class PDDL(Puzzle):
         str_parser = self.get_solve_config_string_parser()
         return build_solve_config_class(self, self.goal_mask, str_parser)
 
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "PDDL.State":
+    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "PDDL.State":
         """Return initial state."""
         return self.State.from_unpacked(atoms=self.init_state)
 
@@ -311,16 +323,14 @@ class PDDL(Puzzle):
 
         # Get masks for this action
         pre = self.pre_mask[action]
-        pre_neg = self.pre_neg_mask[action] # Added pre_neg
+        pre_neg = self.pre_neg_mask[action]  # Added pre_neg
         add = self.add_mask[action]
         dele = self.del_mask[action]
 
         # Check applicability
         # Positive preconditions: (~pre | s)
         # Negative preconditions: (~pre_neg | ~s)
-        applicable = jnp.all(jnp.logical_or(~pre, s)) & jnp.all(
-            jnp.logical_or(~pre_neg, ~s)
-        )
+        applicable = jnp.all(jnp.logical_or(~pre, s)) & jnp.all(jnp.logical_or(~pre_neg, ~s))
 
         # Compute next state: (s & ~del) | add
         s_next = jnp.logical_or(jnp.logical_and(s, ~dele), add)
@@ -378,9 +388,7 @@ class PDDL(Puzzle):
                         )
                     else:
                         # Green for true atoms, red for false
-                        color = (
-                            jnp.array([0.0, 1.0, 0.0]) if atoms[i] else jnp.array([1.0, 0.0, 0.0])
-                        )
+                        color = jnp.array([0.0, 1.0, 0.0]) if atoms[i] else jnp.array([1.0, 0.0, 0.0])
                     img = img.at[row, col].set(color)
 
             return img
@@ -427,9 +435,7 @@ class PDDL(Puzzle):
                 col = i % grid_size
                 if row < grid_size and col < grid_size:
                     # Blue for goal atoms, gray for non-goal
-                    color = (
-                        jnp.array([0.0, 0.0, 1.0]) if goal_mask[i] else jnp.array([0.5, 0.5, 0.5])
-                    )
+                    color = jnp.array([0.0, 0.0, 1.0]) if goal_mask[i] else jnp.array([0.5, 0.5, 0.5])
                     img = img.at[row, col].set(color)
 
             return img

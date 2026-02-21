@@ -6,6 +6,7 @@ from typing import Any, Hashable, Iterable, Sequence
 
 import jax.numpy as jnp
 import numpy as np
+
 from puxle.benchmark._deepcubea import load_deepcubea_dataset
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_state import PuzzleState
@@ -35,9 +36,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
 
     def load_dataset(self) -> dict[str, Any]:
         fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH
-        return load_deepcubea_dataset(
-            self._dataset_path, self._dataset_name, "puxle.data.lightsout", fallback_dir
-        )
+        return load_deepcubea_dataset(self._dataset_path, self._dataset_name, "puxle.data.lightsout", fallback_dir)
 
     def sample_ids(self) -> Iterable[Hashable]:
         return range(len(self.dataset["states"]))
@@ -66,9 +65,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
             length = len(tiles)
             size = int(math.isqrt(length))
             if size * size != length:
-                raise ValueError(
-                    f"Unable to infer puzzle size from state length {length}. Expected a perfect square."
-                )
+                raise ValueError(f"Unable to infer puzzle size from state length {length}. Expected a perfect square.")
             self._size = size
         return self._size
 
@@ -100,7 +97,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         # we can confirm it is optimal.
         if result is None:
             return True
-            
+
         return result
 
     @staticmethod
@@ -113,12 +110,10 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         board = np.asarray(tiles, dtype=np.bool_)
         if not puzzle.board_is_solvable(board, puzzle.size):
             raise ValueError(
-                "Encountered unsolvable LightsOut state in DeepCubeA dataset. "
-                f"State: {board.astype(int).tolist()}"
+                f"Encountered unsolvable LightsOut state in DeepCubeA dataset. State: {board.astype(int).tolist()}"
             )
         faces = jnp.asarray(board, dtype=jnp.bool_)
         return puzzle.State.from_unpacked(board=faces)
 
 
 __all__ = ["LightsOutDeepCubeABenchmark"]
-

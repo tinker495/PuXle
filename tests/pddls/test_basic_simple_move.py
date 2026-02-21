@@ -194,14 +194,10 @@ class TestPDDLWrapper:
         # Create multiple states and configs for batching
         keys = jax.random.split(rng_key, 4)
         solve_configs = jax.vmap(lambda k: puzzle.get_solve_config(k))(keys)
-        initial_states = jax.vmap(lambda sc, k: puzzle.get_initial_state(sc, k))(
-            solve_configs, keys
-        )
+        initial_states = jax.vmap(lambda sc, k: puzzle.get_initial_state(sc, k))(solve_configs, keys)
 
         # Test batched is_solved
-        solved_mask = puzzle.batched_is_solved(
-            solve_configs, initial_states, multi_solve_config=True
-        )
+        solved_mask = puzzle.batched_is_solved(solve_configs, initial_states, multi_solve_config=True)
         assert solved_mask.shape[0] == 4
         assert isinstance(solved_mask, jnp.ndarray)
 

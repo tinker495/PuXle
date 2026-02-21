@@ -77,12 +77,8 @@ class LightsOut(Puzzle):
 
         return parser
 
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "LightsOut.State":
-        return self._get_shuffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
-        )
+    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "LightsOut.State":
+        return self._get_shuffled_state(solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle)
 
     def get_target_state(self, key=None) -> "LightsOut.State":
         board = jnp.zeros(self.size**2, dtype=jnp.bool_)
@@ -98,33 +94,31 @@ class LightsOut(Puzzle):
         This function returns the next state and cost for a given action.
         """
         board = state.board_unpacked
-        
+
         # Decode action to (x, y)
         # action is in range [0, size*size - 1]
         # x = action // size
         # y = action % size
         # Or better: use unravel_index but that works on shapes.
         # Since size is scalar, we can compute directly.
-        
+
         x = action // self.size
         y = action % self.size
-        
+
         def flip(board, x, y):
             # Create coordinate grids
             i, j = jnp.meshgrid(jnp.arange(self.size), jnp.arange(self.size), indexing="ij")
-            
+
             # Manhattan distance from center (x,y)
             dist = jnp.abs(i - x) + jnp.abs(j - y)
-            
+
             # Mask includes center (dist=0) and immediate neighbors (dist=1)
             mask = (dist <= 1).reshape(-1)
-            
+
             # XOR flip where mask is true
             return jnp.where(mask, jnp.logical_not(board), board)
 
-        next_board, cost = jax.lax.cond(
-            filled, lambda: (flip(board, x, y), 1.0), lambda: (board, jnp.inf)
-        )
+        next_board, cost = jax.lax.cond(filled, lambda: (flip(board, x, y), 1.0), lambda: (board, jnp.inf))
         next_state = state.set_unpacked(board=next_board)
         return next_state, cost
 
@@ -190,9 +184,7 @@ class LightsOut(Puzzle):
                 if r != rank and augmented[r, col]:
                     augmented[r] ^= augmented[rank]
             rank += 1
-        inconsistent = np.logical_and(
-            np.all(augmented[:, :-1] == 0, axis=1), augmented[:, -1] == 1
-        )
+        inconsistent = np.logical_and(np.all(augmented[:, :-1] == 0, axis=1), augmented[:, -1] == 1)
         return not bool(np.any(inconsistent))
 
     def is_state_solvable(self, state: "LightsOut.State") -> bool:
@@ -273,9 +265,5 @@ class LightsOutRandom(LightsOut):
         )
         return solve_config
 
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> LightsOut.State:
-        return self._get_shuffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
-        )
+    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> LightsOut.State:
+        return self._get_shuffled_state(solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle)

@@ -17,14 +17,14 @@ class TestPDDLEquivalence:
         reference = ReferenceSTRIPS(spec.domain, spec.problem)
 
         # Check atom count equivalence
-        assert (
-            len(reference.grounded_atoms) == puzzle.num_atoms
-        ), f"Atom count mismatch: reference={len(reference.grounded_atoms)}, ours={puzzle.num_atoms}"
+        assert len(reference.grounded_atoms) == puzzle.num_atoms, (
+            f"Atom count mismatch: reference={len(reference.grounded_atoms)}, ours={puzzle.num_atoms}"
+        )
 
         # Check action count equivalence
-        assert (
-            len(reference.grounded_actions) == puzzle.num_actions
-        ), f"Action count mismatch: reference={len(reference.grounded_actions)}, ours={puzzle.num_actions}"
+        assert len(reference.grounded_actions) == puzzle.num_actions, (
+            f"Action count mismatch: reference={len(reference.grounded_actions)}, ours={puzzle.num_actions}"
+        )
 
         # Check that our grounded atoms match reference (allowing for whitespace differences)
         our_atoms = set(puzzle.grounded_atoms)
@@ -34,9 +34,7 @@ class TestPDDLEquivalence:
         our_atoms_normalized = {atom.replace(" ", "") for atom in our_atoms}
         ref_atoms_normalized = {atom.replace(" ", "") for atom in ref_atoms}
 
-        assert (
-            our_atoms_normalized == ref_atoms_normalized
-        ), f"Atom mismatch: ours={our_atoms}, reference={ref_atoms}"
+        assert our_atoms_normalized == ref_atoms_normalized, f"Atom mismatch: ours={our_atoms}, reference={ref_atoms}"
 
     @pytest.mark.parametrize("spec", DATA_SPECS, ids=lambda s: s.name)
     def test_applicability_equivalence(self, spec):
@@ -62,9 +60,7 @@ class TestPDDLEquivalence:
             action_idx = jnp.where(applicable)[0][0]
             current_state = jax.tree_util.tree_map(lambda x: x[action_idx], neighbors)
 
-            _test_applicability_in_state(
-                puzzle, reference, solve_config, current_state, f"step_{step+1}"
-            )
+            _test_applicability_in_state(puzzle, reference, solve_config, current_state, f"step_{step + 1}")
 
     @pytest.mark.parametrize("spec", DATA_SPECS, ids=lambda s: s.name)
     def test_successor_equivalence(self, spec):
@@ -90,9 +86,7 @@ class TestPDDLEquivalence:
             action_idx = jnp.where(applicable)[0][0]
             current_state = jax.tree_util.tree_map(lambda x: x[action_idx], neighbors)
 
-            _test_successors_in_state(
-                puzzle, reference, solve_config, current_state, f"step_{step+1}"
-            )
+            _test_successors_in_state(puzzle, reference, solve_config, current_state, f"step_{step + 1}")
 
     @pytest.mark.parametrize("spec", DATA_SPECS, ids=lambda s: s.name)
     def test_goal_equivalence(self, spec):
@@ -106,9 +100,9 @@ class TestPDDLEquivalence:
         our_goal_satisfied = puzzle.is_solved(solve_config, initial_state)
         ref_goal_satisfied = reference.is_goal_satisfied(reference.initial_atoms)
 
-        assert (
-            our_goal_satisfied == ref_goal_satisfied
-        ), f"Goal satisfaction mismatch in initial state: ours={our_goal_satisfied}, reference={ref_goal_satisfied}"
+        assert our_goal_satisfied == ref_goal_satisfied, (
+            f"Goal satisfaction mismatch in initial state: ours={our_goal_satisfied}, reference={ref_goal_satisfied}"
+        )
 
         # Test some successor states
         current_state = initial_state
@@ -149,16 +143,12 @@ class TestPDDLEquivalence:
                 # Find corresponding action index in our system
                 action_idx = _find_action_index(puzzle, action)
                 if action_idx is None:
-                    pytest.skip(
-                        f"Could not find action {action['name']} {action['parameters']} in our system"
-                    )
+                    pytest.skip(f"Could not find action {action['name']} {action['parameters']} in our system")
 
                 # Apply action
                 neighbors, costs = puzzle.get_neighbours(solve_config, current_state, filled=True)
                 if not jnp.isfinite(costs[action_idx]):
-                    pytest.fail(
-                        f"Action {action['name']} {action['parameters']} not applicable in our system"
-                    )
+                    pytest.fail(f"Action {action['name']} {action['parameters']} not applicable in our system")
 
                 current_state = jax.tree_util.tree_map(lambda x: x[action_idx], neighbors)
 
@@ -215,9 +205,7 @@ class TestPDDLEquivalence:
 
         # Track static predicate values through transitions
         current_state = initial_state
-        initial_static_values = _get_static_predicate_values(
-            puzzle, current_state, static_predicates
-        )
+        initial_static_values = _get_static_predicate_values(puzzle, current_state, static_predicates)
 
         for step in range(3):
             neighbors, costs = puzzle.get_neighbours(solve_config, current_state, filled=True)
@@ -230,15 +218,13 @@ class TestPDDLEquivalence:
             action_idx = jnp.where(applicable)[0][0]
             current_state = jax.tree_util.tree_map(lambda x: x[action_idx], neighbors)
 
-            current_static_values = _get_static_predicate_values(
-                puzzle, current_state, static_predicates
-            )
+            current_static_values = _get_static_predicate_values(puzzle, current_state, static_predicates)
 
             # Static predicates should preserve their values
             for pred, value in current_static_values.items():
-                assert (
-                    value == initial_static_values[pred]
-                ), f"Static predicate {pred} changed value from {initial_static_values[pred]} to {value}"
+                assert value == initial_static_values[pred], (
+                    f"Static predicate {pred} changed value from {initial_static_values[pred]} to {value}"
+                )
 
     @pytest.mark.parametrize("spec", DATA_SPECS, ids=lambda s: s.name)
     def test_action_string_normalization(self, spec):
@@ -259,9 +245,9 @@ class TestPDDLEquivalence:
             our_normalized = our_action_str.replace(" ", "")
             ref_normalized = ref_action_str.replace(" ", "")
 
-            assert (
-                our_normalized == ref_normalized
-            ), f"Action string mismatch at index {i}: ours='{our_action_str}', reference='{ref_action_str}'"
+            assert our_normalized == ref_normalized, (
+                f"Action string mismatch at index {i}: ours='{our_action_str}', reference='{ref_action_str}'"
+            )
 
 
 # Helper functions (converted from class methods)
@@ -330,9 +316,7 @@ def _test_successors_in_state(puzzle, reference, solve_config, state, state_name
         # Check that our successor state is valid (actions may not change state if they have no effects)
         # This is a basic sanity check - in practice, we'd do a full semantic comparison
         our_successor_atoms = _extract_state_atoms(puzzle, our_successor)
-        assert isinstance(
-            our_successor_atoms, set
-        ), f"Successor should be a valid state for action {i} in {state_name}"
+        assert isinstance(our_successor_atoms, set), f"Successor should be a valid state for action {i} in {state_name}"
 
 
 def _find_action_index(puzzle, action):

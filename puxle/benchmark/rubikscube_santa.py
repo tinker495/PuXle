@@ -13,6 +13,7 @@ from puxle.puzzles.rubikscube import RubiksCube
 
 DATA_RELATIVE_PATH = Path("data") / "santa-2023" / "puzzles.csv"
 
+
 class RubiksCubeSantaPreset(Enum):
     CUBE_2 = "cube_2/2/2"
     CUBE_3 = "cube_3/3/3"
@@ -33,15 +34,16 @@ class RubiksCubeSantaPreset(Enum):
 class RubiksCubeSantaBenchmark(Benchmark):
     """
     Benchmark exposing the Santa 2023 Rubik's Cube puzzles.
-    
+
     The dataset contains puzzles of various sizes (2x2x2 to 33x33x33).
     Each sample defines an initial state and a target solution state.
-    
-    This base class only includes samples where the target state matches 
+
+    This base class only includes samples where the target state matches
     the standard solved state (A;A...B;B...).
 
     References:
-        R. Holbrook, W. Reade, and A. Howard, Santa 2023 the polytope permutation puzzle, https://kaggle.com/ competitions/santa-2023 (2023), kaggle.
+        R. Holbrook, W. Reade, and A. Howard, Santa 2023 the polytope
+        permutation puzzle, https://kaggle.com/competitions/santa-2023 (2023), kaggle.
     """
 
     def __init__(
@@ -51,27 +53,27 @@ class RubiksCubeSantaBenchmark(Benchmark):
         puzzle_type: str | None = None,
     ) -> None:
         super().__init__()
-        
+
         # Use preset if provided, otherwise use puzzle_type string directly
         if puzzle_type is not None:
             self.puzzle_type = puzzle_type
         else:
             self.puzzle_type = preset.puzzle_type if preset else RubiksCubeSantaPreset.CUBE_3.puzzle_type
-            
+
         self._dataset_path = Path(dataset_path).expanduser().resolve() if dataset_path else None
         self._solve_config_cache = None
-        
+
         # Extract size from puzzle_type
         if not self.puzzle_type.startswith("cube_"):
             raise ValueError(f"Invalid puzzle type '{self.puzzle_type}'. Must start with 'cube_'.")
         try:
-            dims = self.puzzle_type.split('_')[1].split('/')
+            dims = self.puzzle_type.split("_")[1].split("/")
             self.size = int(dims[0])
         except (IndexError, ValueError) as e:
             raise ValueError(f"Could not parse size from '{self.puzzle_type}'.") from e
 
     def build_puzzle(self) -> RubiksCube:
-        # We enforce color embedding because Santa dataset uses colors (A, B...) 
+        # We enforce color embedding because Santa dataset uses colors (A, B...)
         # which we map to 0..5, rather than unique tile IDs.
         return RubiksCube(size=self.size, initial_shuffle=0, color_embedding=True, metric="UQTM")
 
@@ -84,24 +86,24 @@ class RubiksCubeSantaBenchmark(Benchmark):
             if not path.exists():
                 # Fallback to package resource or other locations if needed
                 pass
-        
+
         if not path.is_file():
             raise FileNotFoundError(f"Santa 2023 dataset not found at {path}")
 
         df = pd.read_csv(path)
         # Filter by puzzle type
-        df = df[df['puzzle_type'] == self.puzzle_type]
-        
+        df = df[df["puzzle_type"] == self.puzzle_type]
+
         if df.empty:
             raise ValueError(f"No puzzles found for type '{self.puzzle_type}' in {path}")
-            
+
         # Pre-process samples
         samples = []
         for _, row in df.iterrows():
             parsed = self._parse_row(row)
             if parsed is not None:
                 samples.append(parsed)
-            
+
         return {"samples": samples}
 
     def _is_standard_solution(self, solution_mapped: np.ndarray) -> bool:
@@ -141,19 +143,19 @@ class RubiksCubeSantaBenchmark(Benchmark):
         Parse and map a row without applying the is_standard filter.
         Returns a dict with parsed data including is_standard flag, or None if parsing fails.
         """
-        initial_str = row['initial_state']
-        solution_str = row['solution_state']
+        initial_str = row["initial_state"]
+        solution_str = row["solution_state"]
 
         # Filter out puzzles that use N0, N1... notation (permutation puzzles)
         if initial_str.startswith("N") or solution_str.startswith("N"):
             return None
 
         # Filter out puzzles with wildcards
-        if row.get('num_wildcards', 0) > 0:
+        if row.get("num_wildcards", 0) > 0:
             return None
 
-        initial_raw = np.array(initial_str.split(';'))
-        solution_raw = np.array(solution_str.split(';'))
+        initial_raw = np.array(initial_str.split(";"))
+        solution_raw = np.array(solution_str.split(";"))
 
         unique_colors = sorted(np.unique(solution_raw))
         mapping = {color: i for i, color in enumerate(unique_colors)}
@@ -164,11 +166,11 @@ class RubiksCubeSantaBenchmark(Benchmark):
         is_standard = self._is_standard_solution(solution_mapped)
 
         return {
-            "id": row['id'],
+            "id": row["id"],
             "initial": initial_mapped,
             "target": solution_mapped,
-            "wildcards": row['num_wildcards'],
-            "is_standard": is_standard
+            "wildcards": row["num_wildcards"],
+            "is_standard": is_standard,
         }
 
     def _parse_row(self, row: pd.Series) -> Dict[str, Any] | None:
@@ -187,7 +189,7 @@ class RubiksCubeSantaBenchmark(Benchmark):
             "id": parsed["id"],
             "initial": parsed["initial"],
             "target": parsed["target"],
-            "wildcards": parsed["wildcards"]
+            "wildcards": parsed["wildcards"],
         }
 
     def sample_ids(self) -> Iterable[Hashable]:
@@ -196,21 +198,21 @@ class RubiksCubeSantaBenchmark(Benchmark):
     def get_sample(self, sample_id: Hashable) -> BenchmarkSample:
         index = int(sample_id)
         sample_data = self.dataset["samples"][index]
-        
+
         puzzle = self.puzzle
-        
+
         initial_faces = jnp.asarray(sample_data["initial"], dtype=jnp.uint8)
         target_faces = jnp.asarray(sample_data["target"], dtype=jnp.uint8)
-        
+
         initial_state = puzzle.State.from_unpacked(faces=initial_faces.reshape(6, -1))
         target_state = puzzle.State.from_unpacked(faces=target_faces.reshape(6, -1))
-        
+
         solve_config = puzzle.SolveConfig(TargetState=target_state)
-        
+
         return BenchmarkSample(
             state=initial_state,
             solve_config=solve_config,
-            optimal_action_sequence=None, 
+            optimal_action_sequence=None,
             optimal_path=None,
             optimal_path_costs=None,
         )
@@ -221,9 +223,10 @@ class RubiksCubeSantaRandomBenchmark(RubiksCubeSantaBenchmark):
     Benchmark for Santa 2023 Rubik's Cube puzzles with non-standard (random pattern) target states.
 
     References:
-        R. Holbrook, W. Reade, and A. Howard, Santa 2023 the polytope permutation puzzle, https://kaggle.com/ competitions/santa-2023 (2023), kaggle.
+        R. Holbrook, W. Reade, and A. Howard, Santa 2023 the polytope
+        permutation puzzle, https://kaggle.com/competitions/santa-2023 (2023), kaggle.
     """
-    
+
     def _parse_row(self, row: pd.Series) -> Dict[str, Any] | None:
         """
         Parse a row and return sample data. Filters to only NON-STANDARD (random) solution puzzles.
@@ -240,7 +243,7 @@ class RubiksCubeSantaRandomBenchmark(RubiksCubeSantaBenchmark):
             "id": parsed["id"],
             "initial": parsed["initial"],
             "target": parsed["target"],
-            "wildcards": parsed["wildcards"]
+            "wildcards": parsed["wildcards"],
         }
 
 
@@ -249,17 +252,21 @@ class RubiksCubeSanta222Benchmark(RubiksCubeSantaBenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
         super().__init__(preset=RubiksCubeSantaPreset.CUBE_2, dataset_path=dataset_path)
 
+
 class RubiksCubeSanta333Benchmark(RubiksCubeSantaBenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
         super().__init__(preset=RubiksCubeSantaPreset.CUBE_3, dataset_path=dataset_path)
+
 
 class RubiksCubeSanta444Benchmark(RubiksCubeSantaBenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
         super().__init__(preset=RubiksCubeSantaPreset.CUBE_4, dataset_path=dataset_path)
 
+
 class RubiksCubeSanta555Benchmark(RubiksCubeSantaBenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
         super().__init__(preset=RubiksCubeSantaPreset.CUBE_5, dataset_path=dataset_path)
+
 
 class RubiksCubeSanta666Benchmark(RubiksCubeSantaBenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
@@ -271,17 +278,21 @@ class RubiksCubeSantaRandom222Benchmark(RubiksCubeSantaRandomBenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
         super().__init__(preset=RubiksCubeSantaPreset.CUBE_2, dataset_path=dataset_path)
 
+
 class RubiksCubeSantaRandom333Benchmark(RubiksCubeSantaRandomBenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
         super().__init__(preset=RubiksCubeSantaPreset.CUBE_3, dataset_path=dataset_path)
+
 
 class RubiksCubeSantaRandom444Benchmark(RubiksCubeSantaRandomBenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
         super().__init__(preset=RubiksCubeSantaPreset.CUBE_4, dataset_path=dataset_path)
 
+
 class RubiksCubeSantaRandom555Benchmark(RubiksCubeSantaRandomBenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
         super().__init__(preset=RubiksCubeSantaPreset.CUBE_5, dataset_path=dataset_path)
+
 
 class RubiksCubeSantaRandom666Benchmark(RubiksCubeSantaRandomBenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:

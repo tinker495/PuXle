@@ -95,9 +95,7 @@ class TowerOfHanoi(Puzzle):
                         # Get the disk at this position (index 1 + pos_from_top has the disk size)
                         disk_size = int(peg[1 + pos_from_top])
                         disk_str = "=" * (2 * disk_size - 1)
-                        colored_disk = colored(
-                            disk_str.center(2 * self.num_disks + 1), get_color(disk_size)
-                        )
+                        colored_disk = colored(disk_str.center(2 * self.num_disks + 1), get_color(disk_size))
                         row.append(colored_disk)
                     else:
                         # No disk, just show the peg
@@ -116,7 +114,7 @@ class TowerOfHanoi(Puzzle):
             # Add peg numbers
             label_row = []
             for i in range(self.num_pegs):
-                label = f"Peg {i+1}".center(2 * self.num_disks + 1)
+                label = f"Peg {i + 1}".center(2 * self.num_disks + 1)
                 label_row.append(label)
 
             result.append("   ".join(label_row))
@@ -158,9 +156,7 @@ class TowerOfHanoi(Puzzle):
             )
 
             # Calculate peg positions
-            peg_xs = [
-                base_x + base_width * (i + 1) / (self.num_pegs + 1) for i in range(self.num_pegs)
-            ]
+            peg_xs = [base_x + base_width * (i + 1) / (self.num_pegs + 1) for i in range(self.num_pegs)]
 
             # Draw pegs
             for peg_x in peg_xs:
@@ -217,9 +213,7 @@ class TowerOfHanoi(Puzzle):
 
         return img_func
 
-    def get_initial_state(
-        self, solve_config: "TowerOfHanoi.SolveConfig", key=None, data=None
-    ) -> "TowerOfHanoi.State":
+    def get_initial_state(self, solve_config: "TowerOfHanoi.SolveConfig", key=None, data=None) -> "TowerOfHanoi.State":
         """Generate the initial state for the puzzle with all disks on the first peg"""
         # Create an array with all disks on the first peg
         pegs = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
@@ -277,14 +271,16 @@ class TowerOfHanoi(Puzzle):
         # This needs to be consistent with action_to_string and inverse map if any
         # Since num_pegs is small (default 3), we can generate this array.
         # We need to index into it using 'action'.
-        
-        possible_moves = jnp.array([
-            [from_peg, to_peg]
-            for from_peg in range(self.num_pegs)
-            for to_peg in range(self.num_pegs)
-            if from_peg != to_peg
-        ])
-        
+
+        possible_moves = jnp.array(
+            [
+                [from_peg, to_peg]
+                for from_peg in range(self.num_pegs)
+                for to_peg in range(self.num_pegs)
+                if from_peg != to_peg
+            ]
+        )
+
         move = possible_moves[action]
         from_peg, to_peg = move[0], move[1]
 
@@ -350,9 +346,7 @@ class TowerOfHanoi(Puzzle):
             valid = is_valid_move(pegs, from_peg, to_peg)
 
             # If valid, make the move; otherwise, keep the original pegs
-            new_pegs = jax.lax.cond(
-                valid, lambda: make_move(pegs, from_peg, to_peg), lambda: pegs
-            )
+            new_pegs = jax.lax.cond(valid, lambda: make_move(pegs, from_peg, to_peg), lambda: pegs)
 
             # Cost is 1 if valid, infinity if invalid
             cost = jax.lax.cond(valid, lambda: jnp.array(1.0), lambda: jnp.array(jnp.inf))
@@ -364,9 +358,7 @@ class TowerOfHanoi(Puzzle):
 
         return jax.lax.cond(filled, move_disk, no_move)
 
-    def is_solved(
-        self, solve_config: "TowerOfHanoi.SolveConfig", state: "TowerOfHanoi.State"
-    ) -> bool:
+    def is_solved(self, solve_config: "TowerOfHanoi.SolveConfig", state: "TowerOfHanoi.State") -> bool:
         """Check if the current state matches the target state"""
         return state == solve_config.TargetState
 
@@ -381,7 +373,7 @@ class TowerOfHanoi(Puzzle):
         ]
 
         from_peg, to_peg = possible_moves[action]
-        return f"Move disk from peg {from_peg+1} to peg {to_peg+1}"
+        return f"Move disk from peg {from_peg + 1} to peg {to_peg + 1}"
 
 
 def get_color(size):

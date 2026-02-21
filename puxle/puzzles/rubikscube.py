@@ -260,9 +260,7 @@ class RubiksCube(Puzzle):
             return stickers_np
         return stickers_np // self._tile_count
 
-    def convert_tile_to_color_embedding(
-        self, tile_faces: np.ndarray | chex.Array
-    ) -> jnp.ndarray:
+    def convert_tile_to_color_embedding(self, tile_faces: np.ndarray | chex.Array) -> jnp.ndarray:
         """
         Convert faces expressed with tile identifiers (0..6*tile_count-1) into
         color embedding (0..5). Accepts shapes (6, tile_count), (6, size, size) or flat.
@@ -270,9 +268,7 @@ class RubiksCube(Puzzle):
         faces = jnp.asarray(tile_faces)
         tile_count = self._tile_count
         if faces.size != 6 * tile_count:
-            raise ValueError(
-                f"Expected {6 * tile_count} elements for tile faces, got {faces.size}"
-            )
+            raise ValueError(f"Expected {6 * tile_count} elements for tile faces, got {faces.size}")
         color_faces = (faces.reshape(6, tile_count) // tile_count).astype(jnp.uint8)
         return color_faces.reshape(faces.shape)
 
@@ -295,9 +291,7 @@ class RubiksCube(Puzzle):
                 return "\n".join(["  " * (self.size + 2) for _ in range(self.size + 2)])
 
             def color_legend():
-                return "\n".join(
-                    [f"{face_map_legend[i]:<6}:{coloring_str('■', rgb_map[i])}" for i in range(6)]
-                )
+                return "\n".join([f"{face_map_legend[i]:<6}:{coloring_str('■', rgb_map[i])}" for i in range(6)])
 
             def get_face_string(face):
                 face_str = face_map[face]
@@ -334,12 +328,8 @@ class RubiksCube(Puzzle):
 
         return parser
 
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "RubiksCube.State":
-        return self._get_shuffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle
-        )
+    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "RubiksCube.State":
+        return self._get_shuffled_state(solve_config, solve_config.TargetState, key, num_shuffle=self.initial_shuffle)
 
     def get_target_state(self, key=None) -> "RubiksCube.State":
         faces = self._solved_faces()
@@ -381,9 +371,9 @@ class RubiksCube(Puzzle):
 
         # Apply 24 global rotations via a single gather + per-face rot90.
         faces_perm = shaped[_SYM_PERM24]  # (24, 6, n, n)
-        rotated = jax.vmap(
-            lambda faces6, ks6: jax.vmap(lambda f, kk: rot90_traceable(f, kk))(faces6, ks6)
-        )(faces_perm, _SYM_K24)  # (24, 6, n, n)
+        rotated = jax.vmap(lambda faces6, ks6: jax.vmap(lambda f, kk: rot90_traceable(f, kk))(faces6, ks6))(
+            faces_perm, _SYM_K24
+        )  # (24, 6, n, n)
         sym_flat = rotated.reshape((24, 6, self._tile_count))
         return self.State.from_unpacked(shape=(24,), faces=sym_flat)
 
@@ -439,9 +429,7 @@ class RubiksCube(Puzzle):
         # Map (axis, index) to face using the same logic as _rotate method
         actual_index = int(self.index_grid[index_idx])
 
-        is_center_slice = (
-            self.metric == "UQTM" and self.size % 2 == 1 and actual_index == (self.size // 2)
-        )
+        is_center_slice = self.metric == "UQTM" and self.size % 2 == 1 and actual_index == (self.size // 2)
         if is_center_slice:
             center_labels = {0: "M", 1: "E", 2: "S"}
             try:
@@ -515,23 +503,15 @@ class RubiksCube(Puzzle):
         )
         edge_faces = rotate_edge_map[axis]
         edge_rot = rotate_edge_rot[axis]
-        shaped_faces = shaped_faces.at[BACK].set(
-            jnp.flip(jnp.flip(shaped_faces[BACK], axis=0), axis=1)
-        )
+        shaped_faces = shaped_faces.at[BACK].set(jnp.flip(jnp.flip(shaped_faces[BACK], axis=0), axis=1))
         rolled_faces = shaped_faces[edge_faces]
-        rolled_faces = jax.vmap(lambda face, rot: rot90_traceable(face, k=rot))(
-            rolled_faces, edge_rot
-        )
+        rolled_faces = jax.vmap(lambda face, rot: rot90_traceable(face, k=rot))(rolled_faces, edge_rot)
         rolled_faces = rolled_faces.at[:, index, :].set(
             jnp.roll(rolled_faces[:, index, :], jnp.where(clockwise, 1, -1), axis=0)
         )
-        rolled_faces = jax.vmap(lambda face, rot: rot90_traceable(face, k=-rot))(
-            rolled_faces, edge_rot
-        )
+        rolled_faces = jax.vmap(lambda face, rot: rot90_traceable(face, k=-rot))(rolled_faces, edge_rot)
         shaped_faces = shaped_faces.at[edge_faces].set(rolled_faces)
-        shaped_faces = shaped_faces.at[BACK].set(
-            jnp.flip(jnp.flip(shaped_faces[BACK], axis=1), axis=0)
-        )
+        shaped_faces = shaped_faces.at[BACK].set(jnp.flip(jnp.flip(shaped_faces[BACK], axis=1), axis=0))
         is_edge = jnp.isin(index, jnp.array([0, self.size - 1]))
         switch_num = jnp.where(
             is_edge, 1 + 2 * axis + index // (self.size - 1), 0
@@ -540,24 +520,12 @@ class RubiksCube(Puzzle):
             switch_num,
             [
                 lambda: shaped_faces,  # 0: None
-                lambda: shaped_faces.at[LEFT].set(
-                    self._rotate_face(shaped_faces[LEFT], clockwise, -1)
-                ),  # 1: left
-                lambda: shaped_faces.at[RIGHT].set(
-                    self._rotate_face(shaped_faces[RIGHT], clockwise, 1)
-                ),  # 2: right
-                lambda: shaped_faces.at[DOWN].set(
-                    self._rotate_face(shaped_faces[DOWN], clockwise, -1)
-                ),  # 3: down
-                lambda: shaped_faces.at[UP].set(
-                    self._rotate_face(shaped_faces[UP], clockwise, 1)
-                ),  # 4: up
-                lambda: shaped_faces.at[FRONT].set(
-                    self._rotate_face(shaped_faces[FRONT], clockwise, 1)
-                ),  # 5: front
-                lambda: shaped_faces.at[BACK].set(
-                    self._rotate_face(shaped_faces[BACK], clockwise, -1)
-                ),  # 6: back
+                lambda: shaped_faces.at[LEFT].set(self._rotate_face(shaped_faces[LEFT], clockwise, -1)),  # 1: left
+                lambda: shaped_faces.at[RIGHT].set(self._rotate_face(shaped_faces[RIGHT], clockwise, 1)),  # 2: right
+                lambda: shaped_faces.at[DOWN].set(self._rotate_face(shaped_faces[DOWN], clockwise, -1)),  # 3: down
+                lambda: shaped_faces.at[UP].set(self._rotate_face(shaped_faces[UP], clockwise, 1)),  # 4: up
+                lambda: shaped_faces.at[FRONT].set(self._rotate_face(shaped_faces[FRONT], clockwise, 1)),  # 5: front
+                lambda: shaped_faces.at[BACK].set(self._rotate_face(shaped_faces[BACK], clockwise, -1)),  # 6: back
             ],
         )
         faces = jnp.reshape(shaped_faces, (6, self.size * self.size))
@@ -645,9 +613,7 @@ class RubiksCube(Puzzle):
             font_scale = max(0.3, min(1.2, edge / 32.0))
             thickness = max(1, int(round(LINE_THICKNESS / 2)))
             text = str(value)
-            (text_width, text_height), baseline = cv2.getTextSize(
-                text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness
-            )
+            (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
             text_x = int(center[0] - text_width / 2)
             text_y = int(center[1] + text_height / 2)
 
@@ -679,9 +645,7 @@ class RubiksCube(Puzzle):
         for i in range(self.size):
             for j in range(self.size):
                 corners = coords_generator(i, j)
-                pts = np.array(
-                    [transform(*c) for c in corners], np.int32
-                ).reshape((-1, 1, 2))
+                pts = np.array([transform(*c) for c in corners], np.int32).reshape((-1, 1, 2))
 
                 row, col = coords_generator.get_face_indices(i, j)
                 color_idx = int(color_faces[face_id, row, col])
@@ -731,9 +695,9 @@ class RubiksCube(Puzzle):
                     p1 = (j + 1, i, self.size)
                     p2 = (j + 1, i + 1, self.size)
                     p3 = (j, i + 1, self.size)
-                    pts = np.array(
-                        [transform(*p0), transform(*p1), transform(*p2), transform(*p3)], np.int32
-                    ).reshape((-1, 1, 2))
+                    pts = np.array([transform(*p0), transform(*p1), transform(*p2), transform(*p3)], np.int32).reshape(
+                        (-1, 1, 2)
+                    )
                     draw_tile(img, pts, FRONT, i, j)
 
             # 2. Draw the right face (RIGHT)
@@ -743,9 +707,9 @@ class RubiksCube(Puzzle):
                     p1 = (self.size, i, self.size - (j + 1))
                     p2 = (self.size, i + 1, self.size - (j + 1))
                     p3 = (self.size, i + 1, self.size - j)
-                    pts = np.array(
-                        [transform(*p0), transform(*p1), transform(*p2), transform(*p3)], np.int32
-                    ).reshape((-1, 1, 2))
+                    pts = np.array([transform(*p0), transform(*p1), transform(*p2), transform(*p3)], np.int32).reshape(
+                        (-1, 1, 2)
+                    )
                     draw_tile(img, pts, RIGHT, i, j)
 
             # 3. Draw the top face (UP) last so that it appears above the other faces
@@ -755,9 +719,9 @@ class RubiksCube(Puzzle):
                     p1 = (j + 1, 0, self.size - i)
                     p2 = (j + 1, 0, self.size - (i + 1))
                     p3 = (j, 0, self.size - (i + 1))
-                    pts = np.array(
-                        [transform(*p0), transform(*p1), transform(*p2), transform(*p3)], np.int32
-                    ).reshape((-1, 1, 2))
+                    pts = np.array([transform(*p0), transform(*p1), transform(*p2), transform(*p3)], np.int32).reshape(
+                        (-1, 1, 2)
+                    )
                     # Note: for UP, flip the row order to match orientation
                     draw_tile(img, pts, UP, self.size - i - 1, j)
 

@@ -10,17 +10,17 @@ states, and optionally saves image renders in ``images/visualizations/``.
 
 from __future__ import annotations
 
+import ast
 import inspect
 from pathlib import Path
-import ast
 from typing import Dict, Type
 
 import click
 import jax
 import jax.numpy as jnp
 import numpy as np
-from PIL import Image
 from jax import tree_util
+from PIL import Image
 
 from puxle.core.puzzle_base import Puzzle
 
@@ -156,4 +156,3 @@ def visualize_puzzle(
 
 if __name__ == "__main__":
     visualize_puzzle()
-

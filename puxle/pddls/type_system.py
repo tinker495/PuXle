@@ -4,6 +4,7 @@ Builds parent/ancestor/descendant maps from a domain's ``:types`` block
 and uses them to group problem objects by the most specific type,
 propagating objects to supertypes as needed for grounding.
 """
+
 from __future__ import annotations
 
 from typing import Dict, Iterable, Set, Tuple
@@ -115,7 +116,7 @@ def extract_objects_by_type(
                     tags = {obj.type_tag}
                 else:
                     tags = set()
-                
+
                 if tags:
                     for t in select_most_specific_types(tags, hierarchy):
                         direct_by_type.setdefault(t, []).append(obj_name)

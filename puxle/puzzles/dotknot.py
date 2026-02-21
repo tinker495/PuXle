@@ -124,7 +124,7 @@ class DotKnot(Puzzle):
         selected_color = jnp.min(jnp.where(available_mask, colors, self.color_num + 1))
         # Define the 4 directional moves: up, down, left, right.
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
-        
+
         move_vector = moves[action]
 
         def is_valid(new_pos, color_idx):
@@ -133,12 +133,7 @@ class DotKnot(Puzzle):
             new_pos_color_idx = (unpacked_board[index] - 1) % self.color_num
             new_pos_is_point = unpacked_board[index] <= 2 * self.color_num
             is_merge = (new_pos_color_idx == color_idx) & new_pos_is_point & ~not_blocked
-            valid = (
-                (new_pos >= 0).all()
-                & (new_pos < self.size).all()
-                & (not_blocked | is_merge)
-                & filled
-            )
+            valid = (new_pos >= 0).all() & (new_pos < self.size).all() & (not_blocked | is_merge) & filled
             return is_merge, valid
 
         def point_move(board, pos, new_pos, point_idx, color_idx, is_merge):
@@ -198,9 +193,7 @@ class DotKnot(Puzzle):
         def _while_loop(val):
             board, key, idx = val
             key, subkey = jax.random.split(key)
-            pos = jax.random.randint(
-                subkey, minval=0, maxval=self.size - 2, shape=(2,)
-            ) + jnp.array([1, 1])
+            pos = jax.random.randint(subkey, minval=0, maxval=self.size - 2, shape=(2,)) + jnp.array([1, 1])
             random_index = pos[0] * self.size + pos[1]
             is_already_filled = board[random_index] != 0
             board = jax.lax.cond(
@@ -211,9 +204,7 @@ class DotKnot(Puzzle):
             next_idx = jnp.where(is_already_filled, idx, idx + 1)
             return board, key, next_idx
 
-        board, _, _ = jax.lax.while_loop(
-            lambda val: val[2] < self.color_num * 2 + 1, _while_loop, (init_board, key, 1)
-        )
+        board, _, _ = jax.lax.while_loop(lambda val: val[2] < self.color_num * 2 + 1, _while_loop, (init_board, key, 1))
         return self.State.from_unpacked(board=board)
 
     def get_solve_config_img_parser(self) -> Callable:

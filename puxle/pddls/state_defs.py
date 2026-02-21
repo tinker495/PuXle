@@ -4,6 +4,7 @@ Constructs xtructure-backed ``State`` (packed boolean atom vector) and
 ``SolveConfig`` (goal mask) dataclasses tailored to a specific grounded
 PDDL problem.
 """
+
 from typing import Callable
 
 import jax.numpy as jnp

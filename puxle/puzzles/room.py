@@ -58,9 +58,7 @@ class Room(Maze):
         """Initialize with a specified size, calculating room dimension and
         adjusting to the nearest valid size if necessary."""
         if size < 5:
-            raise ValueError(
-                f"Input size {size} is too small. Minimum valid size is 5 (for 1x1 rooms)."
-            )
+            raise ValueError(f"Input size {size} is too small. Minimum valid size is 5 (for 1x1 rooms).")
 
         # Check if size fits the 3*N+2 formula
         if (size - 2) % 3 == 0:
@@ -102,9 +100,9 @@ class Room(Maze):
             for c_idx in range(num_rooms_dim):
                 room_r_start = (room_dim + 1) * r_idx
                 room_c_start = (room_dim + 1) * c_idx
-                maze = maze.at[
-                    room_r_start : room_r_start + room_dim, room_c_start : room_c_start + room_dim
-                ].set(False)
+                maze = maze.at[room_r_start : room_r_start + room_dim, room_c_start : room_c_start + room_dim].set(
+                    False
+                )
 
         # 2. Define all potential doors and their properties
         # Each entry: ((door_r, door_c), room_idx1_flat, room_idx2_flat)
@@ -199,9 +197,7 @@ class Room(Maze):
             ), None  # No per-iteration output needed
 
         # Run the scan to determine which doors form the spanning tree
-        final_kruskal_state, _ = jax.lax.scan(
-            kruskal_scan_body, initial_kruskal_carry, shuffled_door_indices
-        )
+        final_kruskal_state, _ = jax.lax.scan(kruskal_scan_body, initial_kruskal_carry, shuffled_door_indices)
         _, spanning_tree_doors_mask, _ = final_kruskal_state
 
         # Open the doors identified for the spanning tree
@@ -217,9 +213,7 @@ class Room(Maze):
                 current_maze_state,
             )
 
-        maze_after_st = jax.lax.fori_loop(
-            0, num_potential_doors, open_st_doors_loop_body, maze_after_st
-        )
+        maze_after_st = jax.lax.fori_loop(0, num_potential_doors, open_st_doors_loop_body, maze_after_st)
 
         # 4. Randomly open additional doors (those not in the spanning tree)
         # Generate random numbers for each potential door
@@ -241,9 +235,7 @@ class Room(Maze):
                 current_maze_state,
             )
 
-        final_maze = jax.lax.fori_loop(
-            0, num_potential_doors, open_extra_doors_loop_body, final_maze
-        )
+        final_maze = jax.lax.fori_loop(0, num_potential_doors, open_extra_doors_loop_body, final_maze)
 
         return final_maze
 

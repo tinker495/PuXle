@@ -8,21 +8,21 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from puxle.puzzles.maze import Maze
-from puxle.puzzles.pancake import PancakeSorting
-from puxle.puzzles.room import Room
-from puxle.puzzles.sokoban import Sokoban
+from puxle.pddls.type_system import (
+    collect_type_hierarchy,
+    extract_objects_by_type,
+    select_most_specific_types,
+)
 from puxle.puzzles.dotknot import DotKnot
 from puxle.puzzles.hanoi import TowerOfHanoi
 from puxle.puzzles.lightsout import LightsOut
+from puxle.puzzles.maze import Maze
+from puxle.puzzles.pancake import PancakeSorting
+from puxle.puzzles.room import Room
 from puxle.puzzles.slidepuzzle import SlidePuzzle
+from puxle.puzzles.sokoban import Sokoban
 from puxle.puzzles.topspin import TopSpin
 from puxle.puzzles.tsp import TSP
-from puxle.pddls.type_system import (
-    collect_type_hierarchy,
-    select_most_specific_types,
-    extract_objects_by_type,
-)
 
 
 @pytest.fixture
@@ -78,9 +78,7 @@ class TestMaze:
 
         # Initial state may or may not be solved (random)
         result = maze.is_solved(sc, state)
-        assert isinstance(result, (bool, jnp.bool_)) or (
-            hasattr(result, "dtype") and result.dtype == jnp.bool_
-        )
+        assert isinstance(result, (bool, jnp.bool_)) or (hasattr(result, "dtype") and result.dtype == jnp.bool_)
 
         # Target state should always be solved
         assert maze.is_solved(sc, sc.TargetState)
@@ -184,9 +182,7 @@ class TestPancakeSorting:
         state = pancake.get_initial_state(sc, key=rng_key)
         # Just verify is_solved returns boolean
         result = pancake.is_solved(sc, state)
-        assert isinstance(result, (bool, jnp.bool_)) or (
-            hasattr(result, "dtype") and result.dtype == jnp.bool_
-        )
+        assert isinstance(result, (bool, jnp.bool_)) or (hasattr(result, "dtype") and result.dtype == jnp.bool_)
 
     def test_flip_action(self, rng_key):
         """Test that flip actions correctly reverse stack prefixes."""
@@ -286,8 +282,7 @@ class TestRoom:
                 room_r_start = (room_dim + 1) * r_idx
                 room_c_start = (room_dim + 1) * c_idx
                 room_interior = maze_grid[
-                    room_r_start:room_r_start + room_dim,
-                    room_c_start:room_c_start + room_dim
+                    room_r_start : room_r_start + room_dim, room_c_start : room_c_start + room_dim
                 ]
                 # Room interior should be paths (False)
                 assert jnp.all(~room_interior)
@@ -351,15 +346,11 @@ class TestSokoban:
 
         # Just verify is_solved returns boolean
         result = sokoban.is_solved(sc, state)
-        assert isinstance(result, (bool, jnp.bool_)) or (
-            hasattr(result, "dtype") and result.dtype == jnp.bool_
-        )
+        assert isinstance(result, (bool, jnp.bool_)) or (hasattr(result, "dtype") and result.dtype == jnp.bool_)
 
     def test_is_solved_all_boxes_and_player(self, rng_key):
         """Test is_solved with ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET condition."""
-        sokoban = Sokoban(
-            solve_condition=Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET
-        )
+        sokoban = Sokoban(solve_condition=Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET)
         sc = sokoban.get_solve_config(key=rng_key)
 
         # Target state should be solved
@@ -462,9 +453,7 @@ class TestPuzzleIntegration:
 
             result = puzzle.is_solved(sc, state)
             # Should return boolean-like value
-            assert isinstance(result, (bool, jnp.bool_)) or (
-                hasattr(result, "dtype") and result.dtype == jnp.bool_
-            )
+            assert isinstance(result, (bool, jnp.bool_)) or (hasattr(result, "dtype") and result.dtype == jnp.bool_)
 
 
 class TestDotKnot:
@@ -514,9 +503,7 @@ class TestDotKnot:
 
         # Initial state should not be solved (has unmerged dots)
         result = dotknot.is_solved(sc, state)
-        assert isinstance(result, (bool, jnp.bool_)) or (
-            hasattr(result, "dtype") and result.dtype == jnp.bool_
-        )
+        assert isinstance(result, (bool, jnp.bool_)) or (hasattr(result, "dtype") and result.dtype == jnp.bool_)
 
     def test_valid_moves(self, rng_key):
         """Test that get_actions returns valid moves."""
@@ -996,6 +983,7 @@ class TestTypeSystem:
 
     def test_collect_type_hierarchy_empty(self):
         """Test collect_type_hierarchy with no types."""
+
         # Mock domain with no types
         class MockDomain:
             pass
@@ -1010,6 +998,7 @@ class TestTypeSystem:
 
     def test_collect_type_hierarchy_simple(self):
         """Test collect_type_hierarchy with simple hierarchy."""
+
         # Mock domain with types dict
         class MockDomain:
             def __init__(self):

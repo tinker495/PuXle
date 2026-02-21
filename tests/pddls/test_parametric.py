@@ -13,15 +13,13 @@ class TestPDDLParametric:
     def test_parse_and_ground_counts_param(self, spec):
         """Test that parsing and grounding produces correct counts across all domains."""
         puzzle = PDDL(spec.domain, spec.problem)
-        assert (
-            puzzle.num_atoms == spec.expected_atoms
-        ), f"Expected {spec.expected_atoms} atoms, got {puzzle.num_atoms}"
-        assert (
-            puzzle.num_actions == spec.expected_actions
-        ), f"Expected {spec.expected_actions} actions, got {puzzle.num_actions}"
-        assert (
-            puzzle.action_size == spec.expected_actions
-        ), f"Expected action_size {spec.expected_actions}, got {puzzle.action_size}"
+        assert puzzle.num_atoms == spec.expected_atoms, f"Expected {spec.expected_atoms} atoms, got {puzzle.num_atoms}"
+        assert puzzle.num_actions == spec.expected_actions, (
+            f"Expected {spec.expected_actions} actions, got {puzzle.num_actions}"
+        )
+        assert puzzle.action_size == spec.expected_actions, (
+            f"Expected action_size {spec.expected_actions}, got {puzzle.action_size}"
+        )
 
     @pytest.mark.parametrize("spec", DATA_SPECS, ids=lambda s: s.name)
     def test_grounded_atoms_param(self, spec):
@@ -62,16 +60,14 @@ class TestPDDLParametric:
 
         # filled=False => all inf
         _, costs_empty = puzzle.get_neighbours(solve_config, initial_state, filled=False)
-        assert jnp.all(
-            jnp.isinf(costs_empty)
-        ), f"filled=False should return all infinite costs for {spec.name}"
+        assert jnp.all(jnp.isinf(costs_empty)), f"filled=False should return all infinite costs for {spec.name}"
 
         # filled=True => check applicability based on solvability
         _, costs = puzzle.get_neighbours(solve_config, initial_state, filled=True)
         if not puzzle.is_solved(solve_config, initial_state) and spec.solvable:
-            assert jnp.any(
-                jnp.isfinite(costs)
-            ), f"Solvable domain {spec.name} should have at least one applicable action"
+            assert jnp.any(jnp.isfinite(costs)), (
+                f"Solvable domain {spec.name} should have at least one applicable action"
+            )
 
     @pytest.mark.parametrize("spec", DATA_SPECS, ids=lambda s: s.name)
     def test_jit_and_batched_param(self, spec):
@@ -96,14 +92,10 @@ class TestPDDLParametric:
         # Test batched operations
         keys = jax.random.split(rng_key, 4)
         solve_configs = jax.vmap(lambda k: puzzle.get_solve_config(k))(keys)
-        initial_states = jax.vmap(lambda sc, k: puzzle.get_initial_state(sc, k))(
-            solve_configs, keys
-        )
+        initial_states = jax.vmap(lambda sc, k: puzzle.get_initial_state(sc, k))(solve_configs, keys)
 
         # Test batched is_solved
-        solved_mask = puzzle.batched_is_solved(
-            solve_configs, initial_states, multi_solve_config=True
-        )
+        solved_mask = puzzle.batched_is_solved(solve_configs, initial_states, multi_solve_config=True)
         assert solved_mask.shape[0] == 4
         assert isinstance(solved_mask, jnp.ndarray)
 
@@ -143,9 +135,9 @@ class TestPDDLParametric:
 
         if spec.solvable:
             # For solvable domains, we should either reach the goal or make progress
-            assert (
-                solved or current_state != initial_state
-            ), f"Solvable domain {spec.name} should either reach goal or make progress"
+            assert solved or current_state != initial_state, (
+                f"Solvable domain {spec.name} should either reach goal or make progress"
+            )
         else:
             # For unsolvable domains, we should never reach the goal
             assert not solved, f"Unsolvable domain {spec.name} should never reach the goal"

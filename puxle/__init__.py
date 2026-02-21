@@ -7,7 +7,6 @@ and search algorithms.
 """
 
 # Core framework
-from puxle.core import FieldDescriptor, Puzzle, PuzzleState, state_dataclass
 from puxle.benchmark import (
     Benchmark,
     BenchmarkSample,
@@ -15,6 +14,7 @@ from puxle.benchmark import (
     RubiksCubeDeepCubeABenchmark,
     SlidePuzzleDeepCubeABenchmark,
 )
+from puxle.core import FieldDescriptor, Puzzle, PuzzleState, state_dataclass
 from puxle.pddls import PDDL
 
 # All puzzle implementations

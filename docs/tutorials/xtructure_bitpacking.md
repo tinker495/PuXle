@@ -91,5 +91,3 @@ Recommended migration:
 
 The legacy helpers (`puxle.utils.util.to_uint8` / `from_uint8`) are still available for generic packing tasks,
 but they should no longer be needed for in-memory puzzle-state representation.
-
-

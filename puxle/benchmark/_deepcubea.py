@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import pickle
 import warnings
-from typing import Any, IO
-
+from importlib.resources import files
+from pathlib import Path
+from typing import IO, Any
 
 
 class DeepCubeAUnpickler(pickle.Unpickler):
@@ -29,9 +30,6 @@ def load_deepcubea(handle: IO[bytes]) -> Any:
         return DeepCubeAUnpickler(handle).load()
 
 
-from importlib.resources import files
-from pathlib import Path
-
 def load_deepcubea_dataset(
     dataset_path: Path | None,
     dataset_name: str,
@@ -51,15 +49,14 @@ def load_deepcubea_dataset(
             return load_deepcubea(handle)
     except (ModuleNotFoundError, FileNotFoundError):
         import logging
+
         logging.getLogger(__name__).debug("Resource not found, trying fallback...")
 
     fallback = fallback_dir / dataset_name
     if not fallback.is_file():
-        raise FileNotFoundError(
-            f"Unable to locate {dataset_name} under package resources or at {fallback}"
-        )
+        raise FileNotFoundError(f"Unable to locate {dataset_name} under package resources or at {fallback}")
     with fallback.open("rb") as handle:
         return load_deepcubea(handle)
 
-__all__ = ["DeepCubeAUnpickler", "load_deepcubea", "load_deepcubea_dataset"]
 
+__all__ = ["DeepCubeAUnpickler", "load_deepcubea", "load_deepcubea_dataset"]

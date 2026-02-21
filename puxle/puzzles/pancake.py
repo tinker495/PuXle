@@ -69,8 +69,7 @@ class PancakeSorting(Puzzle):
             for i, pancake in enumerate(state.stack):
                 size_str = "=" * (2 * (int(pancake) - 1) + 1)
                 result.append(
-                    f"{i+1:02d}:{pancake:02d} - "
-                    + colored(f"{size_str.center(self.size * 2)}", get_color(pancake))
+                    f"{i + 1:02d}:{pancake:02d} - " + colored(f"{size_str.center(self.size * 2)}", get_color(pancake))
                 )
             result.append("Plate " + "┗━" + "━━" * self.size + "┛")
             return "\n".join(result)
@@ -189,9 +188,7 @@ class PancakeSorting(Puzzle):
 
         return img_func
 
-    def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "PancakeSorting.State":
+    def get_initial_state(self, solve_config: Puzzle.SolveConfig, key=None, data=None) -> "PancakeSorting.State":
         """Generate a random initial state for the puzzle"""
         return self._get_random_state(key)
 
@@ -249,9 +246,7 @@ class PancakeSorting(Puzzle):
         )
         return self.State(stack=next_stack), cost
 
-    def is_solved(
-        self, solve_config: "PancakeSorting.SolveConfig", state: "PancakeSorting.State"
-    ) -> bool:
+    def is_solved(self, solve_config: "PancakeSorting.SolveConfig", state: "PancakeSorting.State") -> bool:
         """Check if the current state matches the target state (sorted)"""
         return state == solve_config.TargetState
 

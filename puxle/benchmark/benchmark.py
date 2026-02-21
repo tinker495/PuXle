@@ -122,9 +122,7 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         else:
             # Reconstruct path from sequence
             puzzle = self.puzzle
-            action_lookup = {
-                puzzle.action_to_string(action): action for action in range(puzzle.action_size)
-            }
+            action_lookup = {puzzle.action_to_string(action): action for action in range(puzzle.action_size)}
             current_state = sample.state
             for i, notation in enumerate(target_sequence):
                 if notation not in action_lookup:
@@ -145,7 +143,7 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         optimal_cost = sample.optimal_path_costs
         if optimal_cost is None:
             optimal_cost = len(sample.optimal_action_sequence)
-        
+
         candidate_cost = 0
         if action_sequence is not None:
             candidate_cost = len(action_sequence)
@@ -167,10 +165,7 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         """Build a mapping from action notation to action index."""
         if self._notation_to_action is None:
             puzzle = self.puzzle
-            self._notation_to_action = {
-                puzzle.action_to_string(action): action
-                for action in range(puzzle.action_size)
-            }
+            self._notation_to_action = {puzzle.action_to_string(action): action for action in range(puzzle.action_size)}
         return self._notation_to_action
 
     def _build_optimal_path(

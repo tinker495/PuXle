@@ -20,7 +20,7 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
 
     queue = deque([(initial_state, 0)])
     visited = {_hash_state(initial_state)}
-    
+
     # Process states in batches to leverage vectorization and reduce JAX dispatch overhead
     BATCH_SIZE = 512
 
@@ -32,39 +32,32 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
         # 1. Collect a batch of states
         batch_states = []
         batch_depths = []
-        
+
         while len(batch_states) < BATCH_SIZE and queue:
             if queue[0][1] >= max_depth:
                 break
             s, d = queue.popleft()
             batch_states.append(s)
             batch_depths.append(d)
-        
+
         if not batch_states:
             return False
 
         # Stack states (List[State] -> State(Batch...))
         stacked_state = jax.tree_util.tree_map(lambda *xs: jnp.stack(xs), *batch_states)
-        
+
         # Prepare filleds mask (required by batched_get_neighbours)
         # We need to pass a boolean array of shape (batch_size,) because batched_get_neighbours vmaps over it
         filleds_batch = jnp.full((len(batch_states),), True)
 
         # 2. Get neighbors in batch
         # env.batched_get_neighbours is pre-jitted in Puzzle.__init__
-        neighbors, costs = env.batched_get_neighbours(
-            solve_config, 
-            stacked_state, 
-            filleds=filleds_batch
-        )
-        
+        neighbors, costs = env.batched_get_neighbours(solve_config, stacked_state, filleds=filleds_batch)
+
         # 3. Check for solutions in batch
         # Flatten neighbors to (Batch*Actions, ...) for solved check
-        flat_neighbors = jax.tree_util.tree_map(
-            lambda x: x.reshape((-1,) + x.shape[2:]), 
-            neighbors
-        )
-        
+        flat_neighbors = jax.tree_util.tree_map(lambda x: x.reshape((-1,) + x.shape[2:]), neighbors)
+
         # env.batched_is_solved is pre-jitted
         solved_mask = env.batched_is_solved(solve_config, flat_neighbors)
 
@@ -75,27 +68,27 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
         # Bulk convert to numpy to avoid repeated device-host transfers
         neighbors_atoms_np = np.array(flat_neighbors.atoms)
         costs_np = np.array(costs).flatten()
-        
+
         # Filter valid transitions (finite cost)
         applicable_indices = np.where(np.isfinite(costs_np))[0]
-        
+
         if len(applicable_indices) == 0:
             continue
-            
+
         # Calculate depths for new states
         parent_indices = applicable_indices // env.action_size
         new_depths = np.array(batch_depths)[parent_indices] + 1
-        
+
         # Filter by max_depth
         valid_mask = new_depths < max_depth
         final_indices = applicable_indices[valid_mask]
         final_depths = new_depths[valid_mask]
-        
+
         if len(final_indices) == 0:
             continue
-            
+
         final_atoms = neighbors_atoms_np[final_indices]
-        
+
         # Add to queue
         for i, atom_row in enumerate(final_atoms):
             key = atom_row.tobytes()
@@ -137,9 +130,9 @@ def test_presets_bfs_solves_within_bounds(domain, problem, max_depth):
     env = PDDL.from_preset(domain=domain, problem_basename=problem)
     solve_config, initial_state = env.get_inits(jax.random.PRNGKey(0))
 
-    assert _bfs_reaches_goal(
-        env, solve_config, initial_state, max_depth
-    ), f"Preset {domain}/{problem} should be solvable within {max_depth} steps"
+    assert _bfs_reaches_goal(env, solve_config, initial_state, max_depth), (
+        f"Preset {domain}/{problem} should be solvable within {max_depth} steps"
+    )
 
 
 @pytest.mark.parametrize(
@@ -162,9 +155,7 @@ def test_presets_jit_and_batch(domain, problem):
 
     jitted_is_solved = jax.jit(env.is_solved)
     solved = jitted_is_solved(solve_config, initial_state)
-    assert isinstance(solved, (bool, jnp.bool_)) or (
-        hasattr(solved, "dtype") and solved.dtype == jnp.bool_
-    )
+    assert isinstance(solved, (bool, jnp.bool_)) or (hasattr(solved, "dtype") and solved.dtype == jnp.bool_)
 
     # Batched
     keys = jax.random.split(rng, 4)
@@ -212,9 +203,9 @@ def test_initial_state_not_solved(domain, problem):
     env = PDDL.from_preset(domain=domain, problem_basename=problem)
     solve_config, initial_state = env.get_inits(jax.random.PRNGKey(0))
 
-    assert not bool(
-        env.is_solved(solve_config, initial_state)
-    ), f"Preset {domain}/{problem} should not be solved at the initial state"
+    assert not bool(env.is_solved(solve_config, initial_state)), (
+        f"Preset {domain}/{problem} should not be solved at the initial state"
+    )
 
 
 @pytest.mark.parametrize(
@@ -232,9 +223,9 @@ def test_random_states_not_mostly_solved(domain, problem):
     solve_config = env.get_solve_config()
 
     # Goals should be non-empty; otherwise any state would be trivially solved
-    assert (
-        int(jnp.sum(solve_config.GoalMask)) > 0
-    ), f"Preset {domain}/{problem} has empty goal mask; any state would be solved"
+    assert int(jnp.sum(solve_config.GoalMask)) > 0, (
+        f"Preset {domain}/{problem} has empty goal mask; any state would be solved"
+    )
 
     # Sample random boolean states and ensure the majority are NOT solved
     rng = jax.random.PRNGKey(123)

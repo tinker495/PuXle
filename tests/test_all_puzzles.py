@@ -54,21 +54,11 @@ class TestPuzzleValidation:
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
-                assert isinstance(
-                    puzzle, Puzzle
-                ), f"{puzzle_class.__name__} should inherit from Puzzle"
-                assert hasattr(
-                    puzzle, "State"
-                ), f"{puzzle_class.__name__} should define State class"
-                assert hasattr(
-                    puzzle, "SolveConfig"
-                ), f"{puzzle_class.__name__} should define SolveConfig class"
-                assert (
-                    puzzle.action_size is not None
-                ), f"{puzzle_class.__name__} should have action_size defined"
-                assert (
-                    puzzle.action_size > 0
-                ), f"{puzzle_class.__name__} should have positive action_size"
+                assert isinstance(puzzle, Puzzle), f"{puzzle_class.__name__} should inherit from Puzzle"
+                assert hasattr(puzzle, "State"), f"{puzzle_class.__name__} should define State class"
+                assert hasattr(puzzle, "SolveConfig"), f"{puzzle_class.__name__} should define SolveConfig class"
+                assert puzzle.action_size is not None, f"{puzzle_class.__name__} should have action_size defined"
+                assert puzzle.action_size > 0, f"{puzzle_class.__name__} should have positive action_size"
                 print(f"✓ {puzzle_class.__name__} instantiated successfully")
             except Exception as e:
                 pytest.fail(f"Failed to instantiate {puzzle_class.__name__}: {e}")
@@ -81,30 +71,18 @@ class TestPuzzleValidation:
 
                 # Test solve config generation
                 solve_config = puzzle.get_solve_config(key=rng_key)
-                assert (
-                    solve_config is not None
-                ), f"{puzzle_class.__name__} should generate solve_config"
-                assert isinstance(
-                    solve_config, puzzle.SolveConfig
-                ), "solve_config should be instance of SolveConfig"
+                assert solve_config is not None, f"{puzzle_class.__name__} should generate solve_config"
+                assert isinstance(solve_config, puzzle.SolveConfig), "solve_config should be instance of SolveConfig"
 
                 # Test initial state generation
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
-                assert (
-                    initial_state is not None
-                ), f"{puzzle_class.__name__} should generate initial_state"
-                assert isinstance(
-                    initial_state, puzzle.State
-                ), "initial_state should be instance of State"
+                assert initial_state is not None, f"{puzzle_class.__name__} should generate initial_state"
+                assert isinstance(initial_state, puzzle.State), "initial_state should be instance of State"
 
                 # Test get_inits convenience function
                 solve_config2, initial_state2 = puzzle.get_inits(key=rng_key)
-                assert isinstance(
-                    solve_config2, puzzle.SolveConfig
-                ), "get_inits should return valid solve_config"
-                assert isinstance(
-                    initial_state2, puzzle.State
-                ), "get_inits should return valid initial_state"
+                assert isinstance(solve_config2, puzzle.SolveConfig), "get_inits should return valid solve_config"
+                assert isinstance(initial_state2, puzzle.State), "get_inits should return valid initial_state"
 
                 print(f"✓ {puzzle_class.__name__} state generation works")
 
@@ -120,14 +98,10 @@ class TestPuzzleValidation:
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
 
                 # Test neighbor generation
-                neighbor_states, costs = puzzle.get_neighbours(
-                    solve_config, initial_state, filled=True
-                )
+                neighbor_states, costs = puzzle.get_neighbours(solve_config, initial_state, filled=True)
 
                 # Validate neighbor states structure
-                assert (
-                    neighbor_states is not None
-                ), f"{puzzle_class.__name__} should generate neighbor_states"
+                assert neighbor_states is not None, f"{puzzle_class.__name__} should generate neighbor_states"
                 assert costs is not None, f"{puzzle_class.__name__} should generate costs"
                 assert len(costs) == puzzle.action_size, "Number of costs should match action_size"
 
@@ -143,9 +117,7 @@ class TestPuzzleValidation:
                 neighbor_states_unfilled, costs_unfilled = puzzle.get_neighbours(
                     solve_config, initial_state, filled=False
                 )
-                assert jnp.all(
-                    jnp.isinf(costs_unfilled)
-                ), "All costs should be infinity when filled=False"
+                assert jnp.all(jnp.isinf(costs_unfilled)), "All costs should be infinity when filled=False"
 
                 print(f"✓ {puzzle_class.__name__} neighbor generation works")
 
@@ -160,48 +132,36 @@ class TestPuzzleValidation:
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
 
-                neighbours_filled, costs_filled = puzzle.get_neighbours(
-                    solve_config, initial_state, filled=True
-                )
-                neighbours_blocked, costs_blocked = puzzle.get_neighbours(
-                    solve_config, initial_state, filled=False
-                )
+                neighbours_filled, costs_filled = puzzle.get_neighbours(solve_config, initial_state, filled=True)
+                neighbours_blocked, costs_blocked = puzzle.get_neighbours(solve_config, initial_state, filled=False)
 
                 actions_to_test = min(puzzle.action_size, 3)
                 for action_idx in range(actions_to_test):
                     action = jnp.asarray(action_idx)
 
                     # Filled=True should match neighbour generation
-                    next_state, action_cost = puzzle.get_actions(
-                        solve_config, initial_state, action, filled=True
-                    )
-                    expected_state = jax.tree_util.tree_map(
-                        lambda x: x[action_idx], neighbours_filled
-                    )
+                    next_state, action_cost = puzzle.get_actions(solve_config, initial_state, action, filled=True)
+                    expected_state = jax.tree_util.tree_map(lambda x: x[action_idx], neighbours_filled)
 
-                    assert (
-                        next_state == expected_state
-                    ), f"{puzzle_class.__name__} get_actions state mismatch at action {action_idx}"
-                    assert jnp.allclose(
-                        action_cost, costs_filled[action_idx]
-                    ), f"{puzzle_class.__name__} get_actions cost mismatch at action {action_idx}"
+                    assert next_state == expected_state, (
+                        f"{puzzle_class.__name__} get_actions state mismatch at action {action_idx}"
+                    )
+                    assert jnp.allclose(action_cost, costs_filled[action_idx]), (
+                        f"{puzzle_class.__name__} get_actions cost mismatch at action {action_idx}"
+                    )
 
                     # Filled=False should block all moves
-                    blocked_state, blocked_cost = puzzle.get_actions(
-                        solve_config, initial_state, action, filled=False
+                    blocked_state, blocked_cost = puzzle.get_actions(solve_config, initial_state, action, filled=False)
+                    expected_blocked_state = jax.tree_util.tree_map(lambda x: x[action_idx], neighbours_blocked)
+                    assert blocked_state == expected_blocked_state, (
+                        f"{puzzle_class.__name__} filled=False state mismatch at action {action_idx}"
                     )
-                    expected_blocked_state = jax.tree_util.tree_map(
-                        lambda x: x[action_idx], neighbours_blocked
+                    assert jnp.allclose(blocked_cost, costs_blocked[action_idx]), (
+                        f"{puzzle_class.__name__} filled=False cost mismatch at action {action_idx}"
                     )
-                    assert (
-                        blocked_state == expected_blocked_state
-                    ), f"{puzzle_class.__name__} filled=False state mismatch at action {action_idx}"
-                    assert jnp.allclose(
-                        blocked_cost, costs_blocked[action_idx]
-                    ), f"{puzzle_class.__name__} filled=False cost mismatch at action {action_idx}"
-                    assert jnp.isinf(
-                        costs_blocked[action_idx]
-                    ), f"{puzzle_class.__name__} filled=False neighbours should be inf"
+                    assert jnp.isinf(costs_blocked[action_idx]), (
+                        f"{puzzle_class.__name__} filled=False neighbours should be inf"
+                    )
 
                 print(f"✓ {puzzle_class.__name__} action transitions align with neighbours")
 
@@ -216,12 +176,8 @@ class TestPuzzleValidation:
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
 
-                neighbours_filled, costs_filled = puzzle.get_neighbours(
-                    solve_config, initial_state, filled=True
-                )
-                neighbours_blocked, costs_blocked = puzzle.get_neighbours(
-                    solve_config, initial_state, filled=False
-                )
+                neighbours_filled, costs_filled = puzzle.get_neighbours(solve_config, initial_state, filled=True)
+                neighbours_blocked, costs_blocked = puzzle.get_neighbours(solve_config, initial_state, filled=False)
 
                 manual_states = []
                 manual_costs = []
@@ -230,21 +186,15 @@ class TestPuzzleValidation:
 
                 for action_idx in range(puzzle.action_size):
                     action = jnp.asarray(action_idx)
-                    next_state, next_cost = puzzle.get_actions(
-                        solve_config, initial_state, action, filled=True
-                    )
+                    next_state, next_cost = puzzle.get_actions(solve_config, initial_state, action, filled=True)
                     manual_states.append(next_state)
                     manual_costs.append(next_cost)
 
-                    blocked_state, blocked_cost = puzzle.get_actions(
-                        solve_config, initial_state, action, filled=False
-                    )
+                    blocked_state, blocked_cost = puzzle.get_actions(solve_config, initial_state, action, filled=False)
                     manual_states_blocked.append(blocked_state)
                     manual_costs_blocked.append(blocked_cost)
 
-                stacked_states = jax.tree_util.tree_map(
-                    lambda *xs: jnp.stack(xs, axis=0), *manual_states
-                )
+                stacked_states = jax.tree_util.tree_map(lambda *xs: jnp.stack(xs, axis=0), *manual_states)
                 stacked_states_blocked = jax.tree_util.tree_map(
                     lambda *xs: jnp.stack(xs, axis=0), *manual_states_blocked
                 )
@@ -252,31 +202,27 @@ class TestPuzzleValidation:
                 stacked_costs_blocked = jnp.stack(manual_costs_blocked)
 
                 def trees_equal(tree_a, tree_b):
-                    comparisons = jax.tree_util.tree_map(
-                        lambda x, y: jnp.array_equal(x, y), tree_a, tree_b
-                    )
+                    comparisons = jax.tree_util.tree_map(lambda x, y: jnp.array_equal(x, y), tree_a, tree_b)
                     return all(bool(v) for v in jax.tree_util.tree_leaves(comparisons))
 
-                assert trees_equal(
-                    neighbours_filled, stacked_states
-                ), f"{puzzle_class.__name__} neighbours vs get_actions mismatch (filled=True)"
-                assert jnp.allclose(
-                    costs_filled, stacked_costs
-                ), f"{puzzle_class.__name__} neighbour costs mismatch (filled=True)"
+                assert trees_equal(neighbours_filled, stacked_states), (
+                    f"{puzzle_class.__name__} neighbours vs get_actions mismatch (filled=True)"
+                )
+                assert jnp.allclose(costs_filled, stacked_costs), (
+                    f"{puzzle_class.__name__} neighbour costs mismatch (filled=True)"
+                )
 
-                assert trees_equal(
-                    neighbours_blocked, stacked_states_blocked
-                ), f"{puzzle_class.__name__} neighbours vs get_actions mismatch (filled=False)"
-                assert jnp.allclose(
-                    costs_blocked, stacked_costs_blocked
-                ), f"{puzzle_class.__name__} neighbour costs mismatch (filled=False)"
+                assert trees_equal(neighbours_blocked, stacked_states_blocked), (
+                    f"{puzzle_class.__name__} neighbours vs get_actions mismatch (filled=False)"
+                )
+                assert jnp.allclose(costs_blocked, stacked_costs_blocked), (
+                    f"{puzzle_class.__name__} neighbour costs mismatch (filled=False)"
+                )
 
                 print(f"✓ {puzzle_class.__name__} neighbours align with get_actions for all moves")
 
             except Exception as e:
-                pytest.fail(
-                    f"Neighbours/get_actions parity test failed for {puzzle_class.__name__}: {e}"
-                )
+                pytest.fail(f"Neighbours/get_actions parity test failed for {puzzle_class.__name__}: {e}")
 
     def test_solution_checking(self, puzzle_configs, rng_key):
         """Test solution checking functionality"""
@@ -295,9 +241,7 @@ class TestPuzzleValidation:
                 # For puzzles with fixed targets, test that target state is actually solved
                 if puzzle.fixed_target and hasattr(solve_config, "TargetState"):
                     target_solved = puzzle.is_solved(solve_config, solve_config.TargetState)
-                    assert (
-                        target_solved
-                    ), f"Target state should be marked as solved for {puzzle_class.__name__}"
+                    assert target_solved, f"Target state should be marked as solved for {puzzle_class.__name__}"
 
                 print(f"✓ {puzzle_class.__name__} solution checking works")
 
@@ -337,17 +281,13 @@ class TestPuzzleValidation:
                 # Test solve config string representation
                 try:
                     solve_config_str = str(solve_config)
-                    assert isinstance(
-                        solve_config_str, str
-                    ), "SolveConfig string representation should be string"
+                    assert isinstance(solve_config_str, str), "SolveConfig string representation should be string"
                     # Empty SolveConfigs (like DotKnot) might return empty strings, which is acceptable
                     # assert len(solve_config_str) > 0, f"SolveConfig string should be non-empty"
                 except IndexError as e:
                     # Handle the case where SolveConfig has no fields (like DotKnot)
                     if "list index out of range" in str(e):
-                        print(
-                            f"⚠ {puzzle_class.__name__} has empty SolveConfig - skipping string representation test"
-                        )
+                        print(f"⚠ {puzzle_class.__name__} has empty SolveConfig - skipping string representation test")
                     else:
                         raise
 
@@ -393,9 +333,7 @@ class TestPuzzleValidation:
                 # Create multiple states and configs for batching
                 keys = jax.random.split(rng_key, 3)
                 solve_configs = [puzzle.get_solve_config(key=k) for k in keys]
-                initial_states = [
-                    puzzle.get_initial_state(sc, key=k) for sc, k in zip(solve_configs, keys)
-                ]
+                initial_states = [puzzle.get_initial_state(sc, key=k) for sc, k in zip(solve_configs, keys)]
 
                 # Stack them for batched operations
                 # Note: This may not work for all puzzles due to different state structures
@@ -413,14 +351,10 @@ class TestPuzzleValidation:
 
                 except Exception as batch_e:
                     # Batched operations might fail due to state structure incompatibilities
-                    print(
-                        f"⚠ {puzzle_class.__name__} batched operations not fully testable: {batch_e}"
-                    )
+                    print(f"⚠ {puzzle_class.__name__} batched operations not fully testable: {batch_e}")
 
             except Exception as e:
-                pytest.fail(
-                    f"Batched operations test setup failed for {puzzle_class.__name__}: {e}"
-                )
+                pytest.fail(f"Batched operations test setup failed for {puzzle_class.__name__}: {e}")
 
     def test_puzzle_properties(self, puzzle_configs):
         """Test puzzle property flags"""
@@ -454,9 +388,7 @@ class TestPuzzleValidation:
                     solve_config = puzzle.get_solve_config(key=rng_key)
                     initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
 
-                    neighbors, costs = puzzle.get_neighbours(
-                        solve_config, initial_state, filled=True
-                    )
+                    neighbors, costs = puzzle.get_neighbours(solve_config, initial_state, filled=True)
 
                     for i in range(puzzle.action_size):
                         # If a move is possible
@@ -471,13 +403,11 @@ class TestPuzzleValidation:
                             # The action that leads from S_prev to S_next is i.
                             # So, the state before S_next via action i was S_initial.
                             # get_inverse_neighbours(S_next)[i] should be S_initial
-                            state_after_inverse = jax.tree_util.tree_map(
-                                lambda x: x[i], inv_neighbors
-                            )
+                            state_after_inverse = jax.tree_util.tree_map(lambda x: x[i], inv_neighbors)
 
-                            assert (
-                                state_after_inverse == initial_state
-                            ), f"Inverse action did not return to original state for action {i}"
+                            assert state_after_inverse == initial_state, (
+                                f"Inverse action did not return to original state for action {i}"
+                            )
 
                     print(f"✓ {puzzle_class.__name__} inverse actions are reversible")
 
@@ -485,21 +415,16 @@ class TestPuzzleValidation:
                     # Test for non-reversible puzzles or those without inverse map
                     # Case 1: Custom inverse implementation (e.g., Sokoban)
                     is_custom_inverse = (
-                        puzzle.get_inverse_neighbours.__qualname__
-                        != Puzzle.get_inverse_neighbours.__qualname__
+                        puzzle.get_inverse_neighbours.__qualname__ != Puzzle.get_inverse_neighbours.__qualname__
                     )
                     if is_custom_inverse:
                         try:
                             solve_config = puzzle.get_solve_config(key=rng_key)
                             initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
                             puzzle.get_inverse_neighbours(solve_config, initial_state, filled=True)
-                            print(
-                                f"✓ {puzzle_class.__name__} custom get_inverse_neighbours called successfully"
-                            )
+                            print(f"✓ {puzzle_class.__name__} custom get_inverse_neighbours called successfully")
                         except Exception as e:
-                            pytest.fail(
-                                f"Custom get_inverse_neighbours for {puzzle_class.__name__} failed: {e}"
-                            )
+                            pytest.fail(f"Custom get_inverse_neighbours for {puzzle_class.__name__} failed: {e}")
 
                     # Case 2: No inverse map and no custom implementation
                     else:
@@ -507,9 +432,7 @@ class TestPuzzleValidation:
                             solve_config = puzzle.get_solve_config(key=rng_key)
                             initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
                             puzzle.get_inverse_neighbours(solve_config, initial_state, filled=True)
-                        print(
-                            f"✓ {puzzle_class.__name__} correctly raised NotImplementedError for inverse actions"
-                        )
+                        print(f"✓ {puzzle_class.__name__} correctly raised NotImplementedError for inverse actions")
 
             except Exception as e:
                 pytest.fail(f"Inverse action test failed for {puzzle_class.__name__}: {e}")

@@ -4,6 +4,7 @@ Generates the universe of grounded atoms and grounded actions by
 instantiating every typed predicate / action schema with all valid
 object combinations drawn from the problem's typed-object pool.
 """
+
 from __future__ import annotations
 
 from typing import Dict, List, Set, Tuple
@@ -109,13 +110,13 @@ def _ground_formula(
     if formula_type == "EqualTo":
         left = getattr(formula.left, "name", str(formula.left))
         right = getattr(formula.right, "name", str(formula.right))
-        
+
         # Substitute parameters
         if left in param_names:
             left = param_substitution[param_names.index(left)]
         if right in param_names:
             right = param_substitution[param_names.index(right)]
-            
+
         if left == right:
             return [], [], False  # Satisfied
         else:
@@ -130,14 +131,10 @@ def _ground_formula(
         if not parts:
             # pddl parser may represent empty `()` as `Or()`; treat as tautology.
             return [], [], False
-        raise ValueError(
-            "Disjunctive preconditions `(or ...)` are not supported in STRIPS mode."
-        )
+        raise ValueError("Disjunctive preconditions `(or ...)` are not supported in STRIPS mode.")
 
     if formula_type == "OneOf":
-        raise ValueError(
-            "Non-deterministic preconditions `(oneof ...)` are not supported in STRIPS mode."
-        )
+        raise ValueError("Non-deterministic preconditions `(oneof ...)` are not supported in STRIPS mode.")
 
     # Handle Negation (Not)
     if formula_type == "Not":
@@ -145,18 +142,18 @@ def _ground_formula(
         if impossible:
             # Not(Impossible) -> Satisfied
             return [], [], False
-        
+
         # If inner is unconditionally true (empty requirements)
         if not pos and not neg:
             return [], [], True
 
         # Swap pos and neg
         # Note: PDDL usually only allows neg of atomic/equality in preconditions
-        if pos: 
-            return neg, pos, False # Move pos to neg
+        if pos:
+            return neg, pos, False  # Move pos to neg
         elif neg:
-             return neg, pos, False # Move neg to pos (double negation)
-        return [], [], False # Empty
+            return neg, pos, False  # Move neg to pos (double negation)
+        return [], [], False  # Empty
 
     # Handle compound formulas (conjunctive only)
     parts = []
@@ -164,7 +161,7 @@ def _ground_formula(
         parts = formula.parts
     elif hasattr(formula, "operands"):
         parts = formula.operands
-    
+
     if formula_type == "And" and not parts:
         # Empty conjunction means no constraints.
         return [], [], False
@@ -190,19 +187,15 @@ def _ground_formula(
                 obj_combination.append(param_substitution[param_names.index(term_name)])
             else:
                 obj_combination.append(term_name)
-        
+
         args = " ".join(obj_combination)
         atom_str = f"({pred_name} {args})" if args else f"({pred_name})"
         return [atom_str], [], False
 
-    raise ValueError(
-        f"Unsupported formula node `{formula_type}` in STRIPS grounding."
-    )
+    raise ValueError(f"Unsupported formula node `{formula_type}` in STRIPS grounding.")
 
 
-def _ground_effects(
-    effect, param_substitution: List[str], param_names: List[str]
-) -> Dict[str, List[str]]:
+def _ground_effects(effect, param_substitution: List[str], param_names: List[str]) -> Dict[str, List[str]]:
     """Grounds effects into add/delete lists."""
     add_effects = []
     delete_effects = []
@@ -227,9 +220,7 @@ def _ground_effects(
             if not parts:
                 # pddl parser may represent empty `()` as `Or()`; treat as no-op.
                 continue
-            raise ValueError(
-                f"Unsupported effect node `{eff_type}` in STRIPS grounding."
-            )
+            raise ValueError(f"Unsupported effect node `{eff_type}` in STRIPS grounding.")
 
         # Check for negation
         if eff_type == "Not":
@@ -237,8 +228,8 @@ def _ground_effects(
             # argument is implicitly atomic in STRIPS
             pos, neg, imp = _ground_formula(eff.argument, param_substitution, param_names)
             if not imp and pos:
-                 delete_effects.extend(pos) 
-                 # _ground_formula returns list[str], we extend
+                delete_effects.extend(pos)
+                # _ground_formula returns list[str], we extend
         else:
             # Positive effect (add)
             pos, neg, imp = _ground_formula(eff, param_substitution, param_names)
@@ -272,13 +263,11 @@ def ground_actions(
 
         for param_combo in param_combinations:
             param_names = [param.name for param in getattr(action, "parameters", []) or []]
-            
+
             # Ground Preconditions
             # Result: (pos, neg, impossible)
-            pre_pos, pre_neg, impossible = _ground_formula(
-                action.precondition, param_combo, param_names
-            )
-            
+            pre_pos, pre_neg, impossible = _ground_formula(action.precondition, param_combo, param_names)
+
             if impossible:
                 continue
 

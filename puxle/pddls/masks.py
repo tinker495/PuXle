@@ -4,6 +4,7 @@ Each grounded action is encoded as four boolean vectors over the atom
 universe: positive preconditions, negative preconditions, add effects,
 and delete effects.  Initial-state and goal masks are also built here.
 """
+
 from __future__ import annotations
 
 from typing import Dict, List, Tuple
@@ -67,7 +68,7 @@ def build_masks(
         for precondition in action.get("preconditions", []):
             if precondition in atom_to_idx:
                 pre_mask = pre_mask.at[i, atom_to_idx[precondition]].set(True)
-        
+
         # Negative Preconditions
         for neg_precondition in action.get("preconditions_neg", []):
             if neg_precondition in atom_to_idx:
@@ -90,9 +91,7 @@ def build_initial_state(problem, atom_to_idx: Dict[str, int], num_atoms: int) ->
 
     for fact in getattr(problem, "init", []) or []:
         if not hasattr(fact, "name") or not hasattr(fact, "terms"):
-            raise ValueError(
-                f"Unsupported initial-state element `{type(fact).__name__}` in STRIPS mode."
-            )
+            raise ValueError(f"Unsupported initial-state element `{type(fact).__name__}` in STRIPS mode.")
         args = " ".join([getattr(arg, "name", str(arg)) for arg in fact.terms])
         fact_str = f"({fact.name} {args})" if args else f"({fact.name})"
         if fact_str not in atom_to_idx:

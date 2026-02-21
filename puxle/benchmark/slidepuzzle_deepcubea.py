@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
 import jax.numpy as jnp
+
 from puxle.benchmark._deepcubea import load_deepcubea_dataset
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_state import PuzzleState
@@ -31,14 +32,15 @@ HARD_17_STATES = [
     [0, 12, 9, 13, 15, 11, 10, 14, 7, 8, 5, 6, 4, 3, 2, 1],
 ]
 
+
 class SlidePuzzlePreset(Enum):
     SIZE15 = ("size15-deepcubeA.pkl", 4, None, None)
     SIZE24 = ("size24-deepcubeA.pkl", 5, None, None)
     SIZE35 = ("size35-deepcubeA.pkl", 6, None, None)
     SIZE48 = ("size48-deepcubeA.pkl", 7, None, None)
     SIZE15_HARD = (
-        "size15-deepcubeA.pkl", 
-        4, 
+        "size15-deepcubeA.pkl",
+        4,
         None,
         HARD_17_STATES,
     )
@@ -88,9 +90,7 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
             return {"states": self._explicit_states, "solutions": None}
 
         fallback_dir = Path(__file__).resolve().parents[1] / DATA_RELATIVE_PATH
-        return load_deepcubea_dataset(
-            self._dataset_path, self._dataset_name, "puxle.data.slidepuzzle", fallback_dir
-        )
+        return load_deepcubea_dataset(self._dataset_path, self._dataset_name, "puxle.data.slidepuzzle", fallback_dir)
 
     def sample_ids(self) -> Iterable[Hashable]:
         if self._subset_indices is not None:
@@ -129,9 +129,7 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
             length = len(tiles)
             size = int(math.isqrt(length))
             if size * size != length:
-                raise ValueError(
-                    f"Unable to infer puzzle size from state length {length}. Expected a perfect square."
-                )
+                raise ValueError(f"Unable to infer puzzle size from state length {length}. Expected a perfect square.")
             self._board_size = size
         return self._board_size
 
@@ -164,19 +162,38 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
 
 class SlidePuzzleDeepCubeA15Benchmark(SlidePuzzleDeepCubeABenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(dataset_path, dataset_name=SlidePuzzlePreset.SIZE15.dataset_name, board_size=SlidePuzzlePreset.SIZE15.board_size)
+        super().__init__(
+            dataset_path,
+            dataset_name=SlidePuzzlePreset.SIZE15.dataset_name,
+            board_size=SlidePuzzlePreset.SIZE15.board_size,
+        )
+
 
 class SlidePuzzleDeepCubeA24Benchmark(SlidePuzzleDeepCubeABenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(dataset_path, dataset_name=SlidePuzzlePreset.SIZE24.dataset_name, board_size=SlidePuzzlePreset.SIZE24.board_size)
+        super().__init__(
+            dataset_path,
+            dataset_name=SlidePuzzlePreset.SIZE24.dataset_name,
+            board_size=SlidePuzzlePreset.SIZE24.board_size,
+        )
+
 
 class SlidePuzzleDeepCubeA35Benchmark(SlidePuzzleDeepCubeABenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(dataset_path, dataset_name=SlidePuzzlePreset.SIZE35.dataset_name, board_size=SlidePuzzlePreset.SIZE35.board_size)
+        super().__init__(
+            dataset_path,
+            dataset_name=SlidePuzzlePreset.SIZE35.dataset_name,
+            board_size=SlidePuzzlePreset.SIZE35.board_size,
+        )
+
 
 class SlidePuzzleDeepCubeA48Benchmark(SlidePuzzleDeepCubeABenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(dataset_path, dataset_name=SlidePuzzlePreset.SIZE48.dataset_name, board_size=SlidePuzzlePreset.SIZE48.board_size)
+        super().__init__(
+            dataset_path,
+            dataset_name=SlidePuzzlePreset.SIZE48.dataset_name,
+            board_size=SlidePuzzlePreset.SIZE48.board_size,
+        )
 
 
 class SlidePuzzleDeepCubeA15HardBenchmark(SlidePuzzleDeepCubeABenchmark):
@@ -192,18 +209,25 @@ class SlidePuzzleDeepCubeA15HardBenchmark(SlidePuzzleDeepCubeABenchmark):
         is_solved = super().verify_solution(sample, states, action_sequence)
         if is_solved is False:
             return False
-        
+
         candidate_cost = 0
         if action_sequence is not None:
             candidate_cost = len(action_sequence)
         elif states is not None:
             candidate_cost = max(0, len(states) - 1)
-        
+
         if is_solved is None:
-             return candidate_cost <= 80
-             
+            return candidate_cost <= 80
+
         return is_solved
 
 
-__all__ = ["SlidePuzzleDeepCubeABenchmark", "SlidePuzzlePreset", "SlidePuzzleDeepCubeA15Benchmark", "SlidePuzzleDeepCubeA24Benchmark", "SlidePuzzleDeepCubeA35Benchmark", "SlidePuzzleDeepCubeA48Benchmark", "SlidePuzzleDeepCubeA15HardBenchmark"]
-
+__all__ = [
+    "SlidePuzzleDeepCubeABenchmark",
+    "SlidePuzzlePreset",
+    "SlidePuzzleDeepCubeA15Benchmark",
+    "SlidePuzzleDeepCubeA24Benchmark",
+    "SlidePuzzleDeepCubeA35Benchmark",
+    "SlidePuzzleDeepCubeA48Benchmark",
+    "SlidePuzzleDeepCubeA15HardBenchmark",
+]

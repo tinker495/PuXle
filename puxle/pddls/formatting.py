@@ -3,6 +3,7 @@
 Provides colour-coded terminal output (via ``termcolor`` and optional
 ``rich``) for debugging and visualisation of grounded atoms and actions.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -70,7 +71,9 @@ def build_label_color_maps(domain) -> Tuple[Dict[str, str], Dict[str, str]]:
     return label_color_map, label_termcolor_map
 
 
-def action_to_string(grounded_actions: List[Dict], index: int, label_termcolor_map: Dict[str, str], colored: bool = True) -> str:
+def action_to_string(
+    grounded_actions: List[Dict], index: int, label_termcolor_map: Dict[str, str], colored: bool = True
+) -> str:
     if 0 <= index < len(grounded_actions):
         action_data = grounded_actions[index]
         name = action_data["name"]
@@ -120,9 +123,7 @@ def build_state_string_parser(env) -> Callable:
         sample_indices = ordered_true_indices[:max_show]
         sample_atoms = [env.grounded_atoms[i] for i in sample_indices]
         truncated = true_count > len(sample_atoms)
-        raw_sample_line = (
-            "Raw sample atoms: " + ", ".join(sample_atoms) if sample_atoms else "Raw sample atoms: <none>"
-        )
+        raw_sample_line = "Raw sample atoms: " + ", ".join(sample_atoms) if sample_atoms else "Raw sample atoms: <none>"
 
         show_summary = bool(kwargs.get("show_summary", False))
         show_more = bool(kwargs.get("show_more", False))
@@ -231,9 +232,7 @@ def build_solve_config_string_parser(env) -> Callable:
         max_show = int(kwargs.get("max_show", 12))
         sample_indices = goal_indices[:max_show]
         sample_atoms = [env.grounded_atoms[i] for i in sample_indices]
-        raw_sample_line = (
-            "Raw sample goals: " + ", ".join(sample_atoms) if sample_atoms else "Raw sample goals: <none>"
-        )
+        raw_sample_line = "Raw sample goals: " + ", ".join(sample_atoms) if sample_atoms else "Raw sample goals: <none>"
 
         show_summary = bool(kwargs.get("show_summary", False))
         show_more = bool(kwargs.get("show_more", False))
