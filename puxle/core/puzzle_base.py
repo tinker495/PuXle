@@ -5,11 +5,86 @@ from typing import Any, Optional, TypeVar
 import chex
 import jax
 import jax.numpy as jnp
+import xtructure.numpy as xnp
 
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import add_img_parser
 
 T = TypeVar("T")
+
+
+def _masked_action_sample_uniform(mask: chex.Array, key: chex.PRNGKey) -> chex.Array:
+    mask_bt = mask.T
+    logits = jnp.where(
+        mask_bt, jnp.array(0.0, dtype=jnp.float32), jnp.array(-1.0e9, dtype=jnp.float32)
+    )
+    keys = jax.random.split(key, logits.shape[0])
+    actions = jax.vmap(lambda k, lg: jax.random.categorical(k, lg, axis=-1))(
+        keys, logits
+    )
+    return actions.astype(jnp.int32)
+
+
+def _gather_by_action(neighbor_states, actions: chex.Array):
+    batch_idx = jnp.arange(actions.shape[0], dtype=jnp.int32)
+
+    def _gather(leaf: chex.Array) -> chex.Array:
+        return leaf[actions, batch_idx, ...]
+
+    return jax.tree_util.tree_map(_gather, neighbor_states)
+
+
+def _leafwise_equal(
+    candidate_leaf: chex.Array, reference_leaf: chex.Array
+) -> chex.Array:
+    expanded_ref = reference_leaf[jnp.newaxis, ...]
+    eq = jnp.equal(candidate_leaf, expanded_ref)
+    if eq.ndim <= 2:
+        return eq
+    axes = tuple(range(2, eq.ndim))
+    return jnp.all(eq, axis=axes)
+
+
+def _states_equal(candidate_states, reference_state) -> chex.Array:
+    equality_tree = jax.tree_util.tree_map(
+        _leafwise_equal, candidate_states, reference_state
+    )
+    leaves, _ = jax.tree_util.tree_flatten(equality_tree)
+    if not leaves:
+        raise ValueError("State comparison received an empty tree")
+    result = leaves[0]
+    for leaf in leaves[1:]:
+        result = jnp.logical_and(result, leaf)
+    return result
+
+
+def _match_history(candidate_states, history_states) -> chex.Array:
+    def _compare(prev_state):
+        return _states_equal(candidate_states, prev_state)
+
+    matches = jax.vmap(_compare)(history_states)
+    return jnp.any(matches, axis=0)
+
+
+def _initialize_history(state, history_len: int):
+    if history_len <= 0:
+        return None
+
+    def _repeat(leaf):
+        expanded = leaf[jnp.newaxis, ...]
+        return jnp.repeat(expanded, repeats=history_len, axis=0)
+
+    return jax.tree_util.tree_map(_repeat, state)
+
+
+def _roll_history(history_states, new_state):
+    if history_states is None:
+        return None
+    return jax.tree_util.tree_map(
+        lambda h, n: jnp.concatenate([h[1:, ...], n[jnp.newaxis, ...]], axis=0),
+        history_states,
+        new_state,
+    )
 
 
 class Puzzle(ABC):
@@ -697,6 +772,554 @@ class Puzzle(ABC):
                 (0, init_state, init_state, key),
             )
             return final_state
+
+    def batched_get_random_trajectory(
+        self,
+        k_max: int,
+        shuffle_parallel: int,
+        key: chex.PRNGKey,
+        non_backtracking_steps: int = 3,
+    ):
+        key_inits, key_scan = jax.random.split(key, 2)
+        solve_configs, initial_states = jax.vmap(self.get_inits)(
+            jax.random.split(key_inits, shuffle_parallel)
+        )
+        step_keys = jax.random.split(key_scan, k_max)
+
+        if self.is_reversible and non_backtracking_steps == 1:
+            action_size = self.action_size
+            inv_map = self._inverse_action_permutation
+
+            def _scan_fast(carry, step_key):
+                state, move_cost, previous_action = carry
+                neighbor_states, cost = self.batched_get_neighbours(
+                    solve_configs,
+                    state,
+                    filleds=jnp.ones_like(move_cost),
+                    multi_solve_config=True,
+                )
+                mask = jnp.isfinite(cost)
+
+                def _apply_inv_mask(prev, c_mask):
+                    valid_idx = prev >= 0
+                    safe_prev = jnp.where(valid_idx, prev, 0)
+                    inv_actions = inv_map[safe_prev]
+                    c_mask = jnp.where(
+                        valid_idx[jnp.newaxis, :]
+                        & (
+                            jnp.arange(action_size)[:, jnp.newaxis]
+                            == inv_actions[jnp.newaxis, :]
+                        ),
+                        False,
+                        c_mask,
+                    )
+                    return c_mask
+
+                final_mask = _apply_inv_mask(previous_action, mask)
+                no_valid = jnp.sum(final_mask, axis=0) == 0
+                final_mask = jnp.where(no_valid[jnp.newaxis, :], mask, final_mask)
+                actions = _masked_action_sample_uniform(final_mask, step_key)
+                next_state = _gather_by_action(neighbor_states, actions)
+                batch_idx = jnp.arange(actions.shape[0], dtype=jnp.int32)
+                step_cost = cost[actions, batch_idx]
+                return (
+                    (next_state, move_cost + step_cost, actions),
+                    (state, move_cost, actions, step_cost),
+                )
+
+            (
+                (last_state, last_move_cost, _),
+                (states, move_costs, actions, action_costs),
+            ) = jax.lax.scan(
+                _scan_fast,
+                (
+                    initial_states,
+                    jnp.zeros(shuffle_parallel),
+                    jnp.full((shuffle_parallel,), -1, dtype=jnp.int32),
+                ),
+                step_keys,
+                length=k_max,
+            )
+        else:
+            if non_backtracking_steps < 0:
+                raise ValueError("non_backtracking_steps must be non-negative")
+            history_states = _initialize_history(
+                initial_states, int(non_backtracking_steps)
+            )
+            use_history = history_states is not None
+
+            def _scan_legacy(carry, step_key):
+                history, state, move_cost = carry
+                neighbor_states, cost = self.batched_get_neighbours(
+                    solve_configs,
+                    state,
+                    filleds=jnp.ones_like(move_cost),
+                    multi_solve_config=True,
+                )
+                action_mask = jnp.isfinite(cost)
+                history_block = (
+                    _match_history(neighbor_states, history)
+                    if use_history
+                    else jnp.zeros_like(action_mask)
+                )
+                same_block = _states_equal(neighbor_states, state)
+                backtracking_mask = (~history_block) & (~same_block)
+                masked = action_mask & backtracking_mask
+                no_valid_backtracking = jnp.sum(masked, axis=0) == 0
+                final_mask = jnp.where(
+                    no_valid_backtracking[jnp.newaxis, :], action_mask, masked
+                )
+                actions = _masked_action_sample_uniform(final_mask, step_key)
+                next_state = _gather_by_action(neighbor_states, actions)
+                batch_idx = jnp.arange(actions.shape[0], dtype=jnp.int32)
+                step_cost = cost[actions, batch_idx]
+                next_history = _roll_history(history, state) if use_history else history
+                return (
+                    (next_history, next_state, move_cost + step_cost),
+                    (state, move_cost, actions, step_cost),
+                )
+
+            (
+                (_, last_state, last_move_cost),
+                (states, move_costs, actions, action_costs),
+            ) = jax.lax.scan(
+                _scan_legacy,
+                (history_states, initial_states, jnp.zeros(shuffle_parallel)),
+                step_keys,
+                length=k_max,
+            )
+
+        states = jax.tree_util.tree_map(
+            lambda s_seq, s_last: jnp.concatenate(
+                [s_seq, s_last[jnp.newaxis, ...]], axis=0
+            ),
+            states,
+            last_state,
+        )
+        move_costs = jnp.concatenate(
+            [move_costs, last_move_cost[jnp.newaxis, ...]], axis=0
+        )
+        move_costs_tm1 = jnp.concatenate(
+            [jnp.zeros_like(move_costs[:1, ...]), move_costs[:-1, ...]], axis=0
+        )
+
+        return {
+            "solve_configs": solve_configs,
+            "states": states,
+            "move_costs": move_costs,
+            "move_costs_tm1": move_costs_tm1,
+            "actions": actions,
+            "action_costs": action_costs,
+        }
+
+    def batched_get_random_inverse_trajectory(
+        self,
+        k_max: int,
+        shuffle_parallel: int,
+        key: chex.PRNGKey,
+        non_backtracking_steps: int = 3,
+    ):
+        key_inits, key_targets, key_scan = jax.random.split(key, 3)
+        solve_configs, _ = jax.vmap(self.get_inits)(
+            jax.random.split(key_inits, shuffle_parallel)
+        )
+        target_states = jax.vmap(self.solve_config_to_state_transform, in_axes=(0, 0))(
+            solve_configs, jax.random.split(key_targets, shuffle_parallel)
+        )
+        step_keys = jax.random.split(key_scan, k_max)
+
+        if self.is_reversible and non_backtracking_steps == 1:
+            action_size = self.action_size
+            inv_map = self._inverse_action_permutation
+
+            def _scan_fast(carry, step_key):
+                state, move_cost, previous_action = carry
+                neighbor_states, cost = self.batched_get_inverse_neighbours(
+                    solve_configs,
+                    state,
+                    filleds=jnp.ones_like(move_cost),
+                    multi_solve_config=True,
+                )
+                mask = jnp.isfinite(cost)
+
+                def _apply_inv_mask(prev, c_mask):
+                    valid_idx = prev >= 0
+                    safe_prev = jnp.where(valid_idx, prev, 0)
+                    inv_actions = inv_map[safe_prev]
+                    c_mask = jnp.where(
+                        valid_idx[jnp.newaxis, :]
+                        & (
+                            jnp.arange(action_size)[:, jnp.newaxis]
+                            == inv_actions[jnp.newaxis, :]
+                        ),
+                        False,
+                        c_mask,
+                    )
+                    return c_mask
+
+                final_mask = _apply_inv_mask(previous_action, mask)
+                no_valid = jnp.sum(final_mask, axis=0) == 0
+                final_mask = jnp.where(no_valid[jnp.newaxis, :], mask, final_mask)
+                inv_actions = _masked_action_sample_uniform(final_mask, step_key)
+                next_state = _gather_by_action(neighbor_states, inv_actions)
+                batch_idx = jnp.arange(inv_actions.shape[0], dtype=jnp.int32)
+                step_cost = cost[inv_actions, batch_idx]
+                return (
+                    (next_state, move_cost + step_cost, inv_actions),
+                    (state, move_cost, inv_actions, step_cost),
+                )
+
+            (
+                (last_state, last_move_cost, _),
+                (states, move_costs, inv_actions, action_costs),
+            ) = jax.lax.scan(
+                _scan_fast,
+                (
+                    target_states,
+                    jnp.zeros(shuffle_parallel),
+                    jnp.full((shuffle_parallel,), -1, dtype=jnp.int32),
+                ),
+                step_keys,
+                length=k_max,
+            )
+        else:
+            if non_backtracking_steps < 0:
+                raise ValueError("non_backtracking_steps must be non-negative")
+            history_states = _initialize_history(
+                target_states, int(non_backtracking_steps)
+            )
+            use_history = history_states is not None
+
+            def _scan_legacy(carry, step_key):
+                history, state, move_cost = carry
+                neighbor_states, cost = self.batched_get_inverse_neighbours(
+                    solve_configs,
+                    state,
+                    filleds=jnp.ones_like(move_cost),
+                    multi_solve_config=True,
+                )
+                action_mask = jnp.isfinite(cost)
+                history_block = (
+                    _match_history(neighbor_states, history)
+                    if use_history
+                    else jnp.zeros_like(action_mask)
+                )
+                same_block = _states_equal(neighbor_states, state)
+                backtracking_mask = (~history_block) & (~same_block)
+                masked = action_mask & backtracking_mask
+                no_valid_backtracking = jnp.sum(masked, axis=0) == 0
+                final_mask = jnp.where(
+                    no_valid_backtracking[jnp.newaxis, :], action_mask, masked
+                )
+                inv_actions = _masked_action_sample_uniform(final_mask, step_key)
+                next_state = _gather_by_action(neighbor_states, inv_actions)
+                batch_idx = jnp.arange(inv_actions.shape[0], dtype=jnp.int32)
+                step_cost = cost[inv_actions, batch_idx]
+                next_history = _roll_history(history, state) if use_history else history
+                return (
+                    (next_history, next_state, move_cost + step_cost),
+                    (state, move_cost, inv_actions, step_cost),
+                )
+
+            (
+                (_, last_state, last_move_cost),
+                (states, move_costs, inv_actions, action_costs),
+            ) = jax.lax.scan(
+                _scan_legacy,
+                (history_states, target_states, jnp.zeros(shuffle_parallel)),
+                step_keys,
+                length=k_max,
+            )
+
+        states = jax.tree_util.tree_map(
+            lambda s_seq, s_last: jnp.concatenate(
+                [s_seq, s_last[jnp.newaxis, ...]], axis=0
+            ),
+            states,
+            last_state,
+        )
+        move_costs = jnp.concatenate(
+            [move_costs, last_move_cost[jnp.newaxis, ...]], axis=0
+        )
+        move_costs_tm1 = jnp.concatenate(
+            [jnp.zeros_like(move_costs[:1, ...]), move_costs[:-1, ...]], axis=0
+        )
+
+        return {
+            "solve_configs": solve_configs,
+            "states": states,
+            "move_costs": move_costs,
+            "move_costs_tm1": move_costs_tm1,
+            "actions": inv_actions,
+            "action_costs": action_costs,
+        }
+
+    def create_target_shuffled_path(
+        self,
+        k_max: int,
+        shuffle_parallel: int,
+        include_solved_states: bool,
+        key: chex.PRNGKey,
+        non_backtracking_steps: int = 3,
+    ):
+        inverse_trajectory = self.batched_get_random_inverse_trajectory(
+            k_max, shuffle_parallel, key, non_backtracking_steps=non_backtracking_steps
+        )
+        solve_configs = inverse_trajectory["solve_configs"]
+        if include_solved_states:
+            states = inverse_trajectory["states"][:-1, ...]
+            move_costs = inverse_trajectory["move_costs"][:-1, ...]
+            move_costs_tm1 = inverse_trajectory["move_costs_tm1"][:-1, ...]
+        else:
+            states = inverse_trajectory["states"][1:, ...]
+            move_costs = inverse_trajectory["move_costs"][1:, ...]
+            move_costs_tm1 = inverse_trajectory["move_costs_tm1"][1:, ...]
+        inv_actions = inverse_trajectory["actions"]
+        action_costs = inverse_trajectory["action_costs"]
+
+        states = states.transpose((1, 0))
+        move_costs = move_costs.transpose((1, 0))
+        move_costs_tm1 = move_costs_tm1.transpose((1, 0))
+        inv_actions = inv_actions.transpose((1, 0))
+        action_costs = action_costs.transpose((1, 0))
+
+        solve_configs = jax.tree_util.tree_map(
+            lambda leaf: jnp.repeat(leaf[:, jnp.newaxis, ...], k_max, axis=1),
+            solve_configs,
+        )
+
+        trajectory_indices = jnp.broadcast_to(
+            jnp.arange(shuffle_parallel, dtype=jnp.int32)[:, jnp.newaxis],
+            (shuffle_parallel, k_max),
+        )
+        step_indices = jnp.broadcast_to(
+            jnp.arange(k_max, dtype=jnp.int32)[jnp.newaxis, :],
+            (shuffle_parallel, k_max),
+        )
+
+        indices = jnp.arange(k_max * shuffle_parallel, dtype=jnp.int32)
+        parent_indices = indices - 1
+        parent_indices = parent_indices.reshape(shuffle_parallel, k_max)
+        parent_indices = parent_indices.at[:, 0].set(-1)
+
+        return {
+            "solve_configs": solve_configs.flatten(),
+            "states": states.flatten(),
+            "move_costs": move_costs.flatten(),
+            "move_costs_tm1": move_costs_tm1.flatten(),
+            "actions": inv_actions.flatten(),
+            "action_costs": action_costs.flatten(),
+            "parent_indices": parent_indices.flatten(),
+            "trajectory_indices": trajectory_indices.flatten(),
+            "step_indices": step_indices.flatten(),
+        }
+
+    def create_hindsight_target_shuffled_path(
+        self,
+        k_max: int,
+        shuffle_parallel: int,
+        include_solved_states: bool,
+        key: chex.PRNGKey,
+        non_backtracking_steps: int = 3,
+    ):
+        assert not self.fixed_target, (
+            "Fixed target is not supported for hindsight target"
+        )
+        key_traj, key_append = jax.random.split(key, 2)
+        trajectory = self.batched_get_random_trajectory(
+            k_max,
+            shuffle_parallel,
+            key_traj,
+            non_backtracking_steps=non_backtracking_steps,
+        )
+
+        original_solve_configs = trajectory["solve_configs"]
+        states = trajectory["states"]
+        move_costs = trajectory["move_costs"]
+        move_costs_tm1 = trajectory["move_costs_tm1"]
+        actions = trajectory["actions"]
+        action_costs = trajectory["action_costs"]
+
+        targets = states[-1, ...]
+        if include_solved_states:
+            states = states[1:, ...]
+        else:
+            states = states[:-1, ...]
+
+        solve_configs = self.batched_hindsight_transform(
+            original_solve_configs, targets
+        )
+
+        if include_solved_states:
+            move_costs = move_costs[-1, ...] - move_costs[1:, ...]
+            move_costs_tm1 = move_costs[-1, ...] - move_costs_tm1[1:, ...]
+            actions = jnp.concatenate(
+                [
+                    actions[1:],
+                    jax.random.randint(
+                        key_append,
+                        (1, shuffle_parallel),
+                        minval=0,
+                        maxval=self.action_size,
+                    ),
+                ]
+            )
+            action_costs = jnp.concatenate(
+                [action_costs[1:], jnp.zeros((1, shuffle_parallel))]
+            )
+        else:
+            move_costs = move_costs[-1, ...] - move_costs[:-1, ...]
+            move_costs_tm1 = move_costs[-1, ...] - move_costs_tm1[:-1, ...]
+            move_costs_tm1 = move_costs_tm1.at[0, ...].set(0.0)
+
+        states = states[::-1, ...]
+        move_costs = move_costs[::-1, ...]
+        move_costs_tm1 = move_costs_tm1[::-1, ...]
+        actions = actions[::-1, ...]
+        action_costs = action_costs[::-1, ...]
+
+        states = states.transpose((1, 0))
+        move_costs = move_costs.transpose((1, 0))
+        move_costs_tm1 = move_costs_tm1.transpose((1, 0))
+        actions = actions.transpose((1, 0))
+        action_costs = action_costs.transpose((1, 0))
+
+        solve_configs = jax.tree_util.tree_map(
+            lambda leaf: jnp.repeat(leaf[:, jnp.newaxis, ...], k_max, axis=1),
+            solve_configs,
+        )
+
+        trajectory_indices = jnp.broadcast_to(
+            jnp.arange(shuffle_parallel, dtype=jnp.int32)[:, jnp.newaxis],
+            (shuffle_parallel, k_max),
+        )
+        step_indices = jnp.broadcast_to(
+            jnp.arange(k_max, dtype=jnp.int32)[jnp.newaxis, :],
+            (shuffle_parallel, k_max),
+        )
+
+        indices = jnp.arange(k_max * shuffle_parallel, dtype=jnp.int32)
+        parent_indices = indices - 1
+        parent_indices = parent_indices.reshape(shuffle_parallel, k_max)
+        parent_indices = parent_indices.at[:, 0].set(-1)
+
+        return {
+            "solve_configs": solve_configs.flatten(),
+            "states": states.flatten(),
+            "move_costs": move_costs.flatten(),
+            "move_costs_tm1": move_costs_tm1.flatten(),
+            "actions": actions.flatten(),
+            "action_costs": action_costs.flatten(),
+            "parent_indices": parent_indices.flatten(),
+            "trajectory_indices": trajectory_indices.flatten(),
+            "step_indices": step_indices.flatten(),
+        }
+
+    def create_hindsight_target_triangular_shuffled_path(
+        self,
+        k_max: int,
+        shuffle_parallel: int,
+        include_solved_states: bool,
+        key: chex.PRNGKey,
+        non_backtracking_steps: int = 3,
+    ):
+        assert not self.fixed_target, (
+            "Fixed target is not supported for hindsight target"
+        )
+        key, subkey = jax.random.split(key)
+        trajectory = self.batched_get_random_trajectory(
+            k_max,
+            shuffle_parallel,
+            subkey,
+            non_backtracking_steps=non_backtracking_steps,
+        )
+
+        original_solve_configs = trajectory["solve_configs"]
+        states = trajectory["states"]
+        move_costs = trajectory["move_costs"]
+        move_costs_tm1 = trajectory["move_costs_tm1"]
+        actions = trajectory["actions"]
+        action_costs = trajectory["action_costs"]
+
+        key, key_k, key_i = jax.random.split(key, 3)
+
+        minval = 0 if include_solved_states else 1
+        k = jax.random.randint(
+            key_k, shape=(k_max, shuffle_parallel), minval=minval, maxval=k_max + 1
+        )
+        random_floats = jax.random.uniform(key_i, shape=(k_max, shuffle_parallel))
+        max_start_idx = k_max - k
+        start_indices = (random_floats * (max_start_idx + 1)).astype(jnp.int32)
+
+        target_indices = start_indices + k
+        parallel_indices = jnp.tile(jnp.arange(shuffle_parallel)[None, :], (k_max, 1))
+
+        start_states = states[start_indices, parallel_indices]
+        target_states = states[target_indices, parallel_indices]
+
+        start_move_costs = move_costs[start_indices, parallel_indices]
+        target_move_costs = move_costs[target_indices, parallel_indices]
+        start_move_costs_tm1 = move_costs_tm1[start_indices, parallel_indices]
+        final_move_costs = target_move_costs - start_move_costs
+        final_move_costs_tm1 = target_move_costs - start_move_costs_tm1
+        final_move_costs_tm1 = jnp.where(start_indices == 0, 0.0, final_move_costs_tm1)
+
+        clamped_start_indices = jnp.clip(start_indices, 0, k_max - 1)
+        final_actions = actions[clamped_start_indices, parallel_indices]
+        final_action_costs = action_costs[clamped_start_indices, parallel_indices]
+
+        is_goal_state = (k == 0) & include_solved_states
+        final_action_costs = jnp.where(is_goal_state, 0.0, final_action_costs)
+
+        tiled_solve_configs = xnp.repeat(
+            original_solve_configs[jnp.newaxis, ...], k_max, axis=0
+        )
+        flat_tiled_sc = tiled_solve_configs.flatten()
+        flat_target_states = target_states.flatten()
+        final_solve_configs = self.batched_hindsight_transform(
+            flat_tiled_sc, flat_target_states
+        ).reshape((k_max, shuffle_parallel, -1))
+
+        k_transposed = k.transpose((1, 0))
+        sort_indices = jnp.argsort(k_transposed, axis=1)
+
+        def _sort_and_transpose(arr_tree):
+            def _op(arr):
+                arr_t = jnp.swapaxes(arr, 0, 1)
+                indices = sort_indices
+                while indices.ndim < arr_t.ndim:
+                    indices = indices[..., jnp.newaxis]
+                return jnp.take_along_axis(arr_t, indices, axis=1)
+
+            return jax.tree_util.tree_map(_op, arr_tree)
+
+        final_solve_configs = _sort_and_transpose(final_solve_configs)
+        final_start_states = _sort_and_transpose(start_states)
+        final_move_costs = _sort_and_transpose(final_move_costs)
+        final_move_costs_tm1 = _sort_and_transpose(final_move_costs_tm1)
+        final_actions = _sort_and_transpose(final_actions)
+        final_action_costs = _sort_and_transpose(final_action_costs)
+
+        step_indices = jnp.take_along_axis(k_transposed, sort_indices, axis=1)
+
+        trajectory_indices = jnp.broadcast_to(
+            jnp.arange(shuffle_parallel, dtype=jnp.int32)[:, jnp.newaxis],
+            (shuffle_parallel, k_max),
+        )
+
+        parent_indices = jnp.full((shuffle_parallel, k_max), -1, dtype=jnp.int32)
+
+        return {
+            "solve_configs": final_solve_configs.flatten(),
+            "states": final_start_states.flatten(),
+            "move_costs": final_move_costs.flatten(),
+            "move_costs_tm1": final_move_costs_tm1.flatten(),
+            "actions": final_actions.flatten(),
+            "action_costs": final_action_costs.flatten(),
+            "parent_indices": parent_indices.flatten(),
+            "trajectory_indices": trajectory_indices.flatten(),
+            "step_indices": step_indices.flatten(),
+        }
 
     def __repr__(self):
         state_fields = list(self.State.__annotations__.keys())
