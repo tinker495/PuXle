@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import xtructure.numpy as xnp
 
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from puxle.core.trajectory import PuzzleTrajectory
 from puxle.utils.util import add_img_parser
 
 T = TypeVar("T")
@@ -903,14 +904,14 @@ class Puzzle(ABC):
             [jnp.zeros_like(move_costs[:1, ...]), move_costs[:-1, ...]], axis=0
         )
 
-        return {
-            "solve_configs": solve_configs,
-            "states": states,
-            "move_costs": move_costs,
-            "move_costs_tm1": move_costs_tm1,
-            "actions": actions,
-            "action_costs": action_costs,
-        }
+        return PuzzleTrajectory(
+            solve_configs=solve_configs,
+            states=states,
+            move_costs=move_costs,
+            move_costs_tm1=move_costs_tm1,
+            actions=actions,
+            action_costs=action_costs,
+        )
 
     def batched_get_random_inverse_trajectory(
         self,
@@ -1045,14 +1046,14 @@ class Puzzle(ABC):
             [jnp.zeros_like(move_costs[:1, ...]), move_costs[:-1, ...]], axis=0
         )
 
-        return {
-            "solve_configs": solve_configs,
-            "states": states,
-            "move_costs": move_costs,
-            "move_costs_tm1": move_costs_tm1,
-            "actions": inv_actions,
-            "action_costs": action_costs,
-        }
+        return PuzzleTrajectory(
+            solve_configs=solve_configs,
+            states=states,
+            move_costs=move_costs,
+            move_costs_tm1=move_costs_tm1,
+            actions=inv_actions,
+            action_costs=action_costs,
+        )
 
     def create_target_shuffled_path(
         self,
@@ -1065,17 +1066,21 @@ class Puzzle(ABC):
         inverse_trajectory = self.batched_get_random_inverse_trajectory(
             k_max, shuffle_parallel, key, non_backtracking_steps=non_backtracking_steps
         )
-        solve_configs = inverse_trajectory["solve_configs"]
+        solve_configs = inverse_trajectory.solve_configs
         if include_solved_states:
-            states = inverse_trajectory["states"][:-1, ...]
-            move_costs = inverse_trajectory["move_costs"][:-1, ...]
-            move_costs_tm1 = inverse_trajectory["move_costs_tm1"][:-1, ...]
+            states = jax.tree_util.tree_map(
+                lambda leaf: leaf[:-1, ...], inverse_trajectory.states
+            )
+            move_costs = inverse_trajectory.move_costs[:-1, ...]
+            move_costs_tm1 = inverse_trajectory.move_costs_tm1[:-1, ...]
         else:
-            states = inverse_trajectory["states"][1:, ...]
-            move_costs = inverse_trajectory["move_costs"][1:, ...]
-            move_costs_tm1 = inverse_trajectory["move_costs_tm1"][1:, ...]
-        inv_actions = inverse_trajectory["actions"]
-        action_costs = inverse_trajectory["action_costs"]
+            states = jax.tree_util.tree_map(
+                lambda leaf: leaf[1:, ...], inverse_trajectory.states
+            )
+            move_costs = inverse_trajectory.move_costs[1:, ...]
+            move_costs_tm1 = inverse_trajectory.move_costs_tm1[1:, ...]
+        inv_actions = inverse_trajectory.actions
+        action_costs = inverse_trajectory.action_costs
 
         states = states.transpose((1, 0))
         move_costs = move_costs.transpose((1, 0))
@@ -1102,17 +1107,17 @@ class Puzzle(ABC):
         parent_indices = parent_indices.reshape(shuffle_parallel, k_max)
         parent_indices = parent_indices.at[:, 0].set(-1)
 
-        return {
-            "solve_configs": solve_configs.flatten(),
-            "states": states.flatten(),
-            "move_costs": move_costs.flatten(),
-            "move_costs_tm1": move_costs_tm1.flatten(),
-            "actions": inv_actions.flatten(),
-            "action_costs": action_costs.flatten(),
-            "parent_indices": parent_indices.flatten(),
-            "trajectory_indices": trajectory_indices.flatten(),
-            "step_indices": step_indices.flatten(),
-        }
+        return PuzzleTrajectory(
+            solve_configs=solve_configs.flatten(),
+            states=states.flatten(),
+            move_costs=move_costs.flatten(),
+            move_costs_tm1=move_costs_tm1.flatten(),
+            actions=inv_actions.flatten(),
+            action_costs=action_costs.flatten(),
+            parent_indices=parent_indices.flatten(),
+            trajectory_indices=trajectory_indices.flatten(),
+            step_indices=step_indices.flatten(),
+        )
 
     def create_hindsight_target_shuffled_path(
         self,
@@ -1133,12 +1138,12 @@ class Puzzle(ABC):
             non_backtracking_steps=non_backtracking_steps,
         )
 
-        original_solve_configs = trajectory["solve_configs"]
-        states = trajectory["states"]
-        move_costs = trajectory["move_costs"]
-        move_costs_tm1 = trajectory["move_costs_tm1"]
-        actions = trajectory["actions"]
-        action_costs = trajectory["action_costs"]
+        original_solve_configs = trajectory.solve_configs
+        states = trajectory.states
+        move_costs = trajectory.move_costs
+        move_costs_tm1 = trajectory.move_costs_tm1
+        actions = trajectory.actions
+        action_costs = trajectory.action_costs
 
         targets = states[-1, ...]
         if include_solved_states:
@@ -1203,17 +1208,17 @@ class Puzzle(ABC):
         parent_indices = parent_indices.reshape(shuffle_parallel, k_max)
         parent_indices = parent_indices.at[:, 0].set(-1)
 
-        return {
-            "solve_configs": solve_configs.flatten(),
-            "states": states.flatten(),
-            "move_costs": move_costs.flatten(),
-            "move_costs_tm1": move_costs_tm1.flatten(),
-            "actions": actions.flatten(),
-            "action_costs": action_costs.flatten(),
-            "parent_indices": parent_indices.flatten(),
-            "trajectory_indices": trajectory_indices.flatten(),
-            "step_indices": step_indices.flatten(),
-        }
+        return PuzzleTrajectory(
+            solve_configs=solve_configs.flatten(),
+            states=states.flatten(),
+            move_costs=move_costs.flatten(),
+            move_costs_tm1=move_costs_tm1.flatten(),
+            actions=actions.flatten(),
+            action_costs=action_costs.flatten(),
+            parent_indices=parent_indices.flatten(),
+            trajectory_indices=trajectory_indices.flatten(),
+            step_indices=step_indices.flatten(),
+        )
 
     def create_hindsight_target_triangular_shuffled_path(
         self,
@@ -1234,12 +1239,12 @@ class Puzzle(ABC):
             non_backtracking_steps=non_backtracking_steps,
         )
 
-        original_solve_configs = trajectory["solve_configs"]
-        states = trajectory["states"]
-        move_costs = trajectory["move_costs"]
-        move_costs_tm1 = trajectory["move_costs_tm1"]
-        actions = trajectory["actions"]
-        action_costs = trajectory["action_costs"]
+        original_solve_configs = trajectory.solve_configs
+        states = trajectory.states
+        move_costs = trajectory.move_costs
+        move_costs_tm1 = trajectory.move_costs_tm1
+        actions = trajectory.actions
+        action_costs = trajectory.action_costs
 
         key, key_k, key_i = jax.random.split(key, 3)
 
@@ -1309,17 +1314,17 @@ class Puzzle(ABC):
 
         parent_indices = jnp.full((shuffle_parallel, k_max), -1, dtype=jnp.int32)
 
-        return {
-            "solve_configs": final_solve_configs.flatten(),
-            "states": final_start_states.flatten(),
-            "move_costs": final_move_costs.flatten(),
-            "move_costs_tm1": final_move_costs_tm1.flatten(),
-            "actions": final_actions.flatten(),
-            "action_costs": final_action_costs.flatten(),
-            "parent_indices": parent_indices.flatten(),
-            "trajectory_indices": trajectory_indices.flatten(),
-            "step_indices": step_indices.flatten(),
-        }
+        return PuzzleTrajectory(
+            solve_configs=final_solve_configs.flatten(),
+            states=final_start_states.flatten(),
+            move_costs=final_move_costs.flatten(),
+            move_costs_tm1=final_move_costs_tm1.flatten(),
+            actions=final_actions.flatten(),
+            action_costs=final_action_costs.flatten(),
+            parent_indices=parent_indices.flatten(),
+            trajectory_indices=trajectory_indices.flatten(),
+            step_indices=step_indices.flatten(),
+        )
 
     def __repr__(self):
         state_fields = list(self.State.__annotations__.keys())
