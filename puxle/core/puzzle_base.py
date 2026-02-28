@@ -612,7 +612,9 @@ class Puzzle(ABC):
         """Generate a scrambled state by applying random actions.
 
         Uses a ``while_loop`` to apply ``num_shuffle`` (±1) random actions,
-        avoiding immediate backtracking.
+        avoiding immediate backtracking. For reversible puzzles, this operates
+        in O(N) by masking out the inverse of the previously applied action.
+        For non-reversible puzzles, it falls back to O(A*N) dense tensor comparison.
 
         Args:
             solve_config: Goal configuration (passed to ``get_neighbours``).
@@ -624,40 +626,77 @@ class Puzzle(ABC):
             A scrambled ``State``.
         """
         key, subkey = jax.random.split(key)
-        num_shuffle += jax.random.randint(
-            subkey, (), 0, 2
-        )  # add a random 1 to 0 to the initial shuffle.
+        # Add a random 1 or 0 to the initial shuffle to vary parity.
+        num_shuffle += jax.random.randint(subkey, (), 0, 2)
 
-        def cond_fun(loop_state):
-            iteration_count, _, _, _ = loop_state
-            return iteration_count < num_shuffle
+        if self.is_reversible:
+            action_size = self.action_size
+            inv_map = self._inverse_action_permutation
 
-        def body_fun(loop_state):
-            iteration_count, current_state, previous_state, key = loop_state
-            neighbor_states, costs = self.get_neighbours(
-                solve_config, current_state, filled=True
+            def cond_fun_reversible(loop_state):
+                iteration_count, _, _, _ = loop_state
+                return iteration_count < num_shuffle
+
+            def body_fun_reversible(loop_state):
+                iteration_count, current_state, previous_action, key = loop_state
+                key, subkey = jax.random.split(key)
+
+                mask = jnp.ones(action_size, dtype=jnp.float32)
+
+                def mask_inverse(prev_action, m):
+                    inv_action = inv_map[prev_action]
+                    return m.at[inv_action].set(0.0)
+
+                valid_mask = jax.lax.cond(
+                    previous_action >= 0,
+                    lambda: mask_inverse(previous_action, mask),
+                    lambda: mask,
+                )
+
+                action = jax.random.choice(subkey, action_size, p=valid_mask)
+                next_state, _ = self.get_actions(
+                    solve_config, current_state, action, filled=True
+                )
+                return (iteration_count + 1, next_state, action, key)
+
+            _, final_state, _, _ = jax.lax.while_loop(
+                cond_fun_reversible, body_fun_reversible, (0, init_state, -1, key)
             )
-            old_eq = jax.vmap(lambda x, y: x == y, in_axes=(None, 0))(
-                previous_state, neighbor_states
+            return final_state
+        else:
+
+            def cond_fun_irreversible(loop_state):
+                iteration_count, _, _, _ = loop_state
+                return iteration_count < num_shuffle
+
+            def body_fun_irreversible(loop_state):
+                iteration_count, current_state, previous_state, key = loop_state
+                neighbor_states, costs = self.get_neighbours(
+                    solve_config, current_state, filled=True
+                )
+                old_eq = jax.vmap(lambda x, y: x == y, in_axes=(None, 0))(
+                    previous_state, neighbor_states
+                )
+                valid_mask = jnp.where(old_eq, 0.0, 1.0)
+                valid_mask_sum = jnp.sum(valid_mask)
+                probabilities = jax.lax.cond(
+                    valid_mask_sum > 0,
+                    lambda: valid_mask / valid_mask_sum,
+                    lambda: jnp.ones_like(costs) / costs.shape[0],
+                )
+                key, subkey = jax.random.split(key)
+                idx = jax.random.choice(
+                    subkey, jnp.arange(costs.shape[0]), p=probabilities
+                )
+                next_state = neighbor_states[idx]
+                return (iteration_count + 1, next_state, current_state, key)
+
+            _, final_state, _, _ = jax.lax.while_loop(
+                cond_fun_irreversible,
+                body_fun_irreversible,
+                (0, init_state, init_state, key),
             )
-            valid_mask = jnp.where(old_eq, 0.0, 1.0)
-
-            valid_mask_sum = jnp.sum(valid_mask)
-            probabilities = jax.lax.cond(
-                valid_mask_sum > 0,
-                lambda: valid_mask / valid_mask_sum,
-                lambda: jnp.ones_like(costs) / costs.shape[0],
-            )
-
-            key, subkey = jax.random.split(key)
-            idx = jax.random.choice(subkey, jnp.arange(costs.shape[0]), p=probabilities)
-            next_state = neighbor_states[idx]
-            return (iteration_count + 1, next_state, current_state, key)
-
-        _, final_state, _, _ = jax.lax.while_loop(
-            cond_fun, body_fun, (0, init_state, init_state, key)
-        )
-        return final_state
+            return final_state
 
     def __repr__(self):
         state_fields = list(self.State.__annotations__.keys())

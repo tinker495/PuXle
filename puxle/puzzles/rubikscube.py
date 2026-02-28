@@ -210,7 +210,7 @@ class RubiksCube(Puzzle):
     def __init__(
         self,
         size: int = 3,
-        initial_shuffle: int = 10,
+        initial_shuffle: int = 26,
         color_embedding: bool = True,
         metric: str = "QTM",
         **kwargs,
