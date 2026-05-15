@@ -9,7 +9,7 @@ import xtructure.numpy as xnp
 
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.core.trajectory import PuzzleTrajectory
-from puxle.utils.util import add_img_parser
+from puxle.render import attach_state_renderer
 
 T = TypeVar("T")
 
@@ -218,8 +218,8 @@ class Puzzle(ABC):
 
         self.State = self.define_state_class()
         self.SolveConfig = self.define_solve_config_class()
-        self.State = add_img_parser(self.State, self.get_img_parser())
-        self.SolveConfig = add_img_parser(
+        self.State = attach_state_renderer(self.State, self.get_img_parser())
+        self.SolveConfig = attach_state_renderer(
             self.SolveConfig, self.get_solve_config_img_parser()
         )
 
