@@ -9,6 +9,7 @@ import sys
 # -- Path setup --------------------------------------------------------------
 # Add the project root so that autodoc can find the `puxle` package.
 sys.path.insert(0, os.path.abspath(".."))
+DOCS_DIR = os.path.dirname(__file__)
 
 # -- Project information -----------------------------------------------------
 project = "PuXle"
@@ -27,7 +28,7 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "AGENTS.md"]
 
 # -- Autodoc configuration ---------------------------------------------------
 autodoc_default_options = {
@@ -64,14 +65,16 @@ myst_enable_extensions = [
 # Intersphinx mapping
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "jax": ("https://jax.readthedocs.io/en/latest/", None),
+    "jax": ("https://docs.jax.dev/en/latest/", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
 }
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = "furo"
 html_title = "PuXle Documentation"
-html_static_path = ["_static"]
+html_static_path = (
+    ["_static"] if os.path.isdir(os.path.join(DOCS_DIR, "_static")) else []
+)
 
 html_theme_options = {
     "source_repository": "https://github.com/tinker495/PuXle",

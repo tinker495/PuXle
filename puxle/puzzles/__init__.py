@@ -1,22 +1,9 @@
-"""
-Puzzle implementations for PuXle.
+"""Puzzle implementations for PuXle."""
 
-This module contains implementations of various classic puzzles optimized for JAX-based computation.
-All puzzle classes inherit from the base Puzzle class and provide parallelized environments
-for AI research and reinforcement learning.
-"""
+from __future__ import annotations
 
-from puxle.puzzles.dotknot import DotKnot
-from puxle.puzzles.hanoi import TowerOfHanoi
-from puxle.puzzles.lightsout import LightsOut, LightsOutRandom
-from puxle.puzzles.maze import Maze
-from puxle.puzzles.pancake import PancakeSorting
-from puxle.puzzles.room import Room
-from puxle.puzzles.rubikscube import RubiksCube, RubiksCubeRandom
-from puxle.puzzles.slidepuzzle import SlidePuzzle, SlidePuzzleHard, SlidePuzzleRandom
-from puxle.puzzles.sokoban import Sokoban, SokobanHard
-from puxle.puzzles.topspin import TopSpin
-from puxle.puzzles.tsp import TSP
+import importlib
+from typing import Any
 
 __all__ = [
     "DotKnot",
@@ -37,3 +24,36 @@ __all__ = [
     "TSP",
     "TopSpin",
 ]
+
+_EXPORTS = {
+    "DotKnot": (".dotknot", "DotKnot"),
+    "TowerOfHanoi": (".hanoi", "TowerOfHanoi"),
+    "LightsOut": (".lightsout", "LightsOut"),
+    "LightsOutRandom": (".lightsout", "LightsOutRandom"),
+    "Maze": (".maze", "Maze"),
+    "Room": (".room", "Room"),
+    "PancakeSorting": (".pancake", "PancakeSorting"),
+    "RubiksCube": (".rubikscube", "RubiksCube"),
+    "RubiksCubeRandom": (".rubikscube", "RubiksCubeRandom"),
+    "SlidePuzzle": (".slidepuzzle", "SlidePuzzle"),
+    "SlidePuzzleHard": (".slidepuzzle", "SlidePuzzleHard"),
+    "SlidePuzzleRandom": (".slidepuzzle", "SlidePuzzleRandom"),
+    "Sokoban": (".sokoban", "Sokoban"),
+    "SokobanHard": (".sokoban", "SokobanHard"),
+    "TSP": (".tsp", "TSP"),
+    "TopSpin": (".topspin", "TopSpin"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    try:
+        module_name, attr_name = _EXPORTS[name]
+    except KeyError as exc:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
+    value = getattr(importlib.import_module(module_name, __name__), attr_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

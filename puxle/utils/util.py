@@ -2,6 +2,7 @@
 PuXle utilities.
 
 Bitpacking note:
+
 - `to_uint8` / `from_uint8` and the variable-bit helpers are **legacy** utilities kept for
   backwards compatibility and generic packing needs.
 - For **in-memory bitpacked puzzle states**, prefer xtructure's built-in support:
@@ -226,7 +227,8 @@ def pack_variable_bits(values_and_bits: list[tuple[chex.Array, int]]) -> chex.Ar
     Returns:
         Packed uint8 array with metadata for unpacking
 
-    Example:
+    Example::
+
         # Pack different data types together efficiently
         bool_array = jnp.array([True, False, True])  # 1 bit each
         nibble_array = jnp.array([3, 7, 1])         # 4 bits each

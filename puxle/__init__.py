@@ -1,51 +1,17 @@
-"""
-PuXle: Parallelized Puzzles with JAX
+"""PuXle public API facade."""
 
-A high-performance library for parallelized puzzle environments built on JAX.
-Provides a collection of classic puzzles optimized for AI research, reinforcement learning,
-and search algorithms.
-"""
+from __future__ import annotations
 
-# Core framework
-from puxle.benchmark import (
-    Benchmark,
-    BenchmarkSample,
-    LightsOutDeepCubeABenchmark,
-    RubiksCubeDeepCubeABenchmark,
-    SlidePuzzleDeepCubeABenchmark,
-)
-from puxle.core import FieldDescriptor, Puzzle, PuzzleState, state_dataclass
-from puxle.pddls import PDDL
-
-# All puzzle implementations
-from puxle.puzzles import (
-    TSP,
-    DotKnot,
-    LightsOut,
-    LightsOutRandom,
-    Maze,
-    PancakeSorting,
-    Room,
-    RubiksCube,
-    RubiksCubeRandom,
-    SlidePuzzle,
-    SlidePuzzleHard,
-    SlidePuzzleRandom,
-    Sokoban,
-    SokobanHard,
-    TopSpin,
-    TowerOfHanoi,
-)
+import importlib
+from typing import Any
 
 __version__ = "0.2.0"
 
 __all__ = [
-    # Core framework
     "Puzzle",
     "PuzzleState",
     "FieldDescriptor",
     "state_dataclass",
-    # Puzzle implementations
     "DotKnot",
     "TowerOfHanoi",
     "LightsOut",
@@ -63,10 +29,61 @@ __all__ = [
     "TSP",
     "TopSpin",
     "PDDL",
-    # Benchmark
     "Benchmark",
     "BenchmarkSample",
     "LightsOutDeepCubeABenchmark",
     "RubiksCubeDeepCubeABenchmark",
     "SlidePuzzleDeepCubeABenchmark",
 ]
+
+_EXPORTS: dict[str, tuple[str, str]] = {
+    "Puzzle": (".core.puzzle_base", "Puzzle"),
+    "PuzzleState": (".core.puzzle_state", "PuzzleState"),
+    "FieldDescriptor": (".core.puzzle_state", "FieldDescriptor"),
+    "state_dataclass": (".core.puzzle_state", "state_dataclass"),
+    "DotKnot": (".puzzles.dotknot", "DotKnot"),
+    "TowerOfHanoi": (".puzzles.hanoi", "TowerOfHanoi"),
+    "LightsOut": (".puzzles.lightsout", "LightsOut"),
+    "LightsOutRandom": (".puzzles.lightsout", "LightsOutRandom"),
+    "Maze": (".puzzles.maze", "Maze"),
+    "Room": (".puzzles.room", "Room"),
+    "PancakeSorting": (".puzzles.pancake", "PancakeSorting"),
+    "RubiksCube": (".puzzles.rubikscube", "RubiksCube"),
+    "RubiksCubeRandom": (".puzzles.rubikscube", "RubiksCubeRandom"),
+    "SlidePuzzle": (".puzzles.slidepuzzle", "SlidePuzzle"),
+    "SlidePuzzleHard": (".puzzles.slidepuzzle", "SlidePuzzleHard"),
+    "SlidePuzzleRandom": (".puzzles.slidepuzzle", "SlidePuzzleRandom"),
+    "Sokoban": (".puzzles.sokoban", "Sokoban"),
+    "SokobanHard": (".puzzles.sokoban", "SokobanHard"),
+    "TSP": (".puzzles.tsp", "TSP"),
+    "TopSpin": (".puzzles.topspin", "TopSpin"),
+    "PDDL": (".pddls.pddl", "PDDL"),
+    "Benchmark": (".benchmark.benchmark", "Benchmark"),
+    "BenchmarkSample": (".benchmark.benchmark", "BenchmarkSample"),
+    "LightsOutDeepCubeABenchmark": (
+        ".benchmark.lightsout_deepcubea",
+        "LightsOutDeepCubeABenchmark",
+    ),
+    "RubiksCubeDeepCubeABenchmark": (
+        ".benchmark.rubikscube_deepcubea",
+        "RubiksCubeDeepCubeABenchmark",
+    ),
+    "SlidePuzzleDeepCubeABenchmark": (
+        ".benchmark.slidepuzzle_deepcubea",
+        "SlidePuzzleDeepCubeABenchmark",
+    ),
+}
+
+
+def __getattr__(name: str) -> Any:
+    try:
+        module_name, attr_name = _EXPORTS[name]
+    except KeyError as exc:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
+    value = getattr(importlib.import_module(module_name, __name__), attr_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

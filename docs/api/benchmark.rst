@@ -10,6 +10,7 @@ BenchmarkSample
 .. autoclass:: puxle.benchmark.benchmark.BenchmarkSample
    :members:
    :show-inheritance:
+   :no-index:
 
 Benchmark (Base)
 ----------------

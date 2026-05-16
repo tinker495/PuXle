@@ -1,25 +1,27 @@
-"""Puzzle Renderer Module.
+"""Puzzle Renderer Module."""
 
-Owns the seam that attaches host-side image rendering methods to puzzle
-``State`` classes. Mirrors the Xtructure ``BatchedRenderer`` ↔
-``RichBackend`` split documented in ``CONTEXT.md``:
+from __future__ import annotations
 
-- :func:`attach_state_renderer` is the canonical attachment seam — display
-  concerns live here while puzzle mechanics (``get_neighbours`` /
-  ``is_solved`` / ``get_actions``) stay in ``puxle.core`` and
-  ``puxle.puzzles``.
-- :class:`Cv2Backend` is the first-party **Puzzle Render Backend**: the
-  drawing-primitive Interface consumed *inside* each puzzle's ``imgfunc``
-  body. Migrated puzzles construct one ``Cv2Backend()`` per
-  ``get_img_parser()`` call and route every cv2 primitive through it instead
-  of importing cv2 directly.
-
-The legacy ``puxle.utils.util.add_img_parser`` alias is retained for
-backwards compatibility with external puzzle authors but new puzzles should
-not consume it directly.
-"""
-
-from puxle.render.backends import Cv2Backend
-from puxle.render.state_renderer import attach_state_renderer
+import importlib
+from typing import Any
 
 __all__ = ["attach_state_renderer", "Cv2Backend"]
+
+_EXPORTS = {
+    "attach_state_renderer": (".state_renderer", "attach_state_renderer"),
+    "Cv2Backend": (".backends.cv2_backend", "Cv2Backend"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    try:
+        module_name, attr_name = _EXPORTS[name]
+    except KeyError as exc:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
+    value = getattr(importlib.import_module(module_name, __name__), attr_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

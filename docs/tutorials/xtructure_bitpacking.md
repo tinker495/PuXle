@@ -8,9 +8,12 @@ This document summarizes the **recommended bitpacking patterns** in PuXle.
 
 ## 1) Field-level in-memory packing: `FieldDescriptor.packed_tensor`
 
-Use `FieldDescriptor.packed_tensor(...)` when you want **a specific field** stored as packed bytes in-memory.
+Use `FieldDescriptor.packed_tensor(...)` when you want **a specific logical field** stored as
+packed bytes in-memory.
 
-- The stored field (e.g. `board`) is a packed `uint8` array (byte-stream).
+- `shape=` declares the logical unpacked **Intrinsic Shape** in the **Xtructure Schema**.
+- The stored field (e.g. `board`) is a packed `uint8` array (byte-stream) whose storage
+  shape is derived by **Type Layout** / **Packed Field Layout**.
 - Access `<field>_unpacked` to get the logical array.
 - Use `from_unpacked(field=...)` to create a packed instance directly from logical arrays (most efficient).
 - Use `set_unpacked(field=...)` to update an existing instance.

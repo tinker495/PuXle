@@ -1,9 +1,20 @@
-"""Puzzle Render Backend implementations.
+"""Puzzle Render Backend implementations."""
 
-The Interface is documented in ``CONTEXT.md`` "Puzzle Render Backend"; the
-first-party implementation is :class:`Cv2Backend`.
-"""
+from __future__ import annotations
 
-from puxle.render.backends.cv2_backend import BgrColor, Cv2Backend, Point, Size
+import importlib
+from typing import Any
 
 __all__ = ["Cv2Backend", "BgrColor", "Point", "Size"]
+
+
+def __getattr__(name: str) -> Any:
+    if name not in __all__:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(importlib.import_module(".cv2_backend", __name__), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))

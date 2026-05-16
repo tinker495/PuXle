@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from functools import partial
+from typing import Any
 
 import chex
 import jax
@@ -258,15 +259,13 @@ class RubiksCube(Puzzle):
             return value_int
         return value_int // self._tile_count
 
-    def _color_indices(self, stickers: np.ndarray | chex.Array) -> np.ndarray:
+    def _color_indices(self, stickers: Any) -> np.ndarray:
         stickers_np = np.array(stickers)
         if self.color_embedding:
             return stickers_np
         return stickers_np // self._tile_count
 
-    def convert_tile_to_color_embedding(
-        self, tile_faces: np.ndarray | chex.Array
-    ) -> jnp.ndarray:
+    def convert_tile_to_color_embedding(self, tile_faces: Any) -> jnp.ndarray:
         """
         Convert faces expressed with tile identifiers (0..6*tile_count-1) into
         color embedding (0..5). Accepts shapes (6, tile_count), (6, size, size) or flat.

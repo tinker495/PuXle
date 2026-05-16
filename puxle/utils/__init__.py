@@ -1,20 +1,9 @@
-"""
-Utility functions and constants for PuXle puzzles.
+"""Utility functions and constants for PuXle puzzles."""
 
-This module provides helper functions, annotations, and common utilities used across puzzle implementations.
-"""
+from __future__ import annotations
 
-# Backward-compatible re-exports for existing imports like:
-# `from puxle.utils import to_uint8`
-from puxle.utils.annotate import IMG_SIZE
-from puxle.utils.util import (
-    add_img_parser,
-    coloring_str,
-    from_uint8,
-    pack_variable_bits,
-    to_uint8,
-    unpack_variable_bits,
-)
+import importlib
+from typing import Any
 
 __all__ = [
     "IMG_SIZE",
@@ -25,3 +14,27 @@ __all__ = [
     "pack_variable_bits",
     "unpack_variable_bits",
 ]
+
+_EXPORTS = {
+    "IMG_SIZE": (".annotate", "IMG_SIZE"),
+    "add_img_parser": (".util", "add_img_parser"),
+    "coloring_str": (".util", "coloring_str"),
+    "from_uint8": (".util", "from_uint8"),
+    "to_uint8": (".util", "to_uint8"),
+    "pack_variable_bits": (".util", "pack_variable_bits"),
+    "unpack_variable_bits": (".util", "unpack_variable_bits"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    try:
+        module_name, attr_name = _EXPORTS[name]
+    except KeyError as exc:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
+    value = getattr(importlib.import_module(module_name, __name__), attr_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(__all__))
