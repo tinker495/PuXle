@@ -245,19 +245,21 @@ class DotKnot(Puzzle):
         """
         This function is a decorator that adds an img_parser to the class.
         """
-        import cv2
-        import numpy as np
+        from puxle.render import Cv2Backend
+
+        backend = Cv2Backend()
 
         def img_func(state: "DotKnot.State", **kwargs):
             imgsize = IMG_SIZE[0]
-            img = np.zeros(IMG_SIZE + (3,), np.uint8)
-            img[:] = (190, 190, 190)  # Background color (R144,G96,B8)
-            img = cv2.rectangle(
+            img = backend.canvas(size=IMG_SIZE, fill_bgr=(190, 190, 190))
+            img = backend.rect(
                 img,
-                (int(imgsize * 0.03), int(imgsize * 0.03)),
-                (int(imgsize - imgsize * 0.02), int(imgsize - imgsize * 0.02)),
-                (50, 50, 50),
-                -1,
+                top_left=(int(imgsize * 0.03), int(imgsize * 0.03)),
+                bottom_right=(
+                    int(imgsize - imgsize * 0.02),
+                    int(imgsize - imgsize * 0.02),
+                ),
+                color_bgr=(50, 50, 50),
             )
             board_flat = state.board_unpacked
             knot_max = 2 * self.color_num  # Values <= knot_max represent knots
@@ -276,11 +278,16 @@ class DotKnot(Puzzle):
                 if val <= knot_max:
                     # Draw knot as a filled circle
                     radius = int(bs * 0.6)
-                    img = cv2.circle(img, center, radius, color, -1)
+                    img = backend.circle(
+                        img, center=center, radius=radius, color_bgr=color
+                    )
                 else:
                     # Draw path as a filled rectangle
-                    img = cv2.rectangle(
-                        img, (stx, sty), (stx + bs, sty + bs), color, -1
+                    img = backend.rect(
+                        img,
+                        top_left=(stx, sty),
+                        bottom_right=(stx + bs, sty + bs),
+                        color_bgr=color,
                     )
             return img
 

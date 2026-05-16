@@ -1,6 +1,11 @@
 import jax
 import pytest
 
+from puxle.core.trajectory import (
+    create_hindsight_target_shuffled_path,
+    create_hindsight_target_triangular_shuffled_path,
+    create_target_shuffled_path,
+)
 from puxle.puzzles.rubikscube import RubiksCube
 from puxle.puzzles.slidepuzzle import SlidePuzzle
 from puxle.puzzles.sokoban import Sokoban
@@ -64,7 +69,8 @@ def test_create_target_shuffled_path():
     rc = RubiksCube(size=3)
     key = jax.random.PRNGKey(42)
 
-    wrapped = rc.create_target_shuffled_path(
+    wrapped = create_target_shuffled_path(
+        rc,
         k_max=5,
         shuffle_parallel=2,
         include_solved_states=True,
@@ -87,7 +93,8 @@ def test_create_hindsight_target_shuffled_path():
     sk = Sokoban()
     key = jax.random.PRNGKey(42)
 
-    wrapped = sk.create_hindsight_target_shuffled_path(
+    wrapped = create_hindsight_target_shuffled_path(
+        sk,
         k_max=5,
         shuffle_parallel=2,
         include_solved_states=True,
@@ -104,7 +111,8 @@ def test_create_hindsight_target_triangular_shuffled_path():
     sk = Sokoban()
     key = jax.random.PRNGKey(42)
 
-    wrapped = sk.create_hindsight_target_triangular_shuffled_path(
+    wrapped = create_hindsight_target_triangular_shuffled_path(
+        sk,
         k_max=5,
         shuffle_parallel=2,
         include_solved_states=False,
@@ -117,13 +125,33 @@ def test_create_hindsight_target_triangular_shuffled_path():
     )
 
 
+def test_puzzle_does_not_expose_trajectory_methods():
+    """Lock the **Puzzle Trajectory Module** seam: target-shuffled-path
+    generation must live in ``puxle.core.trajectory``, not as methods on the
+    ``Puzzle`` base. Any new puzzle inheriting from ``Puzzle`` must access the
+    three creators through the Module, never through ``self.create_*``.
+    """
+    from puxle.core.puzzle_base import Puzzle
+
+    for method_name in (
+        "create_target_shuffled_path",
+        "create_hindsight_target_shuffled_path",
+        "create_hindsight_target_triangular_shuffled_path",
+    ):
+        assert not hasattr(Puzzle, method_name), (
+            f"`Puzzle.{method_name}` must NOT exist — it lives in "
+            "`puxle.core.trajectory` per CONTEXT.md 'Puzzle Trajectory Module'."
+        )
+
+
 def test_hindsight_assertion_on_fixed_target():
     rc = RubiksCube(size=3)
     key = jax.random.PRNGKey(42)
     with pytest.raises(
         AssertionError, match="Fixed target is not supported for hindsight target"
     ):
-        rc.create_hindsight_target_shuffled_path(
+        create_hindsight_target_shuffled_path(
+            rc,
             k_max=5,
             shuffle_parallel=2,
             include_solved_states=True,

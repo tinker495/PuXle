@@ -24,7 +24,17 @@ from pathlib import Path
 
 import numpy as np
 
-_MIGRATED_PUZZLES = ("slidepuzzle", "lightsout", "maze")
+_MIGRATED_PUZZLES = (
+    "slidepuzzle",
+    "lightsout",
+    "maze",
+    "dotknot",
+    "hanoi",
+    "pancake",
+    "topspin",
+    "tsp",
+    "rubikscube",
+)
 
 _BACKEND_INTERFACE_METHODS = (
     "canvas",
@@ -35,6 +45,9 @@ _BACKEND_INTERFACE_METHODS = (
     "text",
     "text_size",
     "text_centered",
+    "ellipse",
+    "fill_poly",
+    "polylines",
 )
 
 
@@ -170,9 +183,15 @@ def test_migrated_puzzle_imgfuncs_produce_valid_images():
     """End-to-end smoke for the migrated puzzles' ``get_img_parser`` results."""
     import jax
 
+    from puxle.puzzles.dotknot import DotKnot
+    from puxle.puzzles.hanoi import TowerOfHanoi
     from puxle.puzzles.lightsout import LightsOut
     from puxle.puzzles.maze import Maze
+    from puxle.puzzles.pancake import PancakeSorting
+    from puxle.puzzles.rubikscube import RubiksCube
     from puxle.puzzles.slidepuzzle import SlidePuzzle
+    from puxle.puzzles.topspin import TopSpin
+    from puxle.puzzles.tsp import TSP
 
     key = jax.random.PRNGKey(0)
 
@@ -190,3 +209,33 @@ def test_migrated_puzzle_imgfuncs_produce_valid_images():
     mz_sc, mz_state = mz.get_inits(key)
     mz_img = mz.get_img_parser()(mz_state, solve_config=mz_sc)
     assert mz_img.ndim == 3 and mz_img.shape[-1] == 3 and mz_img.dtype == np.uint8
+
+    dk = DotKnot()
+    dk_sc, dk_state = dk.get_inits(key)
+    dk_img = dk.get_img_parser()(dk_state)
+    assert dk_img.ndim == 3 and dk_img.shape[-1] == 3 and dk_img.dtype == np.uint8
+
+    th = TowerOfHanoi()
+    th_sc, th_state = th.get_inits(key)
+    th_img = th.get_img_parser()(th_state)
+    assert th_img.ndim == 3 and th_img.shape[-1] == 3 and th_img.dtype == np.uint8
+
+    pc = PancakeSorting()
+    pc_sc, pc_state = pc.get_inits(key)
+    pc_img = pc.get_img_parser()(pc_state)
+    assert pc_img.ndim == 3 and pc_img.shape[-1] == 3 and pc_img.dtype == np.uint8
+
+    ts = TopSpin()
+    ts_sc, ts_state = ts.get_inits(key)
+    ts_img = ts.get_img_parser()(ts_state)
+    assert ts_img.ndim == 3 and ts_img.shape[-1] == 3 and ts_img.dtype == np.uint8
+
+    tsp = TSP()
+    tsp_sc, tsp_state = tsp.get_inits(key)
+    tsp_img = tsp.get_img_parser()(tsp_state, solve_config=tsp_sc)
+    assert tsp_img.ndim == 3 and tsp_img.shape[-1] == 3 and tsp_img.dtype == np.uint8
+
+    rc = RubiksCube(size=3)
+    rc_sc, rc_state = rc.get_inits(key)
+    rc_img = rc.get_img_parser()(rc_state)
+    assert rc_img.ndim == 3 and rc_img.shape[-1] == 3 and rc_img.dtype == np.uint8

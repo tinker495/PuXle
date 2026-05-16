@@ -647,7 +647,7 @@ class RubiksCube(Puzzle):
         return cos45, sin45, scale, offset_x, offset_y, margin
 
     @staticmethod
-    def _draw_tile(img_target, pts, color_idx, value, color_embedding):
+    def _draw_tile(img_target, pts, color_idx, value, color_embedding, *, backend):
         """
         Draw a single cube face tile with color and optional numbering.
 
@@ -657,17 +657,17 @@ class RubiksCube(Puzzle):
             color_idx: Color index (0-5)
             value: Tile value for numbering
             color_embedding: Whether using color embedding mode
+            backend: Cv2Backend instance routing every drawing primitive.
         """
-        import cv2
         import numpy as np
 
         color = rgb_map[color_idx]
-        cv2.fillPoly(img_target, [pts], color)
-        cv2.polylines(
+        backend.fill_poly(img_target, points=[pts], color_bgr=color)
+        backend.polylines(
             img_target,
-            [pts],
-            isClosed=True,
-            color=(0, 0, 0),
+            points=[pts],
+            is_closed=True,
+            color_bgr=(0, 0, 0),
             thickness=LINE_THICKNESS,
         )
 
@@ -677,25 +677,31 @@ class RubiksCube(Puzzle):
             font_scale = max(0.3, min(1.2, edge / 32.0))
             thickness = max(1, int(round(LINE_THICKNESS / 2)))
             text = str(value)
-            (text_width, text_height), baseline = cv2.getTextSize(
-                text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness
+            text_width, text_height = backend.text_size(
+                text, font_scale=font_scale, thickness=thickness
             )
             text_x = int(center[0] - text_width / 2)
             text_y = int(center[1] + text_height / 2)
 
-            cv2.putText(
+            backend.text(
                 img_target,
-                text,
-                (text_x, text_y),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                font_scale,
-                (0, 0, 0),
-                thickness,
-                lineType=cv2.LINE_AA,
+                text=text,
+                position=(text_x, text_y),
+                color_bgr=(0, 0, 0),
+                font_scale=font_scale,
+                thickness=thickness,
             )
 
     def _draw_face_grid(
-        self, img, face_id, coords_generator, transform, stickers, color_faces
+        self,
+        img,
+        face_id,
+        coords_generator,
+        transform,
+        stickers,
+        color_faces,
+        *,
+        backend,
     ):
         """
         Draw a complete cube face as a grid of tiles.
@@ -707,6 +713,7 @@ class RubiksCube(Puzzle):
             transform: Transform function (x, y, z) -> (screen_x, screen_y)
             stickers: Sticker value array
             color_faces: Color index array
+            backend: Cv2Backend instance routing every drawing primitive.
         """
         import numpy as np
 
@@ -721,7 +728,9 @@ class RubiksCube(Puzzle):
                 color_idx = int(color_faces[face_id, row, col])
                 value = int(stickers[face_id, row, col])
 
-                self._draw_tile(img, pts, color_idx, value, self.color_embedding)
+                self._draw_tile(
+                    img, pts, color_idx, value, self.color_embedding, backend=backend
+                )
 
     def get_img_parser(self) -> Callable:
         """
@@ -729,11 +738,14 @@ class RubiksCube(Puzzle):
         """
         import numpy as np
 
+        from puxle.render import Cv2Backend
+
+        backend = Cv2Backend()
+
         def img_func(state: "RubiksCube.State", another_faces: bool = True, **kwargs):
             imgsize = IMG_SIZE[0]
             # Create a blank image with a neutral background
-            img = np.zeros((imgsize, imgsize, 3), dtype=np.uint8)
-            img[:] = (190, 190, 190)
+            img = backend.canvas(size=(imgsize, imgsize), fill_bgr=(190, 190, 190))
 
             # Set up projection parameters
             cos45, sin45, scale, offset_x, offset_y, margin = (
@@ -761,7 +773,14 @@ class RubiksCube(Puzzle):
             def draw_tile(img_target, pts, face_id, row, col):
                 color_idx = int(color_faces[face_id, row, col])
                 value = int(stickers[face_id, row, col])
-                self._draw_tile(img_target, pts, color_idx, value, self.color_embedding)
+                self._draw_tile(
+                    img_target,
+                    pts,
+                    color_idx,
+                    value,
+                    self.color_embedding,
+                    backend=backend,
+                )
 
             # Draw faces in correct order for proper depth.
             # 1. Draw the front face (FRONT)
@@ -821,8 +840,7 @@ class RubiksCube(Puzzle):
 
             # If another_faces is True, draw additional faces (DOWN, BACK, LEFT) as flat squares
             if another_faces:
-                img2 = np.zeros((imgsize, imgsize, 3), dtype=np.uint8)
-                img2[:] = (190, 190, 190)
+                img2 = backend.canvas(size=(imgsize, imgsize), fill_bgr=(190, 190, 190))
 
                 # 4. Draw the back face (BACK)
                 for i in range(self.size):

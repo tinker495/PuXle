@@ -79,14 +79,15 @@ class PancakeSorting(Puzzle):
 
     def get_img_parser(self) -> Callable:
         """Returns a function to convert a state to an image representation"""
-        import cv2
         import numpy as np
 
+        from puxle.render import Cv2Backend
+
+        backend = Cv2Backend()
+
         def img_func(state: "PancakeSorting.State", **kwargs):
-            # Create blank image with correct dimensions
             # IMG_SIZE is actually a tuple (width, height)
-            image = np.zeros((*IMG_SIZE, 3), dtype=np.uint8)
-            image.fill(240)  # Light gray background
+            image = backend.canvas(size=IMG_SIZE, fill_bgr=(240, 240, 240))
             stack = state.stack
             max_size = self.size
 
@@ -99,15 +100,14 @@ class PancakeSorting(Puzzle):
             plate_y = img_height - 50  # Position plate at the bottom with some margin
             plate_height = pancake_height // 2
             plate_width = int(max_width * 1.1)
-            cv2.ellipse(
+            image = backend.ellipse(
                 image,
-                (IMG_SIZE[0] // 2, plate_y + plate_height // 2),
-                (plate_width // 2, plate_height // 2),
-                0,
-                0,
-                180,
-                (150, 150, 150),
-                -1,
+                center=(IMG_SIZE[0] // 2, plate_y + plate_height // 2),
+                axes=(plate_width // 2, plate_height // 2),
+                angle=0,
+                start_angle=0,
+                end_angle=180,
+                color_bgr=(150, 150, 150),
             )
 
             def draw_pancake(img, y_pos, size):
@@ -143,44 +143,48 @@ class PancakeSorting(Puzzle):
                 )
 
                 # Draw filled pancake with rounded corners
-                cv2.fillPoly(img, [rect_points], color)
+                img = backend.fill_poly(img, points=[rect_points], color_bgr=color)
 
                 # Add a highlight on top of the pancake
                 highlight_y = y_pos + 2
                 highlight_height = pancake_height // 4
-                cv2.rectangle(
+                img = backend.rect(
                     img,
-                    (x_start + 5, highlight_y),
-                    (x_end - 5, highlight_y + highlight_height),
-                    (
+                    top_left=(x_start + 5, highlight_y),
+                    bottom_right=(x_end - 5, highlight_y + highlight_height),
+                    color_bgr=(
                         min(color[0] + 40, 255),
                         min(color[1] + 40, 255),
                         min(color[2] + 40, 255),
                     ),
-                    -1,
                 )
 
                 # Add a shadow at the bottom
                 shadow_y = y_pos + pancake_height - highlight_height - 2
-                cv2.rectangle(
+                img = backend.rect(
                     img,
-                    (x_start + 5, shadow_y),
-                    (x_end - 5, shadow_y + highlight_height),
-                    (
+                    top_left=(x_start + 5, shadow_y),
+                    bottom_right=(x_end - 5, shadow_y + highlight_height),
+                    color_bgr=(
                         max(color[0] - 40, 0),
                         max(color[1] - 40, 0),
                         max(color[2] - 40, 0),
                     ),
-                    -1,
                 )
 
                 # Add size text in the middle of the pancake
-                font = cv2.FONT_HERSHEY_SIMPLEX
                 text = str(int(size))
-                text_size = cv2.getTextSize(text, font, 0.7, 2)[0]
-                text_x = (x_start + x_end - text_size[0]) // 2
-                text_y = y_pos + (pancake_height + text_size[1]) // 2
-                cv2.putText(img, text, (text_x, text_y), font, 0.7, (255, 255, 255), 2)
+                text_w, text_h = backend.text_size(text, font_scale=0.7, thickness=2)
+                text_x = (x_start + x_end - text_w) // 2
+                text_y = y_pos + (pancake_height + text_h) // 2
+                img = backend.text(
+                    img,
+                    text=text,
+                    position=(text_x, text_y),
+                    color_bgr=(255, 255, 255),
+                    font_scale=0.7,
+                    thickness=2,
+                )
 
                 return img
 

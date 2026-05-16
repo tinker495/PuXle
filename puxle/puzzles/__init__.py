@@ -19,7 +19,6 @@ __all__ = [
     "SlidePuzzleHard",
     "SlidePuzzleRandom",
     "Sokoban",
-    "SokobanDS",
     "SokobanHard",
     "TSP",
     "TopSpin",

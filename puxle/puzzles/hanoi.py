@@ -128,16 +128,16 @@ class TowerOfHanoi(Puzzle):
 
     def get_img_parser(self) -> Callable:
         """Returns a function to convert a state to an image representation"""
-        import cv2
-        import numpy as np
+        from puxle.render import Cv2Backend
+
+        backend = Cv2Backend()
 
         def img_func(state: "TowerOfHanoi.State", **kwargs):
-            # Create blank image with correct dimensions
-            image = np.zeros((*IMG_SIZE, 3), dtype=np.uint8)
-            image.fill(240)  # Light gray background
-
             # Get dimensions
             width, height = IMG_SIZE
+
+            # Create blank image with correct dimensions
+            image = backend.canvas(size=IMG_SIZE, fill_bgr=(240, 240, 240))
 
             # Parameters for visualization
             peg_width = 10
@@ -150,12 +150,14 @@ class TowerOfHanoi(Puzzle):
 
             # Draw base
             base_x = (width - base_width) / 2
-            cv2.rectangle(
+            image = backend.rect(
                 image,
-                (int(base_x), int(base_y)),
-                (int(base_x + base_width), int(base_y + base_height)),
-                (120, 80, 40),  # Brown color
-                -1,  # Filled
+                top_left=(int(base_x), int(base_y)),
+                bottom_right=(
+                    int(base_x + base_width),
+                    int(base_y + base_height),
+                ),
+                color_bgr=(120, 80, 40),  # Brown color
             )
 
             # Calculate peg positions
@@ -166,12 +168,14 @@ class TowerOfHanoi(Puzzle):
 
             # Draw pegs
             for peg_x in peg_xs:
-                cv2.rectangle(
+                image = backend.rect(
                     image,
-                    (int(peg_x - peg_width / 2), int(base_y - peg_height)),
-                    (int(peg_x + peg_width / 2), int(base_y)),
-                    (120, 80, 40),  # Brown color
-                    -1,  # Filled
+                    top_left=(
+                        int(peg_x - peg_width / 2),
+                        int(base_y - peg_height),
+                    ),
+                    bottom_right=(int(peg_x + peg_width / 2), int(base_y)),
+                    color_bgr=(120, 80, 40),  # Brown color
                 )
 
             # Draw disks on pegs
@@ -199,22 +203,33 @@ class TowerOfHanoi(Puzzle):
                     color = get_disk_color(disk_size, self.max_disk_value)
 
                     # Draw disk
-                    cv2.rectangle(
+                    image = backend.rect(
                         image,
-                        (int(peg_x - disk_width / 2), int(disk_y)),
-                        (int(peg_x + disk_width / 2), int(disk_y + disk_height)),
-                        color,
-                        -1,  # Filled
+                        top_left=(
+                            int(peg_x - disk_width / 2),
+                            int(disk_y),
+                        ),
+                        bottom_right=(
+                            int(peg_x + disk_width / 2),
+                            int(disk_y + disk_height),
+                        ),
+                        color_bgr=color,
                     )
 
                     # Add disk size text
-                    font = cv2.FONT_HERSHEY_SIMPLEX
                     text = str(disk_size)
-                    text_size = cv2.getTextSize(text, font, 0.5, 1)[0]
-                    text_x = int(peg_x - text_size[0] / 2)
+                    text_w, _text_h = backend.text_size(
+                        text, font_scale=0.5, thickness=1
+                    )
+                    text_x = int(peg_x - text_w / 2)
                     text_y = int(disk_y + disk_height - 5)
-                    cv2.putText(
-                        image, text, (text_x, text_y), font, 0.5, (255, 255, 255), 1
+                    image = backend.text(
+                        image,
+                        text=text,
+                        position=(text_x, text_y),
+                        color_bgr=(255, 255, 255),
+                        font_scale=0.5,
+                        thickness=1,
                     )
 
             return image

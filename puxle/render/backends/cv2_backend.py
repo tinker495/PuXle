@@ -151,5 +151,60 @@ class Cv2Backend:
             thickness=thickness,
         )
 
+    def ellipse(
+        self,
+        img: np.ndarray,
+        *,
+        center: Point,
+        axes: Size,
+        color_bgr: BgrColor,
+        angle: float = 0.0,
+        start_angle: float = 0.0,
+        end_angle: float = 360.0,
+        thickness: int = -1,
+    ) -> np.ndarray:
+        """Filled (``thickness=-1``) or outlined ellipse / arc segment.
+
+        ``axes`` is the ``(major_semi, minor_semi)`` pair in pixels.
+        ``angle``, ``start_angle``, ``end_angle`` are in degrees following the
+        cv2 convention; an arc from ``start_angle`` to ``end_angle`` is drawn
+        instead of a full ellipse when those differ from ``(0, 360)``.
+        """
+        return cv2.ellipse(
+            img,
+            tuple(center),
+            tuple(axes),
+            angle,
+            start_angle,
+            end_angle,
+            color_bgr,
+            thickness,
+        )
+
+    def fill_poly(
+        self,
+        img: np.ndarray,
+        *,
+        points,
+        color_bgr: BgrColor,
+    ) -> np.ndarray:
+        """Filled polygon. ``points`` is a sequence of ``(N, 2)`` int arrays —
+        the same shape ``cv2.fillPoly`` expects so callers can keep their
+        existing ``np.array`` / ``reshape`` setup unchanged."""
+        return cv2.fillPoly(img, list(points), color_bgr)
+
+    def polylines(
+        self,
+        img: np.ndarray,
+        *,
+        points,
+        is_closed: bool,
+        color_bgr: BgrColor,
+        thickness: int = 1,
+    ) -> np.ndarray:
+        """Open or closed polyline (outline only). ``points`` mirrors the
+        ``cv2.polylines`` contract: a sequence of ``(N, 2)`` int arrays."""
+        return cv2.polylines(img, list(points), is_closed, color_bgr, thickness)
+
 
 __all__ = ["Cv2Backend", "BgrColor", "Point", "Size"]
