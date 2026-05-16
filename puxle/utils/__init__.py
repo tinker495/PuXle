@@ -9,20 +9,12 @@ __all__ = [
     "IMG_SIZE",
     "add_img_parser",
     "coloring_str",
-    "from_uint8",
-    "to_uint8",
-    "pack_variable_bits",
-    "unpack_variable_bits",
 ]
 
 _EXPORTS = {
     "IMG_SIZE": (".annotate", "IMG_SIZE"),
     "add_img_parser": (".util", "add_img_parser"),
     "coloring_str": (".util", "coloring_str"),
-    "from_uint8": (".util", "from_uint8"),
-    "to_uint8": (".util", "to_uint8"),
-    "pack_variable_bits": (".util", "pack_variable_bits"),
-    "unpack_variable_bits": (".util", "unpack_variable_bits"),
 }
 
 

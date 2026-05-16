@@ -25,6 +25,23 @@ def _masked_action_sample_uniform(mask: chex.Array, key: chex.PRNGKey) -> chex.A
     return actions.astype(jnp.int32)
 
 
+def _mask_inverse_action(
+    previous_action: chex.Array,
+    candidate_mask: chex.Array,
+    inverse_action_permutation: chex.Array,
+    action_size: int,
+) -> chex.Array:
+    valid_idx = previous_action >= 0
+    safe_prev = jnp.where(valid_idx, previous_action, 0)
+    inverse_actions = inverse_action_permutation[safe_prev]
+    return jnp.where(
+        valid_idx[jnp.newaxis, :]
+        & (jnp.arange(action_size)[:, jnp.newaxis] == inverse_actions[jnp.newaxis, :]),
+        False,
+        candidate_mask,
+    )
+
+
 def _gather_by_action(neighbor_states, actions: chex.Array):
     batch_idx = jnp.arange(actions.shape[0], dtype=jnp.int32)
 
@@ -800,22 +817,9 @@ class Puzzle(ABC):
                 )
                 mask = jnp.isfinite(cost)
 
-                def _apply_inv_mask(prev, c_mask):
-                    valid_idx = prev >= 0
-                    safe_prev = jnp.where(valid_idx, prev, 0)
-                    inv_actions = inv_map[safe_prev]
-                    c_mask = jnp.where(
-                        valid_idx[jnp.newaxis, :]
-                        & (
-                            jnp.arange(action_size)[:, jnp.newaxis]
-                            == inv_actions[jnp.newaxis, :]
-                        ),
-                        False,
-                        c_mask,
-                    )
-                    return c_mask
-
-                final_mask = _apply_inv_mask(previous_action, mask)
+                final_mask = _mask_inverse_action(
+                    previous_action, mask, inv_map, action_size
+                )
                 no_valid = jnp.sum(final_mask, axis=0) == 0
                 final_mask = jnp.where(no_valid[jnp.newaxis, :], mask, final_mask)
                 actions = _masked_action_sample_uniform(final_mask, step_key)
@@ -942,22 +946,9 @@ class Puzzle(ABC):
                 )
                 mask = jnp.isfinite(cost)
 
-                def _apply_inv_mask(prev, c_mask):
-                    valid_idx = prev >= 0
-                    safe_prev = jnp.where(valid_idx, prev, 0)
-                    inv_actions = inv_map[safe_prev]
-                    c_mask = jnp.where(
-                        valid_idx[jnp.newaxis, :]
-                        & (
-                            jnp.arange(action_size)[:, jnp.newaxis]
-                            == inv_actions[jnp.newaxis, :]
-                        ),
-                        False,
-                        c_mask,
-                    )
-                    return c_mask
-
-                final_mask = _apply_inv_mask(previous_action, mask)
+                final_mask = _mask_inverse_action(
+                    previous_action, mask, inv_map, action_size
+                )
                 no_valid = jnp.sum(final_mask, axis=0) == 0
                 final_mask = jnp.where(no_valid[jnp.newaxis, :], mask, final_mask)
                 inv_actions = _masked_action_sample_uniform(final_mask, step_key)

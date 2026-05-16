@@ -4,9 +4,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from xtructure.core.layout.bitpack import to_uint8
 
 from puxle.pddls.pddl import PDDL
-from puxle.utils.util import to_uint8
 
 
 def _hash_state(state) -> bytes:
