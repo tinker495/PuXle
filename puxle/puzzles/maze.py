@@ -3,6 +3,7 @@ from collections.abc import Callable
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 from termcolor import colored
 
 from puxle.core.puzzle_base import Puzzle
@@ -367,8 +368,14 @@ class Maze(Puzzle):
         """
         This function is a decorator that adds an img_parser to the class.
         """
-        import cv2
-        import numpy as np
+        from puxle.render import Cv2Backend
+
+        backend = Cv2Backend()
+        size = self.size
+
+        grid_color = (200, 200, 200)
+        target_color = (255, 0, 0)
+        on_target_color = (0, 255, 0)
 
         def img_func(
             state: "Maze.State", solve_config: "Maze.SolveConfig" = None, **kwargs
@@ -376,39 +383,27 @@ class Maze(Puzzle):
             assert solve_config is not None, "This puzzle requires a solve_config"
             imgsize = IMG_SIZE[0]
 
-            # --- Optimized Wall Rendering ---
-            # 1. Unpack maze to boolean (True=wall)
-            maze_bool_jax = solve_config.Maze_unpacked.reshape((self.size, self.size))
-            maze_bool_np = np.array(maze_bool_jax)  # Convert JAX array to NumPy array
+            maze_bool_np = np.array(solve_config.Maze_unpacked.reshape((size, size)))
+            walls_mono = (~maze_bool_np).astype(np.uint8) * 255
+            img = backend.canvas_from_mono(size=IMG_SIZE, mono_pattern=walls_mono)
 
-            # 2. Create monochrome image (0=wall, 255=path) using NumPy array
-            walls_mono_np = (~maze_bool_np).astype(np.uint8) * 255
+            cell_size = imgsize / size
 
-            # 3. Resize the NumPy array to target image size
-            img_resized = cv2.resize(
-                walls_mono_np, (imgsize, imgsize), interpolation=cv2.INTER_NEAREST
-            )
+            for i in range(size + 1):
+                img = backend.line(
+                    img,
+                    p1=(0, int(i * cell_size)),
+                    p2=(imgsize, int(i * cell_size)),
+                    color_bgr=grid_color,
+                )
+            for j in range(size + 1):
+                img = backend.line(
+                    img,
+                    p1=(int(j * cell_size), 0),
+                    p2=(int(j * cell_size), imgsize),
+                    color_bgr=grid_color,
+                )
 
-            # 4. Convert to 3-channel BGR
-            img = cv2.cvtColor(img_resized, cv2.COLOR_GRAY2BGR)
-            # --- End Optimized Wall Rendering ---
-
-            cell_size = (
-                imgsize / self.size
-            )  # Still needed for grid lines and object placement
-
-            # Draw grid lines (remains the same)
-            grid_color = (200, 200, 200)  # Light grey
-            for i in range(self.size + 1):
-                pt1 = (0, int(i * cell_size))
-                pt2 = (imgsize, int(i * cell_size))
-                cv2.line(img, pt1, pt2, grid_color, 1)
-            for j in range(self.size + 1):
-                pt1 = (int(j * cell_size), 0)
-                pt2 = (int(j * cell_size), imgsize)
-                cv2.line(img, pt1, pt2, grid_color, 1)
-
-            # Draw player and target (remains the same)
             pos_player = state.pos
             pos_target = solve_config.TargetState.pos
             player_center = (
@@ -418,41 +413,39 @@ class Maze(Puzzle):
             player_radius = max(1, int(cell_size / 3))
 
             if (state.pos == solve_config.TargetState.pos).all():
-                # Player on target: Green circle
-                img = cv2.circle(
-                    img, player_center, player_radius, (0, 255, 0), thickness=-1
+                img = backend.circle(
+                    img,
+                    center=player_center,
+                    radius=player_radius,
+                    color_bgr=on_target_color,
                 )
             else:
-                # Player not on target: Red circle
-                img = cv2.circle(
-                    img, player_center, player_radius, (255, 0, 0), thickness=-1
+                img = backend.circle(
+                    img,
+                    center=player_center,
+                    radius=player_radius,
+                    color_bgr=target_color,
                 )
 
-                # Draw target 'X' (Red)
-                target_top_left = (
+                tx0, ty0 = (
                     int(pos_target[1] * cell_size),
                     int(pos_target[0] * cell_size),
                 )
-                target_bottom_right = (
-                    int((pos_target[1] + 1) * cell_size),
-                    int((pos_target[0] + 1) * cell_size),
+                tx1 = int((pos_target[1] + 1) * cell_size)
+                ty1 = int((pos_target[0] + 1) * cell_size)
+                img = backend.line(
+                    img,
+                    p1=(tx0, ty0),
+                    p2=(tx1, ty1),
+                    color_bgr=target_color,
+                    thickness=2,
                 )
-                target_top_right = (
-                    int((pos_target[1] + 1) * cell_size),
-                    int(pos_target[0] * cell_size),
-                )
-                target_bottom_left = (
-                    int(pos_target[1] * cell_size),
-                    int((pos_target[0] + 1) * cell_size),
-                )
-
-                target_color = (255, 0, 0)  # Red in BGR
-                thickness = 2
-                img = cv2.line(
-                    img, target_top_left, target_bottom_right, target_color, thickness
-                )
-                img = cv2.line(
-                    img, target_top_right, target_bottom_left, target_color, thickness
+                img = backend.line(
+                    img,
+                    p1=(tx1, ty0),
+                    p2=(tx0, ty1),
+                    color_bgr=target_color,
+                    thickness=2,
                 )
 
             return img

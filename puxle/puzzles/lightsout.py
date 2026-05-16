@@ -240,32 +240,38 @@ class LightsOut(Puzzle):
         """
         This function is a decorator that adds an img_parser to the class.
         """
-        import cv2
-        import numpy as np
+        from puxle.render import Cv2Backend
+
+        backend = Cv2Backend()
+        size = self.size
+
+        on_color = (255, 255, 0)  # Yellow (BGR)
+        off_color = (0, 0, 0)
+        grid_color = (50, 50, 50)
+        bg_color = (30, 30, 30)
 
         def img_func(state: "LightsOut.State", **kwargs):
             imgsize = IMG_SIZE[0]
-            # Create a background image with a dark gray base
-            img = np.full((imgsize, imgsize, 3), fill_value=30, dtype=np.uint8)
-            # Calculate the size of each cell in the grid
-            cell_size = imgsize // self.size
-            # Reshape the flat board state into a 2D array
-            board = np.array(state.board_unpacked).reshape(self.size, self.size)
-            # Define colors in BGR: light on → bright yellow, light off → black, and grid lines → gray
-            on_color = (255, 255, 0)  # Yellow
-            off_color = (0, 0, 0)  # Black
-            grid_color = (50, 50, 50)  # Gray for grid lines
-            # Draw each cell of the puzzle
-            for i in range(self.size):
-                for j in range(self.size):
+            img = backend.canvas(size=IMG_SIZE, fill_bgr=bg_color)
+            cell_size = imgsize // size
+            board = np.array(state.board_unpacked).reshape(size, size)
+            for i in range(size):
+                for j in range(size):
                     top_left = (j * cell_size, i * cell_size)
                     bottom_right = ((j + 1) * cell_size, (i + 1) * cell_size)
                     cell_color = on_color if board[i, j] else off_color
-                    img = cv2.rectangle(
-                        img, top_left, bottom_right, cell_color, thickness=-1
+                    img = backend.rect(
+                        img,
+                        top_left=top_left,
+                        bottom_right=bottom_right,
+                        color_bgr=cell_color,
                     )
-                    img = cv2.rectangle(
-                        img, top_left, bottom_right, grid_color, thickness=1
+                    img = backend.rect(
+                        img,
+                        top_left=top_left,
+                        bottom_right=bottom_right,
+                        color_bgr=grid_color,
+                        thickness=1,
                     )
             return img
 
