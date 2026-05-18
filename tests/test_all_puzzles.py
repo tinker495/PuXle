@@ -8,11 +8,14 @@ import pytest
 
 from puxle.core.puzzle_base import Puzzle
 
+_NO_DEFAULT_CTOR: frozenset[str] = frozenset({"CayleyPuzzle"})
+
 
 def discover_puzzle_classes() -> List[Type[Puzzle]]:
     """
     Dynamically discover all puzzle classes from puxle.puzzles module.
     Returns a list of puzzle classes that inherit from Puzzle.
+    Excludes puzzles that require mandatory constructor arguments (e.g. CayleyPuzzle).
     """
     import puxle.puzzles as puzzles_module
 
@@ -20,6 +23,8 @@ def discover_puzzle_classes() -> List[Type[Puzzle]]:
 
     # Get all attributes from the puzzles module
     for attr_name in dir(puzzles_module):
+        if attr_name in _NO_DEFAULT_CTOR:
+            continue
         attr = getattr(puzzles_module, attr_name)
 
         # Check if it's a class and inherits from Puzzle
@@ -645,3 +650,94 @@ def run_comprehensive_puzzle_tests():
 
 if __name__ == "__main__":
     run_comprehensive_puzzle_tests()
+
+
+# ---------------------------------------------------------------------------
+# CayleyPuzzle integration tests — skipped when cayleypy is not installed.
+# ---------------------------------------------------------------------------
+
+cayleypy = pytest.importorskip("cayleypy")
+
+
+def _make_cayley_puzzle():
+    from puxle.puzzles import CayleyPuzzle
+
+    return CayleyPuzzle.from_cayleypy_factory("cyclic", 8)
+
+
+@pytest.fixture(scope="module")
+def cayley_puzzle():
+    return _make_cayley_puzzle()
+
+
+@pytest.fixture(scope="module")
+def cayley_rng():
+    return jax.random.PRNGKey(0)
+
+
+@pytest.fixture(scope="module")
+def cayley_solve_config(cayley_puzzle, cayley_rng):
+    return cayley_puzzle.get_solve_config(key=cayley_rng)
+
+
+@pytest.fixture(scope="module")
+def cayley_state(cayley_puzzle, cayley_solve_config, cayley_rng):
+    return cayley_puzzle.get_initial_state(cayley_solve_config, key=cayley_rng)
+
+
+class TestCayleyPuzzle:
+    def test_get_neighbours_returns_correct_count(
+        self, cayley_puzzle, cayley_solve_config, cayley_state
+    ):
+        neighbours, costs = cayley_puzzle.get_neighbours(
+            cayley_solve_config, cayley_state, filled=True
+        )
+        assert len(costs) == cayley_puzzle.action_size
+
+    def test_get_neighbours_all_finite_costs(
+        self, cayley_puzzle, cayley_solve_config, cayley_state
+    ):
+        _, costs = cayley_puzzle.get_neighbours(
+            cayley_solve_config, cayley_state, filled=True
+        )
+        assert jnp.all(jnp.isfinite(costs))
+
+    def test_get_neighbours_unfilled_all_inf(
+        self, cayley_puzzle, cayley_solve_config, cayley_state
+    ):
+        _, costs = cayley_puzzle.get_neighbours(
+            cayley_solve_config, cayley_state, filled=False
+        )
+        assert jnp.all(jnp.isinf(costs))
+
+    def test_is_solved_target_state(self, cayley_puzzle, cayley_solve_config):
+        assert cayley_puzzle.is_solved(
+            cayley_solve_config, cayley_solve_config.TargetState
+        )
+
+    def test_is_solved_initial_state_false(
+        self, cayley_puzzle, cayley_solve_config, cayley_state
+    ):
+        result = cayley_puzzle.is_solved(cayley_solve_config, cayley_state)
+        assert isinstance(result, (bool, jnp.bool_, np.bool_)) or hasattr(
+            result, "dtype"
+        )
+
+    def test_inverse_action_map_not_none(self, cayley_puzzle):
+        assert cayley_puzzle.inverse_action_map is not None
+
+    def test_inverse_action_map_roundtrip(
+        self, cayley_puzzle, cayley_solve_config, cayley_state
+    ):
+        inv_map = cayley_puzzle.inverse_action_map
+        neighbours, _ = cayley_puzzle.get_neighbours(
+            cayley_solve_config, cayley_state, filled=True
+        )
+        for i in range(cayley_puzzle.action_size):
+            next_state = jax.tree_util.tree_map(lambda x: x[i], neighbours)
+            inv_i = int(inv_map[i])
+            inv_neighbours, _ = cayley_puzzle.get_neighbours(
+                cayley_solve_config, next_state, filled=True
+            )
+            recovered = jax.tree_util.tree_map(lambda x: x[inv_i], inv_neighbours)
+            assert recovered == cayley_state

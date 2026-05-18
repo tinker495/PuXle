@@ -16,6 +16,7 @@ A high-performance library for parallelized planning and puzzle environments bui
    :caption: Guides
 
    tutorials/xtructure_bitpacking
+   tutorials/cayley_bridge
    pddlfuse
 
 

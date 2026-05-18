@@ -13,6 +13,7 @@
 
 - **High Performance**: JAX-powered parallelization for lightning-fast planning and puzzle solving
 - **PDDL Support**: Full STRIPS subset support with automatic grounding and JAX-optimized state representation
+- **cayleypy Bridge**: Adapter that consumes any [cayleypy](https://github.com/cayleypy/cayleypy) `CayleyGraphDef` (permutation or matrix groups, ~30 ready-made graph families) as a JAX-native `Puzzle` — no PyTorch in the import chain
 - **Optimized Data Structures**: Powered by Xtructure for efficient batched operations, GPU-accelerated priority queues, and hash tables
 - **Diverse Environments**: 11+ classic puzzles + PDDL domains for comprehensive planning research
 - **AI Research Ready**: Perfect for reinforcement learning, search algorithms, and AI research
@@ -27,6 +28,7 @@ Full API documentation is automatically built and deployed to **[GitHub Pages](h
 - **[API Reference](https://tinker495.github.io/PuXle/api/index.html)** — All modules, classes, and functions
 - **Bitpacked runtime states (xtructure)**: [`docs/tutorials/xtructure_bitpacking.md`](docs/tutorials/xtructure_bitpacking.md)
 - **PDDLFuse: Diverse Planning Domain Generator**: [`docs/pddlfuse.md`](docs/pddlfuse.md) — Based on the [PDDLFuse paper](https://arxiv.org/pdf/2411.19886)
+- **cayleypy bridge — Cayley/Schreier graphs as PuXle puzzles**: [`docs/tutorials/cayley_bridge.md`](docs/tutorials/cayley_bridge.md)
 
 ## 📦 Installation
 
@@ -44,11 +46,12 @@ pip install "puxle[dev]"
 pip install "puxle[docs]"
 pip install "puxle[visualization]"
 pip install "puxle[cuda]"
+pip install "puxle[cayley]"   # adds cayleypy as a dependency for the Cayley/Schreier bridge
 
 # Combine extras
-pip install "puxle[dev,docs,visualization,cuda]"
+pip install "puxle[dev,docs,visualization,cuda,cayley]"
 # GitHub + extras
-pip install "puxle[dev,docs,visualization,cuda] @ git+https://github.com/tinker495/PuXle.git"
+pip install "puxle[dev,docs,visualization,cuda,cayley] @ git+https://github.com/tinker495/PuXle.git"
 ```
 
 ## 🎯 Quick Start
@@ -126,6 +129,11 @@ for i, cost in enumerate(costs):
 | **PancakeSorting** | Sort pancakes by flipping | Medium |
 | **TopSpin** | Circular sliding puzzle | Medium |
 | **DotKnot** | Untangle knots puzzle | Medium |
+| **CayleyPuzzle** | Adapter wrapping any [cayleypy](https://github.com/cayleypy/cayleypy) Cayley/Schreier graph as a JAX-native puzzle (permutation or matrix groups) | Variable |
+
+### Cayley / Schreier Graphs via cayleypy
+
+`CayleyPuzzle` is a single-class adapter that turns any `cayleypy.CayleyGraphDef` (~30 permutation families like *pancake*, *LRX*, *top_spin*, *coxeter*, plus matrix groups like *heisenberg*, *special_linear_\**, plus the *mini_pyramorphix* / *pyraminx* / *globe_puzzle* Schreier graphs) into a JAX-native `Puzzle`. The bridge consumes `CayleyGraphDef` as **plain data** — no PyTorch in PuXle/JAxtar's import chain. See the dedicated tutorial below.
 
 ### PDDL Planning Domains
 **⚠️ Experimental Feature**: PDDL support in PuXle is currently experimental and under active development. While we strive for full STRIPS subset compliance, some edge cases may not be fully supported yet.
@@ -292,10 +300,68 @@ pytest --cov=puxle tests/
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## 🔗 cayleypy Bridge
+
+PuXle ships a JAX-native adapter that brings the full [cayleypy](https://github.com/cayleypy/cayleypy) catalog of Cayley/Schreier graphs into PuXle, **without dragging PyTorch into the JAX stack**. Two layers:
+
+### 1. The adapter class — `CayleyPuzzle`
+
+Wraps a `cayleypy.cayley_graph_def.CayleyGraphDef` (which itself is a frozen dataclass of `generators_permutations`, `generators_matrices`, `central_state`, and `name`) as a `Puzzle`. Supports both `PERMUTATION` and `MATRIX` generator types. Construction-time kernel switch — no runtime branching inside `get_actions`.
+
+```python
+from cayleypy.graphs_lib import PermutationGroups
+from puxle import CayleyPuzzle
+
+graph_def = PermutationGroups.pancake(7)
+puzzle = CayleyPuzzle(graph_def, num_shuffle=10)
+solve_config, initial_state = puzzle.get_inits(jax.random.PRNGKey(0))
+neighbours, costs = puzzle.get_neighbours(solve_config, initial_state)
+```
+
+Or use the convenience factory that walks `PermutationGroups → MatrixGroups → Puzzles` (first-wins):
+
+```python
+puzzle = CayleyPuzzle.from_cayleypy_factory("top_spin", 8, k=4)
+```
+
+### 2. Auto-generated subclasses — pattern-based naming
+
+For one-shot use as a no-arg `Puzzle` (e.g. registering into JAxtar's puzzle registry), import names of the form `Cayley<FactoryPascalCase>[_<arg>…]`:
+
+```python
+from puxle import (
+    CayleyPancake7,            # PermutationGroups.pancake(7)
+    CayleyLRX12,               # PermutationGroups.lrx(12)
+    CayleyTopSpin8K4,          # PermutationGroups.top_spin(8, k=4)  (kwarg form)
+    CayleyTopSpin8_4,          # PermutationGroups.top_spin(8, 4)    (positional)
+    CayleyConsecutiveKCycles8_3,
+    CayleyAllCycles6,
+)
+```
+
+The class is generated lazily on first attribute access via a module-level `__getattr__`; subsequent lookups return the same object. New cayleypy factories require **zero PuXle code changes** — name the class and it works. List available factories:
+
+```python
+from puxle.puzzles.cayley_subclasses import list_available_factories, discover
+print(list_available_factories())  # ['all_cycles', 'lrx', 'pancake', ...]
+cls = discover("pancake", 9)        # build without name parsing
+```
+
+### Optional dependency
+
+Install the cayleypy extra to enable the bridge:
+
+```bash
+pip install "puxle[cayley]"
+```
+
+The adapter module itself imports cleanly without cayleypy installed; construction raises `ImportError` naming `[cayley]`. See [`docs/tutorials/cayley_bridge.md`](docs/tutorials/cayley_bridge.md) for a longer walk-through of the adapter API, the auto-generated subclasses, and empirical JAxtar A\* benchmarks across the cayleypy catalog.
+
 ## See Also
 
 - [Xtructure](https://github.com/tinker495/Xtructure): JAX-optimized data structures used as a backend for PuXle.
 - [JAxtar](https://github.com/tinker495/JAxtar): JAX-native parallelizable A* and Q* solver that uses PuXle as its planning and puzzle implementation backend.
+- [cayleypy](https://github.com/cayleypy/cayleypy): PyTorch library for very-large state-transition / Cayley graphs whose `CayleyGraphDef` catalog is consumed by the bridge above.
 
 ## 🤝 Contributing and Feedback
 

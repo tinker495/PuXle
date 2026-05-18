@@ -22,6 +22,12 @@ __all__ = [
     "SokobanHard",
     "TSP",
     "TopSpin",
+    "CayleyPuzzle",
+    "CayleyPancake7",
+    "CayleyPancake8",
+    "CayleyLRX8",
+    "CayleyTopSpin8K4",
+    "CayleyCoxeter8",
 ]
 
 _EXPORTS = {
@@ -41,6 +47,12 @@ _EXPORTS = {
     "SokobanHard": (".sokoban", "SokobanHard"),
     "TSP": (".tsp", "TSP"),
     "TopSpin": (".topspin", "TopSpin"),
+    "CayleyPuzzle": (".cayley_puzzle", "CayleyPuzzle"),
+    "CayleyPancake7": (".cayley_subclasses", "CayleyPancake7"),
+    "CayleyPancake8": (".cayley_subclasses", "CayleyPancake8"),
+    "CayleyLRX8": (".cayley_subclasses", "CayleyLRX8"),
+    "CayleyTopSpin8K4": (".cayley_subclasses", "CayleyTopSpin8K4"),
+    "CayleyCoxeter8": (".cayley_subclasses", "CayleyCoxeter8"),
 }
 
 

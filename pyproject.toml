@@ -61,6 +61,9 @@ visualization = [
 cuda = [
     "jax[cuda]>=0.4.0",
 ]
+cayley = [
+    "cayleypy==0.1.0",
+]
 
 [tool.setuptools]
 include-package-data = true
