@@ -7,6 +7,12 @@ from pddl.logic import Variable
 from pddl.logic.base import And, Not
 from pddl.logic.predicates import Predicate
 
+from puxle.pddls.fusion.formula_facts import flatten_formula
+from puxle.pddls.fusion.type_facts import (
+    build_type_ancestor_map,
+    strict_compatible_candidates,
+)
+
 
 @dataclass
 class FusionParams:
@@ -37,7 +43,7 @@ class ActionModifier:
         """
         Apply stochastic modifications to a list of actions.
         """
-        type_ancestors = self._build_type_ancestor_map(types_map)
+        type_ancestors = build_type_ancestor_map(types_map)
         modified_actions = []
         for action in actions:
             modified = self._modify_single_action(
@@ -59,8 +65,8 @@ class ActionModifier:
         type_ancestors: Dict[str, Set[str]],
     ) -> Action:
         # PDDL library objects are immutable, so we rebuild precondition/effect lists.
-        preconditions = self._extract_atomic_conditions(action.precondition)
-        effects = self._extract_atomic_conditions(action.effect)
+        preconditions = flatten_formula(action.precondition)
+        effects = flatten_formula(action.effect)
         params = action.parameters
 
         if self.rng.random() < self.params.prob_add_pre:
@@ -118,7 +124,7 @@ class ActionModifier:
         added_preds = set()
 
         for action in actions:
-            effects = self._extract_atomic_conditions(action.effect)
+            effects = flatten_formula(action.effect)
             for eff in effects:
                 if isinstance(eff, Not):
                     if hasattr(eff.argument, "name"):
@@ -146,8 +152,8 @@ class ActionModifier:
                 term_candidate_vars_list = []
                 possible = True
                 for term in target_pred.terms:
-                    vars_for_term = self._compatible_action_params_for_term(
-                        term, action.parameters, type_ancestors
+                    vars_for_term = strict_compatible_candidates(
+                        action.parameters, term, type_ancestors
                     )
                     if not vars_for_term:
                         possible = False
@@ -169,9 +175,7 @@ class ActionModifier:
                     new_effect_term = Predicate(pred_name, *chosen_vars)
 
                     original_action = new_actions[idx]
-                    current_effects = self._extract_atomic_conditions(
-                        original_action.effect
-                    )
+                    current_effects = flatten_formula(original_action.effect)
 
                     if self._is_consistent(new_effect_term, current_effects):
                         current_effects.append(new_effect_term)
@@ -211,8 +215,8 @@ class ActionModifier:
                     continue
                 term_candidate_vars: List[List[Variable]] = []
                 for term in p.terms:
-                    compatible_vars = self._compatible_action_params_for_term(
-                        term, action_params, type_ancestors
+                    compatible_vars = strict_compatible_candidates(
+                        action_params, term, type_ancestors
                     )
                     if not compatible_vars:
                         term_candidate_vars = []
@@ -234,94 +238,6 @@ class ActionModifier:
 
         # Create new Predicate instance with variables
         return Predicate(chosen_pred.name, *chosen_vars)
-
-    def _normalize_type_tags(self, typed_obj: Any) -> Set[str]:
-        tags = getattr(typed_obj, "type_tags", None)
-        if tags:
-            return {str(t) for t in tags}
-        tag = getattr(typed_obj, "type_tag", None)
-        if tag:
-            return {str(tag)}
-        return {"object"}
-
-    def _build_type_ancestor_map(
-        self, types_map: Dict[str, Any]
-    ) -> Dict[str, Set[str]]:
-        parent: Dict[str, str] = {}
-        for child_raw, par_raw in (types_map or {}).items():
-            child = str(child_raw)
-            if par_raw is None:
-                continue
-            par = str(par_raw)
-            if not par or par.lower() == "none":
-                continue
-            if child != par:
-                parent[child] = par
-
-        ancestors: Dict[str, Set[str]] = {}
-        all_types = set(parent.keys()) | set(parent.values()) | {"object"}
-        for t in all_types:
-            chain: Set[str] = set()
-            seen: Set[str] = set()
-            cur = parent.get(t)
-            while cur is not None and cur not in seen:
-                chain.add(cur)
-                seen.add(cur)
-                cur = parent.get(cur)
-            ancestors[t] = chain
-
-        return ancestors
-
-    def _is_subtype(
-        self,
-        candidate_type: str,
-        required_type: str,
-        type_ancestors: Dict[str, Set[str]],
-    ) -> bool:
-        if required_type == "object":
-            return True
-        if candidate_type == required_type:
-            return True
-        return required_type in type_ancestors.get(candidate_type, set())
-
-    def _is_variable_compatible_with_required_tags(
-        self,
-        variable: Variable,
-        required_tags: Set[str],
-        type_ancestors: Dict[str, Set[str]],
-    ) -> bool:
-        variable_tags = self._normalize_type_tags(variable)
-        # Variable type must be equal to, or more specific than, at least one required tag.
-        for v_tag in variable_tags:
-            if not any(
-                self._is_subtype(v_tag, req_tag, type_ancestors)
-                for req_tag in required_tags
-            ):
-                return False
-        return True
-
-    def _compatible_action_params_for_term(
-        self,
-        term: Any,
-        action_params: Tuple[Variable, ...],
-        type_ancestors: Dict[str, Set[str]],
-    ) -> List[Variable]:
-        required_tags = self._normalize_type_tags(term)
-        return [
-            param
-            for param in action_params
-            if self._is_variable_compatible_with_required_tags(
-                param, required_tags, type_ancestors
-            )
-        ]
-
-    def _extract_atomic_conditions(self, formula: Formula) -> List[Formula]:
-        """Unpack And(a, b, c) to [a, b, c]. Handle single atom too."""
-        if formula is None:
-            return []
-        if isinstance(formula, And):
-            return list(formula.operands)
-        return [formula]
 
     def _list_to_formula(self, dry_list: List[Formula]) -> Optional[Formula]:
         if not dry_list:

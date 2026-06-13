@@ -1,8 +1,15 @@
 from typing import List, Tuple
 
-from pddl.core import Action, Domain, Formula
-from pddl.logic import Predicate
-from pddl.logic.base import And, Not
+from pddl.core import Action, Domain
+from pddl.logic.base import Not
+
+from puxle.pddls.fusion.formula_facts import (
+    extract_predicates,
+    flatten_formula,
+)
+from puxle.pddls.fusion.type_facts import (
+    normalise_type_tags,
+)
 
 
 class DomainValidator:
@@ -20,9 +27,9 @@ class DomainValidator:
 
         # 1. Check all predicates in actions exist in domain
         for action in domain.actions:
-            action_preds = self._extract_predicates(
-                action.precondition
-            ) + self._extract_predicates(action.effect)
+            action_preds = extract_predicates(action.precondition) + extract_predicates(
+                action.effect
+            )
 
             for pred in action_preds:
                 if pred.name not in defined_predicates:
@@ -53,31 +60,11 @@ class DomainValidator:
         defined_types.add("object")  # implicit root
 
         for param in action.parameters:
-            if hasattr(param, "type_tags") and param.type_tags:
-                for tag in param.type_tags:
-                    if tag not in defined_types:
-                        return False
-            elif hasattr(param, "type_tag") and param.type_tag:
-                if param.type_tag not in defined_types:
+            for tag in normalise_type_tags(param):
+                if tag not in defined_types:
                     return False
 
         return True
-
-    def _extract_predicates(self, formula: Formula) -> List[Predicate]:
-        """Recursively extract predicates from a formula."""
-        if formula is None:
-            return []
-
-        preds = []
-        if isinstance(formula, Predicate):
-            preds.append(formula)
-        elif isinstance(formula, Not):
-            preds.extend(self._extract_predicates(formula.argument))
-        elif isinstance(formula, And):  # Or other composite
-            for op in formula.operands:
-                preds.extend(self._extract_predicates(op))
-        # Add other types if needed (Or, Imply, etc.)
-        return preds
 
     def _validate_action_consistency(self, action: Action) -> bool:
         """Check if action effects contain direct contradictions.
@@ -85,7 +72,7 @@ class DomainValidator:
         An action is inconsistent if it both adds and deletes the same atom
         (same predicate and arguments).
         """
-        effects = self._flatten_effects(action.effect)
+        effects = flatten_formula(action.effect)
 
         adds = set()
         dels = set()
@@ -96,14 +83,3 @@ class DomainValidator:
                 adds.add(str(eff))
 
         return adds.isdisjoint(dels)
-
-    def _flatten_effects(self, formula: Formula) -> List[Formula]:
-        """Flatten nested Ands."""
-        if formula is None:
-            return []
-        if isinstance(formula, And):
-            res = []
-            for op in formula.operands:
-                res.extend(self._flatten_effects(op))
-            return res
-        return [formula]

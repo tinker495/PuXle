@@ -6,6 +6,16 @@ from pddl.core import Domain, Problem
 from pddl.logic import Constant, Predicate
 from pddl.logic.base import And, Not
 
+from puxle.pddls.fusion.formula_facts import (
+    flatten_formula,
+    ground_formula,
+)
+from puxle.pddls.fusion.type_facts import (
+    any_match_compatible_candidates,
+    build_type_ancestor_map,
+    domain_type_parent_map,
+)
+
 
 class ProblemGenerator:
     """
@@ -33,6 +43,7 @@ class ProblemGenerator:
         Returns:
             A pddl.Problem instance.
         """
+        type_ancestors = build_type_ancestor_map(domain_type_parent_map(domain))
 
         # 1. Create objects, assigning random types when the domain is typed.
         types = list(domain.types) if domain.types else []
@@ -49,7 +60,11 @@ class ProblemGenerator:
         # 2. Generate initial state, falling back to a random sparse state.
         init_state = self._generate_domain_specific_init(domain, objects)
         if not init_state:
-            init_state = self._generate_initial_state(domain, objects)
+            init_state = self._generate_initial_state(
+                domain,
+                objects,
+                type_ancestors,
+            )
 
         # 3. Simulate a random applicable-action walk to reach a solvable goal state.
         current_state = set(init_state)
@@ -58,7 +73,7 @@ class ProblemGenerator:
             found = False
             for _ in range(20):  # attempts to find an applicable grounded action
                 action = self.rng.choice(list(domain.actions))
-                args = self._sample_args(action, objects)
+                args = self._sample_args(action, objects, type_ancestors)
                 if args is None:
                     continue
 
@@ -95,24 +110,19 @@ class ProblemGenerator:
         )
 
     def _sample_args(
-        self, action: Action, objects: List[Constant]
+        self,
+        action: Action,
+        objects: List[Constant],
+        type_ancestors: Dict[str, Set[str]] | None = None,
     ) -> Optional[List[Constant]]:
         """Samples objects matching action parameter types."""
         args = []
         for param in action.parameters:
-            valid_objs = []
-            # Check type tags (pddl lib specific)
-            if hasattr(param, "type_tags") and param.type_tags:
-                # Assuming single type for simplicity or union
-                # We need to match any of tags
-                required = param.type_tags
-                for obj in objects:
-                    if hasattr(obj, "type_tags") and (obj.type_tags & required):
-                        valid_objs.append(obj)
-                    elif hasattr(obj, "type_tag") and obj.type_tag in required:
-                        valid_objs.append(obj)
-            else:
-                valid_objs = objects
+            valid_objs = any_match_compatible_candidates(
+                objects,
+                param,
+                type_ancestors,
+            )
 
             if not valid_objs:
                 return None
@@ -120,24 +130,19 @@ class ProblemGenerator:
         return args
 
     def _sample_args_for_predicate(
-        self, predicate: Predicate, objects: List[Constant]
+        self,
+        predicate: Predicate,
+        objects: List[Constant],
+        type_ancestors: Dict[str, Set[str]] | None = None,
     ) -> Optional[List[Constant]]:
         """Sample objects for a predicate's terms."""
         args = []
         for term in predicate.terms:
-            # Check type restrictions
-            # term.type_tags might be used if available
-            valid_objs = []
-            if hasattr(term, "type_tags") and term.type_tags:
-                required = term.type_tags
-                for obj in objects:
-                    # obj.type_tags should match
-                    if hasattr(obj, "type_tags") and (obj.type_tags & required):
-                        valid_objs.append(obj)
-                    elif hasattr(obj, "type_tag") and obj.type_tag in required:
-                        valid_objs.append(obj)
-            else:
-                valid_objs = objects
+            valid_objs = any_match_compatible_candidates(
+                objects,
+                term,
+                type_ancestors,
+            )
 
             if not valid_objs:
                 return None
@@ -145,7 +150,10 @@ class ProblemGenerator:
         return args
 
     def _generate_initial_state(
-        self, domain: Domain, objects: List[Constant]
+        self,
+        domain: Domain,
+        objects: List[Constant],
+        type_ancestors: Dict[str, Set[str]] | None = None,
     ) -> Set[Predicate]:
         """Generate a random initial state."""
         init_state = set()
@@ -155,7 +163,11 @@ class ProblemGenerator:
         for predicate in domain.predicates:
             # We sample a few times for each predicate
             for _ in range(min(5, len(objects))):
-                args = self._sample_args_for_predicate(predicate, objects)
+                args = self._sample_args_for_predicate(
+                    predicate,
+                    objects,
+                    type_ancestors,
+                )
                 if args:
                     # Create ground atom
                     atom = Predicate(predicate.name, *args)
@@ -219,10 +231,10 @@ class ProblemGenerator:
         if precondition is None:
             return True
 
-        grounded_pre = self._ground_formula(precondition, var_map)
+        grounded_pre = ground_formula(precondition, var_map)
 
         if isinstance(grounded_pre, And):
-            for op in grounded_pre.operands:
+            for op in flatten_formula(grounded_pre):
                 if op not in state:
                     return False
             return True
@@ -242,13 +254,7 @@ class ProblemGenerator:
         """
         new_state = state.copy()
 
-        grounded_eff = self._ground_formula(effect, var_map)
-
-        atoms_to_process = []
-        if isinstance(grounded_eff, And):
-            atoms_to_process = list(grounded_eff.operands)
-        elif grounded_eff:
-            atoms_to_process = [grounded_eff]
+        atoms_to_process = flatten_formula(ground_formula(effect, var_map))
 
         for atom in atoms_to_process:
             if isinstance(atom, Not):
@@ -262,24 +268,3 @@ class ProblemGenerator:
                     new_state.add(atom)
 
         return new_state
-
-    def _ground_formula(self, formula, var_map: Dict[str, Constant]):
-        """
-        Recursively substitutes variables in formula with constants using the provided mapping.
-        """
-        if isinstance(formula, And):
-            return And(*[self._ground_formula(op, var_map) for op in formula.operands])
-        elif isinstance(formula, Not):
-            return Not(self._ground_formula(formula.argument, var_map))
-        elif isinstance(formula, Predicate):
-            # Substitute terms
-            new_terms = []
-            for term in formula.terms:
-                if hasattr(term, "name") and term.name in var_map:
-                    new_terms.append(var_map[term.name])
-                else:
-                    # Already a constant or unknown variable
-                    new_terms.append(term)
-            return Predicate(formula.name, *new_terms)
-
-        return formula

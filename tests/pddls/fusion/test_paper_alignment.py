@@ -4,6 +4,7 @@ from pddl.logic.base import And, Not
 
 from puxle.pddls.fusion.action_modifier import ActionModifier, FusionParams
 from puxle.pddls.fusion.domain_fusion import DomainFusion
+from puxle.pddls.fusion.formula_facts import flatten_formula
 
 
 def test_disjoint_fusion():
@@ -72,7 +73,7 @@ def test_reversibility():
 
     has_p_adder = False
     for a in modified_actions:
-        effs = modifier._extract_atomic_conditions(a.effect)
+        effs = flatten_formula(a.effect)
         for eff in effs:
             if isinstance(eff, Predicate) and eff.name == "P":
                 has_p_adder = True
