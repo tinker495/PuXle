@@ -24,24 +24,12 @@ class DomainFusion:
         if not domains:
             raise ValueError("At least one domain must be provided for fusion.")
 
-        # 1. Merge Requirements
         requirements = self._merge_requirements(domains)
-
-        # 2. Merge Types
-        # Types are merged by name (shared type system assumption)
+        # Types and constants merge by name; predicates and actions are kept disjoint.
         types = self._merge_types(domains)
-
-        # 3. Merge Constants
-        # Constants are also merged by name.
         constants = self._merge_constants(domains)
-
-        # 4. Merge Predicates (Disjoint)
         predicates = self._merge_predicates_disjoint(domains)
-
-        # 5. Merge Actions (Disjoint)
         actions = self._merge_actions_disjoint(domains)
-
-        # TODO: derived predicates if any
 
         return Domain(
             name=name,
@@ -127,8 +115,7 @@ class DomainFusion:
             for a in d.actions:
                 new_name = f"{prefix}{a.name}"
 
-                # We must also rename all predicates appearing in precond/effect
-                # to match the disjoint predicate names.
+                # Rename predicates in precond/effect to match disjoint predicate names.
                 new_pre = self._rename_predicates_in_formula(a.precondition, prefix)
                 new_eff = self._rename_predicates_in_formula(a.effect, prefix)
 
@@ -149,11 +136,7 @@ class DomainFusion:
         if formula is None:
             return None
 
-        # Handle And, Not, Or, Imply, etc.
-        # Assuming minimal support for And/Not/Predicate for now based on previous code.
-
         if hasattr(formula, "operands"):  # And, Or
-            # Reconstruct same type
             new_ops = [
                 self._rename_predicates_in_formula(op, prefix)
                 for op in formula.operands
@@ -166,7 +149,6 @@ class DomainFusion:
             )
 
         if hasattr(formula, "name") and hasattr(formula, "terms"):  # Predicate
-            # Rename!
             new_name = f"{prefix}{formula.name}"
             return type(formula)(new_name, *formula.terms)
 

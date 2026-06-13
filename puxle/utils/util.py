@@ -7,12 +7,12 @@ bitpacking via ``bits=...``. The canonical low-level codec is
 carries duplicate primitives.
 """
 
-from typing import Type, TypeVar
+from typing import Callable, Type, TypeVar
 
 T = TypeVar("T")
 
 
-def add_img_parser(cls: Type[T], imgfunc: callable) -> Type[T]:
+def add_img_parser(cls: Type[T], imgfunc: Callable) -> Type[T]:
     """Deprecated alias for :func:`puxle.render.attach_state_renderer`.
 
     Kept so external puzzle authors that depend on the historical

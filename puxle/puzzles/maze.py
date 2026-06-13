@@ -169,7 +169,6 @@ class Maze(Puzzle):
         stack_ptr = 0
 
         # Choose starting cell - always start at (0, 0)
-        # key, start_key = jax.random.split(key) # No longer needed for random start
         start_pos = jnp.array([0, 0], dtype=TYPE)
         maze = maze.at[start_pos[0], start_pos[1]].set(
             False

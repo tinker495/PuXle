@@ -597,61 +597,6 @@ class TestPuzzleValidation:
                 )
 
 
-def run_comprehensive_puzzle_tests():
-    """Run all puzzle validation tests"""
-    print("=" * 80)
-    print("COMPREHENSIVE PUZZLE VALIDATION TESTS")
-    print("=" * 80)
-
-    # Create test instance
-    test_instance = TestPuzzleValidation()
-
-    # Get puzzle configurations
-    puzzle_configs = test_instance.puzzle_configs()
-    rng_key = jax.random.PRNGKey(42)
-
-    print(f"\nTesting {len(puzzle_configs)} puzzle configurations...")
-    print("-" * 50)
-
-    try:
-        # Run all test methods
-        test_methods = [
-            test_instance.test_puzzle_instantiation,
-            test_instance.test_state_generation,
-            test_instance.test_neighbor_generation,
-            test_instance.test_solution_checking,
-            test_instance.test_action_strings,
-            test_instance.test_string_parsing,
-            test_instance.test_jax_compilation,
-            test_instance.test_batched_operations,
-            test_instance.test_puzzle_properties,
-            test_instance.test_state_equality,
-        ]
-
-        for test_method in test_methods:
-            print(
-                f"\n{test_method.__name__.replace('test_', '').replace('_', ' ').title()}:"
-            )
-            print("-" * 30)
-
-            if "rng_key" in test_method.__code__.co_varnames:
-                test_method(puzzle_configs, rng_key)
-            else:
-                test_method(puzzle_configs)
-
-    except Exception as e:
-        print(f"\n❌ Test execution failed: {e}")
-        raise
-
-    print("\n" + "=" * 80)
-    print("ALL PUZZLE VALIDATION TESTS COMPLETED!")
-    print("=" * 80)
-
-
-if __name__ == "__main__":
-    run_comprehensive_puzzle_tests()
-
-
 # ---------------------------------------------------------------------------
 # CayleyPuzzle integration tests — skipped when cayleypy is not installed.
 # ---------------------------------------------------------------------------
@@ -662,7 +607,19 @@ cayleypy = pytest.importorskip("cayleypy")
 def _make_cayley_puzzle():
     from puxle.puzzles import CayleyPuzzle
 
-    return CayleyPuzzle.from_cayleypy_factory("cyclic", 8)
+    candidates = [
+        ("cyclic", (8,), {}),
+        ("cyclic_coxeter", (8,), {}),
+        ("top_spin", (8,), {"factory_kwargs": {"k": 4}}),
+        ("pancake", (5,), {}),
+    ]
+    errors = []
+    for name, args, kwargs in candidates:
+        try:
+            return CayleyPuzzle.from_cayleypy_factory(name, *args, **kwargs)
+        except ValueError as exc:
+            errors.append(str(exc))
+    pytest.skip("No supported cayleypy registry entry available: " + "; ".join(errors))
 
 
 @pytest.fixture(scope="module")

@@ -85,33 +85,6 @@ class TopSpin(Puzzle):
         # Start from solved state and apply random moves
         return self._get_shuffled_state(solve_config, solve_config.TargetState, key, 18)
 
-    def _get_neighbors_internal(
-        self, state: "TopSpin.State"
-    ) -> tuple["TopSpin.State", chex.Array]:
-        """Internal function to compute neighbors without vmap."""
-        p = state.permutation
-
-        # 1. Shift Left
-        state_left = self.State(permutation=jnp.roll(p, -1))
-
-        # 2. Shift Right
-        state_right = self.State(permutation=jnp.roll(p, 1))
-
-        # 3. Reverse Turnstile
-        turnstile = p[: self.turnstile_size]
-        reversed_turnstile = jnp.flip(turnstile)
-        perm_reversed = p.at[: self.turnstile_size].set(reversed_turnstile)
-        state_reversed = self.State(permutation=perm_reversed)
-
-        # Combine states - use jax.tree_util.tree_map to stack arrays within the dataclass
-        all_states = jax.tree_util.tree_map(
-            lambda *args: jnp.stack(args), state_left, state_right, state_reversed
-        )
-
-        costs = jnp.ones(3)  # All moves have cost 1
-
-        return all_states, costs
-
     def get_actions(
         self,
         solve_config: Puzzle.SolveConfig,

@@ -268,10 +268,9 @@ def test_subprocess_import_without_cayleypy():
     cayleypy_present = importlib.util.find_spec("cayleypy") is not None
 
     if not cayleypy_present:
-        # cayleypy is absent in this process — verify in-process.
-        # Step 1: CayleyPuzzle class itself is importable (lazy module).
-
-        # Step 2: constructing with a non-graph_def raises ImportError naming [cayley].
+        # cayleypy is absent in this process — verify in-process that the class
+        # imports (lazy module) and that constructing with a non-graph_def
+        # raises ImportError naming [cayley].
         class FakeGraphDef:
             pass
 
@@ -359,10 +358,6 @@ def test_state_field_per_mode(perm_puzzle, mat_puzzle):
     mat_cfg = mat_puzzle.get_solve_config()
     mat_state = mat_cfg.TargetState
     assert hasattr(mat_state, "vector"), "MATRIX state must have .vector"
-    assert not hasattr(mat_state, "vector") or not hasattr(mat_state, "permutation"), (
-        "MATRIX state must not have .permutation"
-    )
-    # Clearer positive assertion:
     assert not hasattr(mat_state, "permutation"), (
         "MATRIX state must not have .permutation"
     )
@@ -429,38 +424,17 @@ def test_jaxtar_astar_smoke():
 
 
 def test_matrix_overflow_precondition():
-    # Craft m and modulo such that m * (modulo - 1)**2 >= 2**63.
-    # m=2, modulo-1 = ceil(sqrt(2**63 / 2)) = ceil(2**31) = 2**31
-    # => modulo = 2**31 + 1, but _read_graph_def checks modulo <= 2**31 - 1.
-    # Use: m=4, modulo = 2**31 (just enough to overflow).
-    # 4 * (2**31 - 1)^2 ≈ 4 * 2**62 = 2**64 >= 2**63. But modulo must be <= 2**31-1.
-    # With m=4, modulo=2**31-1: 4 * (2**31-2)^2 ≈ 4*(2^31)^2 = 2^63. Borderline.
-    # Use m=3, modulo=2**21: 3*(2**21-1)**2 = 3*~2**42 = ~3*2**42 < 2**63. Not enough.
-    # Use m=4, modulo=2**16: 4*(65535)^2 = 4*4.3e9 ~= 1.7e10, < 2**63. Not enough.
-    # We need m * (modulo-1)**2 >= 2**63.
-    # Simplest: m=1 doesn't work (only 1x1 matrix, 1*(m-1)^2 = 0).
-    # Use m=2, modulo = 2**31: violates modulo <= 2**31-1 check first.
-    # Actually the implementation checks: if int(self._m) * (modulo - 1) ** 2 >= 2 ** 63: raise ValueError
-    # AND it checks modulo <= 2**31-1 in _close_under_inversion_matrices (not _read_graph_def).
-    # The overflow check happens before _close_under_inversion_matrices is called.
-    # So we need m*(modulo-1)**2 >= 2**63 with modulo <= 2**31-1.
-    # With m=2, modulo=2**31-1=2147483647: 2*(2147483646)^2 = 2*~4.6e18 = ~9.2e18 > 2**63=9.2e18.
-    # Actually 2*(2**31-2)**2 = 2*(2^31)^2 - ... let's compute precisely:
-    # (2**31-2)**2 = 2**62 - 2**32 + 4; 2*(2**62 - 2**32 + 4) = 2**63 - 2**33 + 8 < 2**63. Just under!
-    # Use m=3, modulo=2**22: 3*(2**22-1)**2 = 3*~4.4e12 = ~1.3e13 < 2**63. No.
-    # Use m=4, modulo=2**16+1=65537: 4*(65536)^2 = 4*4294967296 = 1.7e10. No.
-    # Let's try: need m*(p-1)^2 >= 2**63.
-    # p-1 = sqrt(2**63/m). For m=2: p-1 = sqrt(2**62) = 2**31. So p=2**31+1 > 2**31-1. Too big.
-    # For m=3: p-1 = sqrt(2**63/3) = sqrt(3.07e18) ~ 1.75e9. p ~ 1.75e9+1 < 2**31-1 = 2.1e9. OK!
-    # 3 * (1753413056)**2 check: 1753413056**2 = ~3.074e18; 3*3.074e18 = 9.22e18 > 9.22e18 = 2**63.
-    # Let's use p = int(np.ceil(np.sqrt(2**63 / 3))) + 1 to be safe.
+    # The adapter rejects generators where m * (modulo - 1)**2 >= 2**63, the
+    # point at which int64 matrix-vector products can overflow. With m=3 the
+    # smallest triggering modulo still fits the <= 2**31-1 int32 bound, so this
+    # exercises the overflow guard rather than the modulo-range check.
     import math
 
     from puxle.puzzles.cayley_puzzle import CayleyPuzzle
 
     m = 3
-    p_min = int(math.ceil(math.sqrt(2**63 / m))) + 1  # p-1 value
-    modulo = p_min + 1  # modulo = (p-1) + 1 = p_min + 1
+    p_min = int(math.ceil(math.sqrt(2**63 / m))) + 1
+    modulo = p_min + 1
 
     # Ensure modulo fits in int32 check (modulo <= 2**31-1).
     if modulo > 2**31 - 1:

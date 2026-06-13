@@ -9,6 +9,7 @@ from puxle import PDDL
 from puxle.pddls.fusion.action_modifier import ActionModifier, FusionParams
 from puxle.pddls.fusion.domain_fusion import DomainFusion
 from puxle.pddls.fusion.problem_generator import ProblemGenerator
+from puxle.pddls.fusion.validator import DomainValidator
 
 
 def _domain_type_parent_map(domain: Domain) -> dict[str, str]:
@@ -24,6 +25,13 @@ def _domain_type_parent_map(domain: Domain) -> dict[str, str]:
         for t in domain_types:
             mapping[str(t)] = "object"
     return mapping
+
+
+def _validate_fused_domain(domain: Domain) -> None:
+    valid, errors = DomainValidator().validate(domain)
+    if not valid:
+        joined_errors = "; ".join(errors)
+        raise ValueError(f"Invalid fused PDDL domain '{domain.name}': {joined_errors}")
 
 
 def fuse_and_load(
@@ -47,15 +55,12 @@ def fuse_and_load(
     if params is None:
         params = FusionParams()
 
-    # 1. Parse all domains
+    # 1. Parse and structurally fuse all domains.
     domains = [pddl.parse_domain(d) for d in domain_paths]
-
-    # 2. Fuse Domains (Structural Merge)
     fusion_engine = DomainFusion()
     fused_domain = fusion_engine.fuse_domains(domains, name=name)
 
-    # 3. Modify Actions (Stochastic Dynamics)
-    # We need all predicates for sampling new conditions/effects
+    # 2. Stochastically modify actions; sampling needs all predicates and the type map.
     all_predicates = list(fused_domain.predicates)
     types_map = _domain_type_parent_map(fused_domain)
 
@@ -64,8 +69,7 @@ def fuse_and_load(
         list(fused_domain.actions), all_predicates, types_map
     )
 
-    # Replace actions in domain
-    # pddl.Domain is immutable-ish but we can construct new one
+    # 3. Rebuild the (immutable) domain with the modified actions.
     final_domain = Domain(
         name=fused_domain.name,
         requirements=fused_domain.requirements,
@@ -74,15 +78,12 @@ def fuse_and_load(
         predicates=fused_domain.predicates,
         actions=modified_actions,
     )
+    _validate_fused_domain(final_domain)
 
-    # 4. Generate a default Problem
-    # We need a problem to initialize the PDDL env (PuXle requirement)
+    # 4. PuXle requires a problem to initialize the env; generate a small default.
     generator = ProblemGenerator(seed=params.seed)
-    # Just generate a small sample problem logic
     problem = generator.generate_problem(final_domain, num_objects=5, walk_length=5)
 
-    # 5. Initialize PDDL Environment
-    # We pass objects directly instead of paths
     return PDDL(domain=final_domain, problem=problem, **kwargs)
 
 
@@ -101,11 +102,7 @@ def generate_benchmark(
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # Fusion (Single domain variant for the batch?)
-    # Or do we want unique domain variant per problem?
-    # Usually benchmarks have fixed domain, multiple problems.
-    # So we generate ONE fused domain.
-
+    # Benchmarks share a single fused domain across all generated problems.
     domains = [pddl.parse_domain(d) for d in domain_paths]
     fusion_engine = DomainFusion()
     fused_domain = fusion_engine.fuse_domains(domains, name="fused-benchmark")
@@ -125,6 +122,7 @@ def generate_benchmark(
         predicates=fused_domain.predicates,
         actions=modified_actions,
     )
+    _validate_fused_domain(final_domain)
 
     # Write Domain
     domain_file = os.path.join(output_dir, "domain.pddl")
@@ -196,16 +194,11 @@ def iterative_fusion(
         predicates=current_domain.predicates,
         actions=modified_actions,
     )
+    _validate_fused_domain(current_domain)
 
-    # Subsequent iterations: fuse current with itself to increase density
-    # This is a simple interpretation of iterative fusion:
-    # merging the domain with itself increases action count (if renaming works)
-    # or just allows re-application of stochastic modifiers on a "denser" base?
-    # PDDLFuse paper suggests fusing generated domains.
+    # Subsequent iterations fuse the domain with itself. Disjoint renaming doubles
+    # the action count each pass, rapidly increasing domain size.
     for i in range(2, depth + 1):
-        # We fuse the current domain with itself.
-        # Since we implemented renaming, this doubles the actions (original + renamed copy).
-        # This rapidly increases domain size.
         current_domain = fusion_engine.fuse_domains(
             [current_domain, current_domain], name=f"{name_prefix}-d{i}"
         )
@@ -225,6 +218,7 @@ def iterative_fusion(
             predicates=current_domain.predicates,
             actions=modified_actions,
         )
+        _validate_fused_domain(current_domain)
 
     return current_domain
 
@@ -258,9 +252,7 @@ def generate_benchmark_with_varying_depth(
         depth_dir = root / f"depth_{d}"
         depth_dir.mkdir(exist_ok=True)
 
-        # 1. Create fused domain for this depth
-        # We use iterative fusion
-        # Note: iterative_fusion parses domains inside.
+        # 1. Create fused domain for this depth (iterative_fusion parses domains inside).
         print(f"Generating depth {d} domain...")
         fused_domain = iterative_fusion(
             base_domains, depth=d, params=params, name_prefix=f"fused_d{d}"
@@ -277,11 +269,8 @@ def generate_benchmark_with_varying_depth(
         generator = ProblemGenerator(seed=params.seed + d)  # vary seed by depth
 
         for i in range(problems_per_depth):
-            # We vary complexity slightly by varying problem size?
-            # Or keep constant size but harder domain structure.
-            # Let's keep size somewhat constant or scaled by depth?
-            # Let's keep constant for comparable size benchmarks.
-            num_objs = 5 + d * 2  # Scale objects with depth?
+            # Scale problem size with fusion depth.
+            num_objs = 5 + d * 2
             walk_len = 10 + d * 5
 
             p_name = f"prob_d{d}_{i:02d}"

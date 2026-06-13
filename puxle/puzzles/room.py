@@ -3,8 +3,6 @@ import jax.numpy as jnp
 
 from .maze import Maze  # Inherit from Maze
 
-# Removed Fixed Map Constants - Map is now generated dynamically
-
 
 # JAX-compatible Disjoint Set Union (DSU) find operation
 def dsu_find_jax(parent_array: jnp.ndarray, i: int) -> int:
@@ -71,10 +69,6 @@ class Room(Maze):
             target_room_dim_float = (size - 2) / 3
             room_dim = max(1, round(target_room_dim_float))
             actual_size = 3 * room_dim + 2
-            print(
-                f"[Room Puzzle] Input size {size} is invalid."
-                f"Using closest valid size {actual_size} (room dimension {room_dim})."
-            )
 
         self.room_dim = room_dim
         self._prob_open_extra_door = prob_open_extra_door
@@ -265,6 +259,3 @@ class Room(Maze):
         )
 
         return final_maze
-
-    # Removed _generate_room_map method as its logic is now integrated and enhanced
-    # in _generate_maze_dfs above.

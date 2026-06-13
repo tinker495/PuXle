@@ -4,7 +4,7 @@ from pddl.logic import Predicate, Variable
 
 from puxle import PDDL
 from puxle.pddls.fusion.action_modifier import ActionModifier, FusionParams
-from puxle.pddls.fusion.api import fuse_and_load
+from puxle.pddls.fusion.api import fuse_and_load, generate_benchmark, iterative_fusion
 from puxle.pddls.fusion.domain_fusion import DomainFusion
 
 # Mock data
@@ -145,6 +145,54 @@ def test_fuse_and_load_api(domain_files, tmp_path):
     # Validates that PuXle initialized correctly with in-memory objects
     assert env.num_actions >= 2  # act1 + act2
     assert env.num_atoms > 0
+
+
+def test_fuse_and_load_validates_domain_before_problem_generation(
+    domain_files, monkeypatch
+):
+    def reject_domain(self, domain):
+        return False, ["synthetic validation failure"]
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("problem generation should not run for invalid domains")
+
+    monkeypatch.setattr(
+        "puxle.pddls.fusion.api.DomainValidator.validate", reject_domain
+    )
+    monkeypatch.setattr(
+        "puxle.pddls.fusion.api.ProblemGenerator.generate_problem", fail_if_called
+    )
+
+    with pytest.raises(ValueError, match="synthetic validation failure"):
+        fuse_and_load(list(domain_files), name="invalid-fused")
+
+
+def test_generate_benchmark_validates_domain_before_writing(
+    domain_files, tmp_path, monkeypatch
+):
+    def reject_domain(self, domain):
+        return False, ["synthetic validation failure"]
+
+    monkeypatch.setattr(
+        "puxle.pddls.fusion.api.DomainValidator.validate", reject_domain
+    )
+
+    with pytest.raises(ValueError, match="synthetic validation failure"):
+        generate_benchmark(list(domain_files), str(tmp_path / "bench"))
+
+    assert not (tmp_path / "bench" / "domain.pddl").exists()
+
+
+def test_iterative_fusion_validates_each_fused_domain(domain_files, monkeypatch):
+    def reject_domain(self, domain):
+        return False, ["synthetic validation failure"]
+
+    monkeypatch.setattr(
+        "puxle.pddls.fusion.api.DomainValidator.validate", reject_domain
+    )
+
+    with pytest.raises(ValueError, match="synthetic validation failure"):
+        iterative_fusion(list(domain_files), depth=1, params=FusionParams())
 
 
 def test_n_domain_fusion(tmp_path):

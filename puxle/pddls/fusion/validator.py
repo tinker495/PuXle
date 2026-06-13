@@ -46,8 +46,6 @@ class DomainValidator:
 
     def _validate_type_consistency(self, action: Action, domain: Domain) -> bool:
         """Check if action parameter types are defined in the domain."""
-        # domain.types usually contains all Type objects.
-        # We need to extract names.
         if not domain.types:
             return True  # Untyped
 
@@ -58,8 +56,6 @@ class DomainValidator:
             if hasattr(param, "type_tags") and param.type_tags:
                 for tag in param.type_tags:
                     if tag not in defined_types:
-                        # Check strictness: if tag is not in types, invalid?
-                        # PDDL might allow implicit types but usually strict matching.
                         return False
             elif hasattr(param, "type_tag") and param.type_tag:
                 if param.type_tag not in defined_types:
@@ -84,30 +80,22 @@ class DomainValidator:
         return preds
 
     def _validate_action_consistency(self, action: Action) -> bool:
-        """Check if action effects contain direct contradictions."""
-        # This is a simple check: can't add and delete the same atom.
-        # But 'same atom' means same predicate and same variables.
+        """Check if action effects contain direct contradictions.
 
-        # We need to flatten effects into lists of atomic effects
+        An action is inconsistent if it both adds and deletes the same atom
+        (same predicate and arguments).
+        """
         effects = self._flatten_effects(action.effect)
 
         adds = set()
         dels = set()
-
         for eff in effects:
             if isinstance(eff, Not):
-                # We convert to string representation for comparison
                 dels.add(str(eff.argument))
             else:
                 adds.add(str(eff))
 
-        # Intersection means we try to Add P and Del P at same time.
-        # In PDDL, usually Del happens before Add or undefined. PDDLFuse paper mentions consistency check.
-        # If intersection is non-empty, it's ambiguous or contradictory.
-        if not adds.isdisjoint(dels):
-            return False
-
-        return True
+        return adds.isdisjoint(dels)
 
     def _flatten_effects(self, formula: Formula) -> List[Formula]:
         """Flatten nested Ands."""

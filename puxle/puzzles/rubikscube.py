@@ -692,46 +692,6 @@ class RubiksCube(Puzzle):
                 thickness=thickness,
             )
 
-    def _draw_face_grid(
-        self,
-        img,
-        face_id,
-        coords_generator,
-        transform,
-        stickers,
-        color_faces,
-        *,
-        backend,
-    ):
-        """
-        Draw a complete cube face as a grid of tiles.
-
-        Args:
-            img: Target image array
-            face_id: Face identifier (UP, FRONT, RIGHT, etc.)
-            coords_generator: Generator function (i, j) -> [(x0,y0,z0), (x1,y1,z1), (x2,y2,z2), (x3,y3,z3)]
-            transform: Transform function (x, y, z) -> (screen_x, screen_y)
-            stickers: Sticker value array
-            color_faces: Color index array
-            backend: Cv2Backend instance routing every drawing primitive.
-        """
-        import numpy as np
-
-        for i in range(self.size):
-            for j in range(self.size):
-                corners = coords_generator(i, j)
-                pts = np.array([transform(*c) for c in corners], np.int32).reshape(
-                    (-1, 1, 2)
-                )
-
-                row, col = coords_generator.get_face_indices(i, j)
-                color_idx = int(color_faces[face_id, row, col])
-                value = int(stickers[face_id, row, col])
-
-                self._draw_tile(
-                    img, pts, color_idx, value, self.color_embedding, backend=backend
-                )
-
     def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.

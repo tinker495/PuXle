@@ -18,9 +18,6 @@ from .formatting import (
     build_solve_config_string_parser,
     build_state_string_parser,
 )
-from .formatting import (
-    split_atom as fmt_split_atom,
-)
 from .grounding import ground_actions as gr_ground_actions
 from .grounding import ground_predicates as gr_ground_predicates
 from .masks import (
@@ -32,20 +29,12 @@ from .masks import (
 from .masks import (
     build_masks as mk_build_masks,
 )
-from .masks import (
-    extract_goal_conditions as mk_extract_goal_conditions,
-)
 from .state_defs import build_solve_config_class, build_state_class
-
-# Refactored helpers
 from .type_system import (
     collect_type_hierarchy,
 )
 from .type_system import (
     extract_objects_by_type as ts_extract_objects_by_type,
-)
-from .type_system import (
-    select_most_specific_types as ts_select_most_specific_types,
 )
 
 
@@ -190,25 +179,11 @@ class PDDL(Puzzle):
         self._label_color_map = label_color_map
         self._label_termcolor_map = label_termcolor_map
 
-    @staticmethod
-    def _split_atom(atom_str: str) -> tuple[str, list[str]]:
-        """Split an atom string like "(pred a b)" into ("pred", ["a", "b"])."""
-        return fmt_split_atom(atom_str)
-
-    # -------------------------
-    # Type hierarchy utilities
-    # -------------------------
     def _collect_type_hierarchy(
         self,
     ) -> tuple[dict[str, str], dict[str, set[str]], dict[str, set[str]]]:
         """Extract type hierarchy from the domain (delegated)."""
         return collect_type_hierarchy(self.domain)
-
-    def _select_most_specific_types(self, type_tags: set[str]) -> list[str]:
-        """Keep the most specific types from a set of tags using the hierarchy (delegated)."""
-        if not hasattr(self, "_type_hierarchy_cache"):
-            self._type_hierarchy_cache = self._collect_type_hierarchy()
-        return ts_select_most_specific_types(type_tags, self._type_hierarchy_cache)
 
     def _extract_objects_by_type(self) -> Dict[str, List[str]]:
         """Extract objects grouped by types, respecting hierarchy (delegated)."""
@@ -228,32 +203,6 @@ class PDDL(Puzzle):
             self._type_hierarchy_cache,
         )
 
-    def _get_type_combinations(self, param_types: List[str]) -> List[List[str]]:
-        """Deprecated: combinations are now handled in the delegated grounding module."""
-        # Backward-compatible fallback using local logic (kept for safety if called elsewhere)
-        if not param_types:
-            return [[]]
-        combinations: list[list[str]] = []
-        first_type = param_types[0]
-        remaining_types = param_types[1:]
-        if isinstance(first_type, (list, tuple, set)):
-            seen_union: set[str] = set()
-            available_objects: list[str] = []
-            for t in first_type:
-                for o in self.objects_by_type.get(t, []):
-                    if o not in seen_union:
-                        seen_union.add(o)
-                        available_objects.append(o)
-        else:
-            available_objects = list(self.objects_by_type.get(first_type, []))
-        if not available_objects:
-            return []
-        sub_combinations = self._get_type_combinations(remaining_types)
-        for obj in available_objects:
-            for sub_combo in sub_combinations:
-                combinations.append([obj] + sub_combo)
-        return combinations
-
     def _ground_actions(self) -> Tuple[List[Dict], Dict[str, int]]:
         """Ground all actions to create action universe (delegated)."""
         if not hasattr(self, "_type_hierarchy_cache"):
@@ -263,22 +212,6 @@ class PDDL(Puzzle):
             self.objects_by_type,
             self._type_hierarchy_cache,
         )
-
-    def _ground_formula(
-        self, formula, param_substitution: List[str], param_names: List[str]
-    ) -> List[str]:
-        """Deprecated: delegated to grounding module; retained for safety."""
-        from .grounding import _ground_formula as _gf
-
-        return _gf(formula, param_substitution, param_names)
-
-    def _ground_effects(
-        self, effect, param_substitution: List[str], param_names: List[str]
-    ) -> Tuple[List[str], List[str]]:
-        """Deprecated: delegated to grounding module; retained for safety."""
-        from .grounding import _ground_effects as _ge
-
-        return _ge(effect, param_substitution, param_names)
 
     def _build_masks(
         self,
@@ -297,10 +230,6 @@ class PDDL(Puzzle):
         self.goal_mask = mk_build_goal_mask(
             self.problem, self.atom_to_idx, self.num_atoms
         )
-
-    def _extract_goal_conditions(self, goal) -> List[str]:
-        """Extract atomic conditions from goal formula (delegated)."""
-        return mk_extract_goal_conditions(goal)
 
     def define_state_class(self) -> PuzzleState:
         """Define state class with packed atoms."""

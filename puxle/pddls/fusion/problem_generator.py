@@ -6,14 +6,6 @@ from pddl.core import Domain, Problem
 from pddl.logic import Constant, Predicate
 from pddl.logic.base import And, Not
 
-# Minimal forward model for generation (pure Python)
-# We avoid full PDDL grounding here since we are generating symbol-level problems
-# and we assume we can just pick random ground actions.
-# However, for correct simulation, we need to know valid groundings.
-# This makes it circular: to generate a problem, we need to solve it (simulate it).
-# But solving requires grounding.
-# We will implement a lightweight symbolic forward simulator.
-
 
 class ProblemGenerator:
     """
@@ -42,79 +34,52 @@ class ProblemGenerator:
             A pddl.Problem instance.
         """
 
-        # 1. Create Objects
-        # We need to assign types if domain is typed.
-        # Collect all types
+        # 1. Create objects, assigning random types when the domain is typed.
         types = list(domain.types) if domain.types else []
         objects = []
 
         if types:
-            # Randomly assign types to objects
             for i in range(num_objects):
-                obj_name = f"obj{i}"
-                obj_type = self.rng.choice(types)  # Simple random assignment
-                objects.append(Constant(obj_name, type_tag=str(obj_type)))
+                obj_type = self.rng.choice(types)
+                objects.append(Constant(f"obj{i}", type_tag=str(obj_type)))
         else:
-            # Untyped
             for i in range(num_objects):
                 objects.append(Constant(f"obj{i}"))
 
-        # 2. Generate Initial State
+        # 2. Generate initial state, falling back to a random sparse state.
         init_state = self._generate_domain_specific_init(domain, objects)
         if not init_state:
-            # Fallback to random sparse if heuristic returns empty or n/a
             init_state = self._generate_initial_state(domain, objects)
 
-        # 3. Simulate Walk
+        # 3. Simulate a random applicable-action walk to reach a solvable goal state.
         current_state = set(init_state)
 
-        # To simulate, we need to find applicable actions.
-        # We need to ground actions with available objects.
-        # This can be expensive. We'll do lazy random sampling.
-
-        trace = []
-
         for _ in range(walk_length):
-            # Try to find a valid action
-            # 20 attempts
             found = False
-            for _ in range(20):
+            for _ in range(20):  # attempts to find an applicable grounded action
                 action = self.rng.choice(list(domain.actions))
-
-                # Sample args matching types
                 args = self._sample_args(action, objects)
-
                 if args is None:
                     continue
 
-                # Build variable mapping {param_name: constant}
-                # args correspond to action.parameters in order
                 var_map = {
                     param.name: arg for param, arg in zip(action.parameters, args)
                 }
-
-                # Check preconditions
                 if self._check_preconditions(
                     action.precondition, var_map, current_state
                 ):
-                    # Apply effects
                     current_state = self._apply_effects(
                         action.effect, var_map, current_state
                     )
-                    trace.append((action.name, [a.name for a in args]))
                     found = True
                     break
 
             if not found:
-                # If we get stuck, we stop early
                 break
 
-        # 4. Define Goal
-        # Goal is a subset of the final state
-        # Don't pick everything, maybe 2-3 atoms
+        # 4. Goal is a small subset (<=3 atoms) of the reached final state.
         if not current_state:
-            # Fallback if nothing happened
-            goal = And()  # Empty goal
+            goal = And()
         else:
             goal_atoms = self.rng.sample(
                 list(current_state), min(3, len(current_state))

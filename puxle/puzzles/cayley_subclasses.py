@@ -28,12 +28,8 @@ from __future__ import annotations
 
 import inspect
 import re
-from typing import TYPE_CHECKING
 
 from puxle.puzzles.cayley_puzzle import CayleyPuzzle
-
-if TYPE_CHECKING:
-    pass
 
 # ---------------------------------------------------------------------------
 # Cache: maps class name -> generated class object

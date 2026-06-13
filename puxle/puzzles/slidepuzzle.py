@@ -198,9 +198,6 @@ class SlidePuzzle(Puzzle):
     def _get_blank_row(self, board: chex.Array):
         return self._get_blank_position(board)[0]
 
-    def _get_blank_col(self, board: chex.Array):
-        return self._get_blank_position(board)[1]
-
     def _get_inv_count(self, board: chex.Array):
         def is_inv(a, b):
             return jnp.logical_and(a > b, jnp.logical_and(a != 0, b != 0))
