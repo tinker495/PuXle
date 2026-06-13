@@ -44,6 +44,83 @@ class PuzzleTrajectory:
     step_indices: Optional[chex.Array] = None
 
 
+def _repeat_solve_configs_for_steps(solve_configs, k_max: int):
+    return jax.tree_util.tree_map(
+        lambda leaf: jnp.repeat(leaf[:, jnp.newaxis, ...], k_max, axis=1),
+        solve_configs,
+    )
+
+
+def _trajectory_indices(shuffle_parallel: int, k_max: int) -> chex.Array:
+    return jnp.broadcast_to(
+        jnp.arange(shuffle_parallel, dtype=jnp.int32)[:, jnp.newaxis],
+        (shuffle_parallel, k_max),
+    )
+
+
+def _step_indices(shuffle_parallel: int, k_max: int) -> chex.Array:
+    return jnp.broadcast_to(
+        jnp.arange(k_max, dtype=jnp.int32)[jnp.newaxis, :],
+        (shuffle_parallel, k_max),
+    )
+
+
+def _chain_parent_indices(shuffle_parallel: int, k_max: int) -> chex.Array:
+    indices = jnp.arange(k_max * shuffle_parallel, dtype=jnp.int32)
+    parent_indices = indices - 1
+    parent_indices = parent_indices.reshape(shuffle_parallel, k_max)
+    return parent_indices.at[:, 0].set(-1)
+
+
+def _flatten_batch_time_trajectory(
+    *,
+    solve_configs,
+    states,
+    move_costs: chex.Array,
+    move_costs_tm1: chex.Array,
+    actions: chex.Array,
+    action_costs: chex.Array,
+    parent_indices: chex.Array,
+    trajectory_indices: chex.Array,
+    step_indices: chex.Array,
+) -> PuzzleTrajectory:
+    return PuzzleTrajectory(
+        solve_configs=solve_configs.flatten(),
+        states=states.flatten(),
+        move_costs=move_costs.flatten(),
+        move_costs_tm1=move_costs_tm1.flatten(),
+        actions=actions.flatten(),
+        action_costs=action_costs.flatten(),
+        parent_indices=parent_indices.flatten(),
+        trajectory_indices=trajectory_indices.flatten(),
+        step_indices=step_indices.flatten(),
+    )
+
+
+def _flatten_chain_trajectory(
+    *,
+    solve_configs,
+    states,
+    move_costs: chex.Array,
+    move_costs_tm1: chex.Array,
+    actions: chex.Array,
+    action_costs: chex.Array,
+    shuffle_parallel: int,
+    k_max: int,
+) -> PuzzleTrajectory:
+    return _flatten_batch_time_trajectory(
+        solve_configs=solve_configs,
+        states=states,
+        move_costs=move_costs,
+        move_costs_tm1=move_costs_tm1,
+        actions=actions,
+        action_costs=action_costs,
+        parent_indices=_chain_parent_indices(shuffle_parallel, k_max),
+        trajectory_indices=_trajectory_indices(shuffle_parallel, k_max),
+        step_indices=_step_indices(shuffle_parallel, k_max),
+    )
+
+
 def create_target_shuffled_path(
     puzzle: "Puzzle",
     k_max: int,
@@ -80,35 +157,16 @@ def create_target_shuffled_path(
     inv_actions = inv_actions.transpose((1, 0))
     action_costs = action_costs.transpose((1, 0))
 
-    solve_configs = jax.tree_util.tree_map(
-        lambda leaf: jnp.repeat(leaf[:, jnp.newaxis, ...], k_max, axis=1),
-        solve_configs,
-    )
-
-    trajectory_indices = jnp.broadcast_to(
-        jnp.arange(shuffle_parallel, dtype=jnp.int32)[:, jnp.newaxis],
-        (shuffle_parallel, k_max),
-    )
-    step_indices = jnp.broadcast_to(
-        jnp.arange(k_max, dtype=jnp.int32)[jnp.newaxis, :],
-        (shuffle_parallel, k_max),
-    )
-
-    indices = jnp.arange(k_max * shuffle_parallel, dtype=jnp.int32)
-    parent_indices = indices - 1
-    parent_indices = parent_indices.reshape(shuffle_parallel, k_max)
-    parent_indices = parent_indices.at[:, 0].set(-1)
-
-    return PuzzleTrajectory(
-        solve_configs=solve_configs.flatten(),
-        states=states.flatten(),
-        move_costs=move_costs.flatten(),
-        move_costs_tm1=move_costs_tm1.flatten(),
-        actions=inv_actions.flatten(),
-        action_costs=action_costs.flatten(),
-        parent_indices=parent_indices.flatten(),
-        trajectory_indices=trajectory_indices.flatten(),
-        step_indices=step_indices.flatten(),
+    solve_configs = _repeat_solve_configs_for_steps(solve_configs, k_max)
+    return _flatten_chain_trajectory(
+        solve_configs=solve_configs,
+        states=states,
+        move_costs=move_costs,
+        move_costs_tm1=move_costs_tm1,
+        actions=inv_actions,
+        action_costs=action_costs,
+        shuffle_parallel=shuffle_parallel,
+        k_max=k_max,
     )
 
 
@@ -179,35 +237,16 @@ def create_hindsight_target_shuffled_path(
     actions = actions.transpose((1, 0))
     action_costs = action_costs.transpose((1, 0))
 
-    solve_configs = jax.tree_util.tree_map(
-        lambda leaf: jnp.repeat(leaf[:, jnp.newaxis, ...], k_max, axis=1),
-        solve_configs,
-    )
-
-    trajectory_indices = jnp.broadcast_to(
-        jnp.arange(shuffle_parallel, dtype=jnp.int32)[:, jnp.newaxis],
-        (shuffle_parallel, k_max),
-    )
-    step_indices = jnp.broadcast_to(
-        jnp.arange(k_max, dtype=jnp.int32)[jnp.newaxis, :],
-        (shuffle_parallel, k_max),
-    )
-
-    indices = jnp.arange(k_max * shuffle_parallel, dtype=jnp.int32)
-    parent_indices = indices - 1
-    parent_indices = parent_indices.reshape(shuffle_parallel, k_max)
-    parent_indices = parent_indices.at[:, 0].set(-1)
-
-    return PuzzleTrajectory(
-        solve_configs=solve_configs.flatten(),
-        states=states.flatten(),
-        move_costs=move_costs.flatten(),
-        move_costs_tm1=move_costs_tm1.flatten(),
-        actions=actions.flatten(),
-        action_costs=action_costs.flatten(),
-        parent_indices=parent_indices.flatten(),
-        trajectory_indices=trajectory_indices.flatten(),
-        step_indices=step_indices.flatten(),
+    solve_configs = _repeat_solve_configs_for_steps(solve_configs, k_max)
+    return _flatten_chain_trajectory(
+        solve_configs=solve_configs,
+        states=states,
+        move_costs=move_costs,
+        move_costs_tm1=move_costs_tm1,
+        actions=actions,
+        action_costs=action_costs,
+        shuffle_parallel=shuffle_parallel,
+        k_max=k_max,
     )
 
 
@@ -297,23 +336,17 @@ def create_hindsight_target_triangular_shuffled_path(
 
     step_indices = jnp.take_along_axis(k_transposed, sort_indices, axis=1)
 
-    trajectory_indices = jnp.broadcast_to(
-        jnp.arange(shuffle_parallel, dtype=jnp.int32)[:, jnp.newaxis],
-        (shuffle_parallel, k_max),
-    )
-
     parent_indices = jnp.full((shuffle_parallel, k_max), -1, dtype=jnp.int32)
-
-    return PuzzleTrajectory(
-        solve_configs=final_solve_configs.flatten(),
-        states=final_start_states.flatten(),
-        move_costs=final_move_costs.flatten(),
-        move_costs_tm1=final_move_costs_tm1.flatten(),
-        actions=final_actions.flatten(),
-        action_costs=final_action_costs.flatten(),
-        parent_indices=parent_indices.flatten(),
-        trajectory_indices=trajectory_indices.flatten(),
-        step_indices=step_indices.flatten(),
+    return _flatten_batch_time_trajectory(
+        solve_configs=final_solve_configs,
+        states=final_start_states,
+        move_costs=final_move_costs,
+        move_costs_tm1=final_move_costs_tm1,
+        actions=final_actions,
+        action_costs=final_action_costs,
+        parent_indices=parent_indices,
+        trajectory_indices=_trajectory_indices(shuffle_parallel, k_max),
+        step_indices=step_indices,
     )
 
 

@@ -1,4 +1,5 @@
 import jax
+import jax.numpy as jnp
 import pytest
 
 from puxle.core.trajectory import (
@@ -122,6 +123,57 @@ def test_create_hindsight_target_triangular_shuffled_path():
 
     assert wrapped.states.board_unpacked.shape == (10, 100), (
         "Triangular Wrapper output shape mismatch"
+    )
+
+
+def test_chain_trajectory_indices_are_canonical():
+    sk = Sokoban()
+    key = jax.random.PRNGKey(42)
+
+    wrapped = create_hindsight_target_shuffled_path(
+        sk,
+        k_max=5,
+        shuffle_parallel=2,
+        include_solved_states=True,
+        key=key,
+        non_backtracking_steps=1,
+    )
+
+    assert jnp.array_equal(
+        wrapped.parent_indices,
+        jnp.array([-1, 0, 1, 2, 3, -1, 5, 6, 7, 8], dtype=jnp.int32),
+    )
+    assert jnp.array_equal(
+        wrapped.trajectory_indices,
+        jnp.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=jnp.int32),
+    )
+    assert jnp.array_equal(
+        wrapped.step_indices,
+        jnp.array([0, 1, 2, 3, 4, 0, 1, 2, 3, 4], dtype=jnp.int32),
+    )
+
+
+def test_triangular_trajectory_indices_are_independent_samples():
+    sk = Sokoban()
+    key = jax.random.PRNGKey(42)
+
+    wrapped = create_hindsight_target_triangular_shuffled_path(
+        sk,
+        k_max=5,
+        shuffle_parallel=2,
+        include_solved_states=True,
+        key=key,
+        non_backtracking_steps=1,
+    )
+
+    assert jnp.array_equal(wrapped.parent_indices, jnp.full((10,), -1, dtype=jnp.int32))
+    assert jnp.array_equal(
+        wrapped.trajectory_indices,
+        jnp.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=jnp.int32),
+    )
+    assert jnp.array_equal(
+        wrapped.step_indices.reshape(2, 5),
+        jnp.sort(wrapped.step_indices.reshape(2, 5), axis=1),
     )
 
 
