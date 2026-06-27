@@ -201,18 +201,20 @@ def _slide_preset_class(
     )
 
 
-SlidePuzzleDeepCubeA15Benchmark = _slide_preset_class(
-    "SlidePuzzleDeepCubeA15Benchmark", SlidePuzzlePreset.SIZE15
-)
-SlidePuzzleDeepCubeA24Benchmark = _slide_preset_class(
-    "SlidePuzzleDeepCubeA24Benchmark", SlidePuzzlePreset.SIZE24
-)
-SlidePuzzleDeepCubeA35Benchmark = _slide_preset_class(
-    "SlidePuzzleDeepCubeA35Benchmark", SlidePuzzlePreset.SIZE35
-)
-SlidePuzzleDeepCubeA48Benchmark = _slide_preset_class(
-    "SlidePuzzleDeepCubeA48Benchmark", SlidePuzzlePreset.SIZE48
-)
+SlidePuzzleDeepCubeA15Benchmark: type[SlidePuzzleDeepCubeABenchmark]
+SlidePuzzleDeepCubeA24Benchmark: type[SlidePuzzleDeepCubeABenchmark]
+SlidePuzzleDeepCubeA35Benchmark: type[SlidePuzzleDeepCubeABenchmark]
+SlidePuzzleDeepCubeA48Benchmark: type[SlidePuzzleDeepCubeABenchmark]
+
+for _name, _preset in (
+    ("SlidePuzzleDeepCubeA15Benchmark", SlidePuzzlePreset.SIZE15),
+    ("SlidePuzzleDeepCubeA24Benchmark", SlidePuzzlePreset.SIZE24),
+    ("SlidePuzzleDeepCubeA35Benchmark", SlidePuzzlePreset.SIZE35),
+    ("SlidePuzzleDeepCubeA48Benchmark", SlidePuzzlePreset.SIZE48),
+):
+    globals()[_name] = _slide_preset_class(_name, _preset)
+
+del _name, _preset
 
 
 class SlidePuzzleDeepCubeA15HardBenchmark(SlidePuzzleDeepCubeABenchmark):

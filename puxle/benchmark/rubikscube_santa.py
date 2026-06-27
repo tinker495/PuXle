@@ -260,53 +260,58 @@ def _santa_preset_class(
     )
 
 
-RubiksCubeSanta222Benchmark = _santa_preset_class(
-    "RubiksCubeSanta222Benchmark",
-    RubiksCubeSantaBenchmark,
-    RubiksCubeSantaPreset.CUBE_2,
-)
-RubiksCubeSanta333Benchmark = _santa_preset_class(
-    "RubiksCubeSanta333Benchmark",
-    RubiksCubeSantaBenchmark,
-    RubiksCubeSantaPreset.CUBE_3,
-)
-RubiksCubeSanta444Benchmark = _santa_preset_class(
-    "RubiksCubeSanta444Benchmark",
-    RubiksCubeSantaBenchmark,
-    RubiksCubeSantaPreset.CUBE_4,
-)
-RubiksCubeSanta555Benchmark = _santa_preset_class(
-    "RubiksCubeSanta555Benchmark",
-    RubiksCubeSantaBenchmark,
-    RubiksCubeSantaPreset.CUBE_5,
-)
-RubiksCubeSanta666Benchmark = _santa_preset_class(
-    "RubiksCubeSanta666Benchmark",
-    RubiksCubeSantaBenchmark,
-    RubiksCubeSantaPreset.CUBE_6,
-)
-RubiksCubeSantaRandom222Benchmark = _santa_preset_class(
-    "RubiksCubeSantaRandom222Benchmark",
-    RubiksCubeSantaRandomBenchmark,
-    RubiksCubeSantaPreset.CUBE_2,
-)
-RubiksCubeSantaRandom333Benchmark = _santa_preset_class(
-    "RubiksCubeSantaRandom333Benchmark",
-    RubiksCubeSantaRandomBenchmark,
-    RubiksCubeSantaPreset.CUBE_3,
-)
-RubiksCubeSantaRandom444Benchmark = _santa_preset_class(
-    "RubiksCubeSantaRandom444Benchmark",
-    RubiksCubeSantaRandomBenchmark,
-    RubiksCubeSantaPreset.CUBE_4,
-)
-RubiksCubeSantaRandom555Benchmark = _santa_preset_class(
-    "RubiksCubeSantaRandom555Benchmark",
-    RubiksCubeSantaRandomBenchmark,
-    RubiksCubeSantaPreset.CUBE_5,
-)
-RubiksCubeSantaRandom666Benchmark = _santa_preset_class(
-    "RubiksCubeSantaRandom666Benchmark",
-    RubiksCubeSantaRandomBenchmark,
-    RubiksCubeSantaPreset.CUBE_6,
-)
+for _name, _base_class, _preset in (
+    (
+        "RubiksCubeSanta222Benchmark",
+        RubiksCubeSantaBenchmark,
+        RubiksCubeSantaPreset.CUBE_2,
+    ),
+    (
+        "RubiksCubeSanta333Benchmark",
+        RubiksCubeSantaBenchmark,
+        RubiksCubeSantaPreset.CUBE_3,
+    ),
+    (
+        "RubiksCubeSanta444Benchmark",
+        RubiksCubeSantaBenchmark,
+        RubiksCubeSantaPreset.CUBE_4,
+    ),
+    (
+        "RubiksCubeSanta555Benchmark",
+        RubiksCubeSantaBenchmark,
+        RubiksCubeSantaPreset.CUBE_5,
+    ),
+    (
+        "RubiksCubeSanta666Benchmark",
+        RubiksCubeSantaBenchmark,
+        RubiksCubeSantaPreset.CUBE_6,
+    ),
+    (
+        "RubiksCubeSantaRandom222Benchmark",
+        RubiksCubeSantaRandomBenchmark,
+        RubiksCubeSantaPreset.CUBE_2,
+    ),
+    (
+        "RubiksCubeSantaRandom333Benchmark",
+        RubiksCubeSantaRandomBenchmark,
+        RubiksCubeSantaPreset.CUBE_3,
+    ),
+    (
+        "RubiksCubeSantaRandom444Benchmark",
+        RubiksCubeSantaRandomBenchmark,
+        RubiksCubeSantaPreset.CUBE_4,
+    ),
+    (
+        "RubiksCubeSantaRandom555Benchmark",
+        RubiksCubeSantaRandomBenchmark,
+        RubiksCubeSantaPreset.CUBE_5,
+    ),
+    (
+        "RubiksCubeSantaRandom666Benchmark",
+        RubiksCubeSantaRandomBenchmark,
+        RubiksCubeSantaPreset.CUBE_6,
+    ),
+):
+    globals()[_name] = _santa_preset_class(_name, _base_class, _preset)
+
+del _name, _base_class, _preset
