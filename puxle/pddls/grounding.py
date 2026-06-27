@@ -7,6 +7,7 @@ object combinations drawn from the problem's typed-object pool.
 
 from __future__ import annotations
 
+from itertools import product
 from typing import Dict, List, Set, Tuple
 
 from .type_system import select_most_specific_types
@@ -48,24 +49,10 @@ def _get_type_combinations(
     param_types: List[object], objects_by_type: Dict[str, List[str]]
 ) -> List[List[str]]:
     """Get all valid object combinations for given parameter types."""
-    if not param_types:
-        return [[]]
-
-    first_type = param_types[0]
-    rest_types = param_types[1:]
-
-    objects = _objects_for_type_spec(first_type, objects_by_type)
-    if not objects:
-        return []
-
-    rest_combinations = _get_type_combinations(rest_types, objects_by_type)
-
-    combinations: List[List[str]] = []
-    for obj in objects:
-        for combo in rest_combinations:
-            combinations.append([obj] + combo)
-
-    return combinations
+    object_options = [
+        _objects_for_type_spec(type_spec, objects_by_type) for type_spec in param_types
+    ]
+    return [list(combo) for combo in product(*object_options)]
 
 
 def ground_predicates(

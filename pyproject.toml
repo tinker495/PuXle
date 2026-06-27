@@ -41,7 +41,6 @@ Issues = "https://github.com/tinker495/PuXle/issues"
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
     "pre-commit>=3.0.0",
     "ruff>=0.15.0",
 ]
