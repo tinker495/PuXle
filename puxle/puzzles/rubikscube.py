@@ -1,3 +1,4 @@
+import re
 from collections.abc import Callable
 from functools import partial
 from typing import Any
@@ -7,7 +8,6 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from tabulate import tabulate
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
@@ -49,6 +49,47 @@ rgb_map = {
     LEFT: (255, 128, 0),  # orange
     DOWN: (255, 255, 0),  # yellow
 }
+
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _visible_len(text: str) -> int:
+    return len(_ANSI_RE.sub("", text))
+
+
+def _pad_visible(text: str, width: int) -> str:
+    return text + " " * max(0, width - _visible_len(text))
+
+
+def _plain_table(rows: list[list[str]], sep: str = "  ") -> str:
+    split_rows = [[cell.splitlines() for cell in row] for row in rows]
+    col_count = max(len(row) for row in split_rows)
+    widths = [
+        max(
+            _visible_len(line)
+            for row in split_rows
+            for cell in row[col : col + 1]
+            for line in cell
+        )
+        for col in range(col_count)
+    ]
+
+    lines = []
+    for row in split_rows:
+        height = max(len(cell) for cell in row)
+        centered = []
+        for cell in row:
+            top = (height - len(cell)) // 2
+            centered.append([""] * top + cell + [""] * (height - len(cell) - top))
+        for i in range(height):
+            lines.append(
+                sep.join(
+                    _pad_visible(cell[i], widths[col])
+                    for col, cell in enumerate(centered)
+                ).rstrip()
+            )
+    return "\n".join(lines)
 
 
 def rot90_traceable(m, k=1, axes=(0, 1)):
@@ -323,7 +364,7 @@ class RubiksCube(Puzzle):
                 return string
 
             # Create the cube string representation
-            cube_str = tabulate(
+            cube_str = _plain_table(
                 [
                     [color_legend(), (".\n" + get_face_string(UP))],
                     [
@@ -333,9 +374,7 @@ class RubiksCube(Puzzle):
                         get_face_string(BACK),
                     ],
                     [get_empty_face_string(), get_face_string(DOWN)],
-                ],
-                tablefmt="plain",
-                rowalign="center",
+                ]
             )
             return cube_str
 

@@ -91,7 +91,6 @@ autodoc_mock_imports = [
     "xtructure",
     "pddl",
     "termcolor",
-    "tabulate",
     "cv2",
     "tqdm",
 ]
