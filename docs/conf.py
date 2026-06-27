@@ -94,7 +94,6 @@ autodoc_mock_imports = [
     "tabulate",
     "cv2",
     "tqdm",
-    "pandas",
 ]
 
 # Prefer real JAX when available; fall back to mocks only when unavailable.

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import csv
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Hashable, Iterable
+from typing import Any, Dict, Hashable, Iterable, Mapping
 
 import jax.numpy as jnp
 import numpy as np
-import pandas as pd
 
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.puzzles.rubikscube import RubiksCube
@@ -100,18 +100,21 @@ class RubiksCubeSantaBenchmark(Benchmark):
         if not path.is_file():
             raise FileNotFoundError(f"Santa 2023 dataset not found at {path}")
 
-        df = pd.read_csv(path)
-        # Filter by puzzle type
-        df = df[df["puzzle_type"] == self.puzzle_type]
+        with path.open(newline="") as f:
+            rows = [
+                row
+                for row in csv.DictReader(f)
+                if row["puzzle_type"] == self.puzzle_type
+            ]
 
-        if df.empty:
+        if not rows:
             raise ValueError(
                 f"No puzzles found for type '{self.puzzle_type}' in {path}"
             )
 
         # Pre-process samples
         samples = []
-        for _, row in df.iterrows():
+        for row in rows:
             parsed = self._parse_row(row)
             if parsed is not None:
                 samples.append(parsed)
@@ -126,7 +129,7 @@ class RubiksCubeSantaBenchmark(Benchmark):
         """
         return np.array_equal(solution_mapped, np.sort(solution_mapped))
 
-    def _parse_and_map_row(self, row: pd.Series) -> Dict[str, Any] | None:
+    def _parse_and_map_row(self, row: Mapping[str, str]) -> Dict[str, Any] | None:
         """
         Parse and map a row without applying the is_standard filter.
         Returns a dict with parsed data including is_standard flag, or None if parsing fails.
@@ -138,8 +141,10 @@ class RubiksCubeSantaBenchmark(Benchmark):
         if initial_str.startswith("N") or solution_str.startswith("N"):
             return None
 
+        wildcards = int(row.get("num_wildcards") or 0)
+
         # Filter out puzzles with wildcards
-        if row.get("num_wildcards", 0) > 0:
+        if wildcards > 0:
             return None
 
         initial_raw = np.array(initial_str.split(";"))
@@ -154,14 +159,14 @@ class RubiksCubeSantaBenchmark(Benchmark):
         is_standard = self._is_standard_solution(solution_mapped)
 
         return {
-            "id": row["id"],
+            "id": int(row["id"]),
             "initial": initial_mapped,
             "target": solution_mapped,
-            "wildcards": row["num_wildcards"],
+            "wildcards": wildcards,
             "is_standard": is_standard,
         }
 
-    def _parse_row(self, row: pd.Series) -> Dict[str, Any] | None:
+    def _parse_row(self, row: Mapping[str, str]) -> Dict[str, Any] | None:
         """
         Parse a row and return sample data. Filters to only STANDARD solution puzzles.
         """
@@ -215,7 +220,7 @@ class RubiksCubeSantaRandomBenchmark(RubiksCubeSantaBenchmark):
         permutation puzzle, https://kaggle.com/competitions/santa-2023 (2023), kaggle.
     """
 
-    def _parse_row(self, row: pd.Series) -> Dict[str, Any] | None:
+    def _parse_row(self, row: Mapping[str, str]) -> Dict[str, Any] | None:
         """
         Parse a row and return sample data. Filters to only NON-STANDARD (random) solution puzzles.
         """
