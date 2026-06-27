@@ -181,9 +181,7 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         return optimal_action_sequence, float(len(optimal_action_sequence))
 
 
-def _slide_preset_class(
-    name: str, preset: SlidePuzzlePreset
-) -> type[SlidePuzzleDeepCubeABenchmark]:
+def _slide_preset_class(name: str, preset: SlidePuzzlePreset):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
         SlidePuzzleDeepCubeABenchmark.__init__(
             self, dataset_path=dataset_path, preset=preset
@@ -192,12 +190,7 @@ def _slide_preset_class(
     return type(
         name,
         (SlidePuzzleDeepCubeABenchmark,),
-        {
-            "__init__": __init__,
-            "__module__": __name__,
-            "__qualname__": name,
-            "__doc__": f"SlidePuzzleDeepCubeABenchmark for {preset.dataset_name}.",
-        },
+        {"__init__": __init__, "__module__": __name__},
     )
 
 
@@ -206,15 +199,16 @@ SlidePuzzleDeepCubeA24Benchmark: type[SlidePuzzleDeepCubeABenchmark]
 SlidePuzzleDeepCubeA35Benchmark: type[SlidePuzzleDeepCubeABenchmark]
 SlidePuzzleDeepCubeA48Benchmark: type[SlidePuzzleDeepCubeABenchmark]
 
-for _name, _preset in (
-    ("SlidePuzzleDeepCubeA15Benchmark", SlidePuzzlePreset.SIZE15),
-    ("SlidePuzzleDeepCubeA24Benchmark", SlidePuzzlePreset.SIZE24),
-    ("SlidePuzzleDeepCubeA35Benchmark", SlidePuzzlePreset.SIZE35),
-    ("SlidePuzzleDeepCubeA48Benchmark", SlidePuzzlePreset.SIZE48),
+for _size, _preset in (
+    (15, SlidePuzzlePreset.SIZE15),
+    (24, SlidePuzzlePreset.SIZE24),
+    (35, SlidePuzzlePreset.SIZE35),
+    (48, SlidePuzzlePreset.SIZE48),
 ):
+    _name = f"SlidePuzzleDeepCubeA{_size}Benchmark"
     globals()[_name] = _slide_preset_class(_name, _preset)
 
-del _name, _preset
+del _size, _preset, _name
 
 
 class SlidePuzzleDeepCubeA15HardBenchmark(SlidePuzzleDeepCubeABenchmark):
