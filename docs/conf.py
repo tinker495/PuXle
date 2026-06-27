@@ -91,7 +91,6 @@ autodoc_mock_imports = [
     "xtructure",
     "pddl",
     "cv2",
-    "tqdm",
 ]
 
 # Prefer real JAX when available; fall back to mocks only when unavailable.
