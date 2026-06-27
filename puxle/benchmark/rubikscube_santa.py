@@ -240,53 +240,25 @@ class RubiksCubeSantaRandomBenchmark(RubiksCubeSantaBenchmark):
         }
 
 
-# Specialized Benchmarks for specific sizes (Standard)
-class RubiksCubeSanta222Benchmark(RubiksCubeSantaBenchmark):
+def _santa_preset_class(name: str, base_class, preset: RubiksCubeSantaPreset):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_2, dataset_path=dataset_path)
+        base_class.__init__(self, preset=preset, dataset_path=dataset_path)
+
+    return type(name, (base_class,), {"__init__": __init__, "__module__": __name__})
 
 
-class RubiksCubeSanta333Benchmark(RubiksCubeSantaBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_3, dataset_path=dataset_path)
+for _suffix, _preset in (
+    ("222", RubiksCubeSantaPreset.CUBE_2),
+    ("333", RubiksCubeSantaPreset.CUBE_3),
+    ("444", RubiksCubeSantaPreset.CUBE_4),
+    ("555", RubiksCubeSantaPreset.CUBE_5),
+    ("666", RubiksCubeSantaPreset.CUBE_6),
+):
+    for _prefix, _base_class in (
+        ("RubiksCubeSanta", RubiksCubeSantaBenchmark),
+        ("RubiksCubeSantaRandom", RubiksCubeSantaRandomBenchmark),
+    ):
+        _name = f"{_prefix}{_suffix}Benchmark"
+        globals()[_name] = _santa_preset_class(_name, _base_class, _preset)
 
-
-class RubiksCubeSanta444Benchmark(RubiksCubeSantaBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_4, dataset_path=dataset_path)
-
-
-class RubiksCubeSanta555Benchmark(RubiksCubeSantaBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_5, dataset_path=dataset_path)
-
-
-class RubiksCubeSanta666Benchmark(RubiksCubeSantaBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_6, dataset_path=dataset_path)
-
-
-# Specialized Benchmarks for specific sizes (Random)
-class RubiksCubeSantaRandom222Benchmark(RubiksCubeSantaRandomBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_2, dataset_path=dataset_path)
-
-
-class RubiksCubeSantaRandom333Benchmark(RubiksCubeSantaRandomBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_3, dataset_path=dataset_path)
-
-
-class RubiksCubeSantaRandom444Benchmark(RubiksCubeSantaRandomBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_4, dataset_path=dataset_path)
-
-
-class RubiksCubeSantaRandom555Benchmark(RubiksCubeSantaRandomBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_5, dataset_path=dataset_path)
-
-
-class RubiksCubeSantaRandom666Benchmark(RubiksCubeSantaRandomBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_6, dataset_path=dataset_path)
+del _suffix, _preset, _prefix, _base_class, _name

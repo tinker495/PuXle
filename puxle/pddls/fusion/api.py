@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -86,7 +85,7 @@ def generate_benchmark(
     if params is None:
         params = FusionParams()
 
-    os.makedirs(output_dir, exist_ok=True)
+    root = Path(output_dir)
 
     # Benchmarks share a single fused domain across all generated problems.
     domains = [pddl.parse_domain(d) for d in domain_paths]
@@ -110,10 +109,8 @@ def generate_benchmark(
     )
     _validate_fused_domain(final_domain)
 
-    # Write Domain
-    domain_file = os.path.join(output_dir, "domain.pddl")
-    with open(domain_file, "w") as f:
-        f.write(pddl.formatter.domain_to_string(final_domain))
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "domain.pddl").write_text(pddl.formatter.domain_to_string(final_domain))
 
     # Generate Problems
     rng = ProblemGenerator(seed=params.seed)
@@ -131,11 +128,11 @@ def generate_benchmark(
             problem_name=prob_name,
         )
 
-        prob_file = os.path.join(output_dir, f"{prob_name}.pddl")
-        with open(prob_file, "w") as f:
-            f.write(pddl.formatter.problem_to_string(problem))
+        (root / f"{prob_name}.pddl").write_text(
+            pddl.formatter.problem_to_string(problem)
+        )
 
-    print(f"Generated benchmark in {output_dir}: 1 domain, {count} problems.")
+    print(f"Generated benchmark in {root}: 1 domain, {count} problems.")
 
 
 def iterative_fusion(
@@ -244,10 +241,8 @@ def generate_benchmark_with_varying_depth(
             base_domains, depth=d, params=params, name_prefix=f"fused_d{d}"
         )
 
-        # Save domain
         domain_path = depth_dir / "domain.pddl"
-        with open(domain_path, "w") as f:
-            f.write(pddl.formatter.domain_to_string(fused_domain))
+        domain_path.write_text(pddl.formatter.domain_to_string(fused_domain))
 
         print(f"  Saved domain to {domain_path}")
 
@@ -268,7 +263,6 @@ def generate_benchmark_with_varying_depth(
             )
 
             p_path = depth_dir / f"problem_{i:02d}.pddl"
-            with open(p_path, "w") as f:
-                f.write(pddl.formatter.problem_to_string(problem))
+            p_path.write_text(pddl.formatter.problem_to_string(problem))
 
         print(f"  Generated {problems_per_depth} problems in {depth_dir}")

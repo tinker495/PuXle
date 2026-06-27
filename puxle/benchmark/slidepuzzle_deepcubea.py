@@ -181,40 +181,34 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         return optimal_action_sequence, float(len(optimal_action_sequence))
 
 
-class SlidePuzzleDeepCubeA15Benchmark(SlidePuzzleDeepCubeABenchmark):
+def _slide_preset_class(name: str, preset: SlidePuzzlePreset):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(
-            dataset_path,
-            dataset_name=SlidePuzzlePreset.SIZE15.dataset_name,
-            board_size=SlidePuzzlePreset.SIZE15.board_size,
+        SlidePuzzleDeepCubeABenchmark.__init__(
+            self, dataset_path=dataset_path, preset=preset
         )
 
-
-class SlidePuzzleDeepCubeA24Benchmark(SlidePuzzleDeepCubeABenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(
-            dataset_path,
-            dataset_name=SlidePuzzlePreset.SIZE24.dataset_name,
-            board_size=SlidePuzzlePreset.SIZE24.board_size,
-        )
+    return type(
+        name,
+        (SlidePuzzleDeepCubeABenchmark,),
+        {"__init__": __init__, "__module__": __name__},
+    )
 
 
-class SlidePuzzleDeepCubeA35Benchmark(SlidePuzzleDeepCubeABenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(
-            dataset_path,
-            dataset_name=SlidePuzzlePreset.SIZE35.dataset_name,
-            board_size=SlidePuzzlePreset.SIZE35.board_size,
-        )
+SlidePuzzleDeepCubeA15Benchmark: type[SlidePuzzleDeepCubeABenchmark]
+SlidePuzzleDeepCubeA24Benchmark: type[SlidePuzzleDeepCubeABenchmark]
+SlidePuzzleDeepCubeA35Benchmark: type[SlidePuzzleDeepCubeABenchmark]
+SlidePuzzleDeepCubeA48Benchmark: type[SlidePuzzleDeepCubeABenchmark]
 
+for _size, _preset in (
+    (15, SlidePuzzlePreset.SIZE15),
+    (24, SlidePuzzlePreset.SIZE24),
+    (35, SlidePuzzlePreset.SIZE35),
+    (48, SlidePuzzlePreset.SIZE48),
+):
+    _name = f"SlidePuzzleDeepCubeA{_size}Benchmark"
+    globals()[_name] = _slide_preset_class(_name, _preset)
 
-class SlidePuzzleDeepCubeA48Benchmark(SlidePuzzleDeepCubeABenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(
-            dataset_path,
-            dataset_name=SlidePuzzlePreset.SIZE48.dataset_name,
-            board_size=SlidePuzzlePreset.SIZE48.board_size,
-        )
+del _size, _preset, _name
 
 
 class SlidePuzzleDeepCubeA15HardBenchmark(SlidePuzzleDeepCubeABenchmark):

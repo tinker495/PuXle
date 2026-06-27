@@ -10,7 +10,7 @@ __all__ = [
 ]
 
 _EXPORTS = {
-    "IMG_SIZE": (".annotate", "IMG_SIZE"),
+    "IMG_SIZE": (".util", "IMG_SIZE"),
     "coloring_str": (".util", "coloring_str"),
 }
 

@@ -52,7 +52,6 @@ docs = [
     "myst-parser",
 ]
 visualization = [
-    "click>=8.1.0",
     "Pillow>=9.0.0",
 ]
 cuda = [

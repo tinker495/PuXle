@@ -10,12 +10,12 @@ states, and optionally saves image renders in ``images/visualizations/``.
 
 from __future__ import annotations
 
+import argparse
 import ast
 import inspect
 from pathlib import Path
 from typing import Dict, Type
 
-import click
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -72,44 +72,17 @@ def _select_state(puzzle: Puzzle, state_tree: Puzzle.State, index: int) -> Puzzl
     return selected
 
 
-@click.command()
-@click.option(
-    "--puzzle",
-    "puzzle_name",
-    type=str,
-    required=True,
-    help="Puzzle class name to visualize.",
-)
-@click.option(
-    "--seed", default=42, show_default=True, help="PRNG seed for reproducible sampling."
-)
-@click.option(
-    "--img/--no-img", default=False, help="Generate images using puzzle image parsers."
-)
-@click.option(
-    "--output-dir",
-    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
-    default=Path("images/visualizations"),
-    show_default=True,
-    help="Directory where generated images are stored when --img is used.",
-)
-@click.option(
-    "--kwarg",
-    "puzzle_kwargs",
-    multiple=True,
-    help="Additional puzzle constructor keyword arguments as key=value pairs.",
-)
 def visualize_puzzle(
     puzzle_name: str,
     seed: int,
     img: bool,
     output_dir: Path,
-    puzzle_kwargs: tuple[str, ...],
+    puzzle_kwargs: list[str],
 ) -> None:
     puzzles = discover_puzzles()
     if puzzle_name not in puzzles:
         available = ", ".join(sorted(puzzles.keys()))
-        raise click.BadParameter(
+        raise ValueError(
             f"Unknown puzzle '{puzzle_name}'. Available puzzles: {available}"
         )
 
@@ -117,11 +90,11 @@ def visualize_puzzle(
     parsed_kwargs: dict[str, object] = {}
     for item in puzzle_kwargs:
         if "=" not in item:
-            raise click.BadParameter("--kwarg must be provided as key=value")
+            raise ValueError("--kwarg must be provided as key=value")
         key, value = item.split("=", 1)
         key = key.strip()
         if not key:
-            raise click.BadParameter("--kwarg key cannot be empty")
+            raise ValueError("--kwarg key cannot be empty")
         try:
             parsed_value = ast.literal_eval(value)
         except (ValueError, SyntaxError):
@@ -129,7 +102,7 @@ def visualize_puzzle(
         parsed_kwargs[key] = parsed_value
 
     puzzle = puzzle_class(**parsed_kwargs)
-    click.echo(f"Loaded puzzle: {puzzle!r}")
+    print(f"Loaded puzzle: {puzzle!r}")
 
     key = jax.random.PRNGKey(seed)
     key, solve_key, state_key = jax.random.split(key, 3)
@@ -137,9 +110,9 @@ def visualize_puzzle(
     init_state = puzzle.get_initial_state(solve_config, key=state_key)
     neighbours, costs = puzzle.get_neighbours(solve_config, init_state, filled=True)
 
-    click.echo("\nInitial State:")
-    click.echo(_format_state(puzzle, init_state))
-    click.echo("\nAction overview:")
+    print("\nInitial State:")
+    print(_format_state(puzzle, init_state))
+    print("\nAction overview:")
 
     action_labels = [puzzle.action_to_string(i) for i in range(puzzle.action_size)]
     np_costs = np.asarray(costs)
@@ -147,17 +120,17 @@ def visualize_puzzle(
 
     for idx, label in enumerate(action_labels):
         cost_repr = "∞" if not finite_mask[idx] else f"{np_costs[idx]:.3f}"
-        click.echo(f"[{idx:02d}] {label:20s} cost={cost_repr}")
+        print(f"[{idx:02d}] {label:20s} cost={cost_repr}")
         neighbour_state = _select_state(puzzle, neighbours, idx)
-        click.echo(_format_state(puzzle, neighbour_state))
-        click.echo("-")
+        print(_format_state(puzzle, neighbour_state))
+        print("-")
 
     if img:
         img_parser = puzzle.get_img_parser()
         img_root = output_dir / puzzle_name
 
         init_path = _save_image(img_parser(init_state), img_root / "initial.png")
-        click.echo(f"Saved initial state image -> {init_path}")
+        print(f"Saved initial state image -> {init_path}")
 
         for idx in range(puzzle.action_size):
             action_label = action_labels[idx]
@@ -165,8 +138,56 @@ def visualize_puzzle(
             neighbour_path = _save_image(
                 img_parser(neighbour_state), img_root / f"{action_label}.png"
             )
-            click.echo(f"Saved neighbour {action_label} image -> {neighbour_path}")
+            print(f"Saved neighbour {action_label} image -> {neighbour_path}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Visualize PuXle puzzle states.")
+    parser.add_argument(
+        "--puzzle", required=True, help="Puzzle class name to visualize."
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42, help="PRNG seed for reproducible sampling."
+    )
+    parser.add_argument(
+        "--img",
+        dest="img",
+        action="store_true",
+        default=False,
+        help="Generate images using puzzle image parsers.",
+    )
+    parser.add_argument(
+        "--no-img",
+        dest="img",
+        action="store_false",
+        help="Disable image generation.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("images/visualizations"),
+        help="Directory where generated images are stored when --img is used.",
+    )
+    parser.add_argument(
+        "--kwarg",
+        dest="puzzle_kwargs",
+        action="append",
+        default=[],
+        help="Additional puzzle constructor keyword argument as key=value.",
+    )
+    args = parser.parse_args()
+
+    try:
+        visualize_puzzle(
+            puzzle_name=args.puzzle,
+            seed=args.seed,
+            img=args.img,
+            output_dir=args.output_dir,
+            puzzle_kwargs=args.puzzle_kwargs,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
 
 if __name__ == "__main__":
-    visualize_puzzle()
+    main()
