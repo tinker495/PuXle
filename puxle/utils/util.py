@@ -7,6 +7,8 @@ bitpacking via ``bits=...``. The canonical low-level codec is
 carries duplicate primitives.
 """
 
+IMG_SIZE = (640, 640)
+
 
 def coloring_str(string: str, color: tuple[int, int, int]) -> str:
     r, g, b = color

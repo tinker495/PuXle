@@ -8,7 +8,7 @@ import numpy as np
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import IMG_SIZE
 
 # Use 16-bit unsigned integers so that problem sizes >255 are handled without overflow.
 TYPE = jnp.uint16

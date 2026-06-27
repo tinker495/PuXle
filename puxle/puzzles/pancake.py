@@ -8,8 +8,7 @@ import numpy as np
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
-from puxle.utils.annotate import IMG_SIZE
-from puxle.utils.util import colored_str
+from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint8
 
