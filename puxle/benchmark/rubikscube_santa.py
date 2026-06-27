@@ -240,53 +240,73 @@ class RubiksCubeSantaRandomBenchmark(RubiksCubeSantaBenchmark):
         }
 
 
-# Specialized Benchmarks for specific sizes (Standard)
-class RubiksCubeSanta222Benchmark(RubiksCubeSantaBenchmark):
+def _santa_preset_class(
+    name: str,
+    base_class: type[RubiksCubeSantaBenchmark],
+    preset: RubiksCubeSantaPreset,
+) -> type[RubiksCubeSantaBenchmark]:
     def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_2, dataset_path=dataset_path)
+        base_class.__init__(self, preset=preset, dataset_path=dataset_path)
+
+    return type(
+        name,
+        (base_class,),
+        {
+            "__init__": __init__,
+            "__module__": __name__,
+            "__qualname__": name,
+            "__doc__": f"{base_class.__name__} for {preset.puzzle_type}.",
+        },
+    )
 
 
-class RubiksCubeSanta333Benchmark(RubiksCubeSantaBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_3, dataset_path=dataset_path)
-
-
-class RubiksCubeSanta444Benchmark(RubiksCubeSantaBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_4, dataset_path=dataset_path)
-
-
-class RubiksCubeSanta555Benchmark(RubiksCubeSantaBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_5, dataset_path=dataset_path)
-
-
-class RubiksCubeSanta666Benchmark(RubiksCubeSantaBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_6, dataset_path=dataset_path)
-
-
-# Specialized Benchmarks for specific sizes (Random)
-class RubiksCubeSantaRandom222Benchmark(RubiksCubeSantaRandomBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_2, dataset_path=dataset_path)
-
-
-class RubiksCubeSantaRandom333Benchmark(RubiksCubeSantaRandomBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_3, dataset_path=dataset_path)
-
-
-class RubiksCubeSantaRandom444Benchmark(RubiksCubeSantaRandomBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_4, dataset_path=dataset_path)
-
-
-class RubiksCubeSantaRandom555Benchmark(RubiksCubeSantaRandomBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_5, dataset_path=dataset_path)
-
-
-class RubiksCubeSantaRandom666Benchmark(RubiksCubeSantaRandomBenchmark):
-    def __init__(self, dataset_path: str | Path | None = None) -> None:
-        super().__init__(preset=RubiksCubeSantaPreset.CUBE_6, dataset_path=dataset_path)
+RubiksCubeSanta222Benchmark = _santa_preset_class(
+    "RubiksCubeSanta222Benchmark",
+    RubiksCubeSantaBenchmark,
+    RubiksCubeSantaPreset.CUBE_2,
+)
+RubiksCubeSanta333Benchmark = _santa_preset_class(
+    "RubiksCubeSanta333Benchmark",
+    RubiksCubeSantaBenchmark,
+    RubiksCubeSantaPreset.CUBE_3,
+)
+RubiksCubeSanta444Benchmark = _santa_preset_class(
+    "RubiksCubeSanta444Benchmark",
+    RubiksCubeSantaBenchmark,
+    RubiksCubeSantaPreset.CUBE_4,
+)
+RubiksCubeSanta555Benchmark = _santa_preset_class(
+    "RubiksCubeSanta555Benchmark",
+    RubiksCubeSantaBenchmark,
+    RubiksCubeSantaPreset.CUBE_5,
+)
+RubiksCubeSanta666Benchmark = _santa_preset_class(
+    "RubiksCubeSanta666Benchmark",
+    RubiksCubeSantaBenchmark,
+    RubiksCubeSantaPreset.CUBE_6,
+)
+RubiksCubeSantaRandom222Benchmark = _santa_preset_class(
+    "RubiksCubeSantaRandom222Benchmark",
+    RubiksCubeSantaRandomBenchmark,
+    RubiksCubeSantaPreset.CUBE_2,
+)
+RubiksCubeSantaRandom333Benchmark = _santa_preset_class(
+    "RubiksCubeSantaRandom333Benchmark",
+    RubiksCubeSantaRandomBenchmark,
+    RubiksCubeSantaPreset.CUBE_3,
+)
+RubiksCubeSantaRandom444Benchmark = _santa_preset_class(
+    "RubiksCubeSantaRandom444Benchmark",
+    RubiksCubeSantaRandomBenchmark,
+    RubiksCubeSantaPreset.CUBE_4,
+)
+RubiksCubeSantaRandom555Benchmark = _santa_preset_class(
+    "RubiksCubeSantaRandom555Benchmark",
+    RubiksCubeSantaRandomBenchmark,
+    RubiksCubeSantaPreset.CUBE_5,
+)
+RubiksCubeSantaRandom666Benchmark = _santa_preset_class(
+    "RubiksCubeSantaRandom666Benchmark",
+    RubiksCubeSantaRandomBenchmark,
+    RubiksCubeSantaPreset.CUBE_6,
+)
