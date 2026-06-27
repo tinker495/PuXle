@@ -70,62 +70,6 @@ POS_MAP = (
     14,
     11,  # F
 )
-ID_MAP = (
-    6,
-    3,
-    0,
-    7,
-    4,
-    1,
-    8,
-    5,
-    2,  # U
-    51,
-    48,
-    45,
-    52,
-    49,
-    46,
-    53,
-    50,
-    47,  # D
-    42,
-    39,
-    36,
-    43,
-    40,
-    37,
-    44,
-    41,
-    38,  # L
-    24,
-    21,
-    18,
-    25,
-    22,
-    19,
-    26,
-    23,
-    20,  # R
-    33,
-    30,
-    27,
-    34,
-    31,
-    28,
-    35,
-    32,
-    29,  # B
-    15,
-    12,
-    9,
-    16,
-    13,
-    10,
-    17,
-    14,
-    11,  # F
-)
 
 HARD_26_STATES = [
     [
@@ -269,11 +213,9 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
                 f"Expected {total_tiles} tiles for a size-{size} cube, received {faces.size}."
             )
 
-        pos_map = jnp.asarray(POS_MAP, dtype=jnp.int32)
-        faces = jnp.zeros_like(faces).at[pos_map].set(faces)
-
-        id_map = jnp.asarray(ID_MAP, dtype=jnp.int32)
-        faces = jnp.take(id_map, faces)
+        facelet_map = jnp.asarray(POS_MAP, dtype=jnp.int32)
+        faces = jnp.zeros_like(faces).at[facelet_map].set(faces)
+        faces = jnp.take(facelet_map, faces)
 
         return faces
 
