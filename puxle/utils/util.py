@@ -7,24 +7,6 @@ bitpacking via ``bits=...``. The canonical low-level codec is
 carries duplicate primitives.
 """
 
-from typing import Callable, Type, TypeVar
-
-T = TypeVar("T")
-
-
-def add_img_parser(cls: Type[T], imgfunc: Callable) -> Type[T]:
-    """Deprecated alias for :func:`puxle.render.attach_state_renderer`.
-
-    Kept so external puzzle authors that depend on the historical
-    ``from puxle.utils import add_img_parser`` import path still work. New
-    code (including ``puxle.core.puzzle_base``) consumes
-    ``puxle.render.attach_state_renderer`` directly. See CONTEXT.md
-    "Puzzle Renderer".
-    """
-    from puxle.render import attach_state_renderer
-
-    return attach_state_renderer(cls, imgfunc)
-
 
 def coloring_str(string: str, color: tuple[int, int, int]) -> str:
     r, g, b = color

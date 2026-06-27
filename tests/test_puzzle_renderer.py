@@ -3,10 +3,8 @@
 Locks the contracts documented in CONTEXT.md "Puzzle Renderer":
 
 - ``puxle.core.puzzle_base`` consumes ``attach_state_renderer`` from
-  ``puxle.render``, not the legacy ``add_img_parser`` from
+  ``puxle.render``, not the removed ``add_img_parser`` alias from
   ``puxle.utils.util``.
-- The legacy ``puxle.utils.util.add_img_parser`` still works (deprecated
-  alias contract) so external puzzle authors do not break.
 - Migrated puzzle modules render directly with cv2 and no longer depend on
   the deleted ``Cv2Backend`` wrapper.
 """
@@ -58,21 +56,13 @@ def test_puzzle_base_does_not_import_legacy_alias():
     )
 
 
-def test_legacy_add_img_parser_still_delegates():
-    """External puzzle authors that import add_img_parser must keep working."""
+def test_legacy_add_img_parser_alias_is_removed():
     util = importlib.import_module("puxle.utils.util")
+    utils = importlib.import_module("puxle.utils")
     render = importlib.import_module("puxle.render")
-    assert hasattr(util, "add_img_parser")
+    assert not hasattr(util, "add_img_parser")
+    assert not hasattr(utils, "add_img_parser")
     assert hasattr(render, "attach_state_renderer")
-
-    def fake_imgfunc(state, **kwargs):
-        return np.zeros((1, 1, 3), dtype=np.uint8)
-
-    class _StubCls:
-        pass
-
-    util.add_img_parser(_StubCls, fake_imgfunc)
-    assert hasattr(_StubCls, "img"), "add_img_parser must attach an `img` method."
 
 
 def test_render_module_attach_state_renderer_attaches_img_method():

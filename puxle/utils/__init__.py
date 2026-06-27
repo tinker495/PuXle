@@ -6,13 +6,11 @@ from puxle._lazy_imports import lazy_dir, load_lazy_export
 
 __all__ = [
     "IMG_SIZE",
-    "add_img_parser",
     "coloring_str",
 ]
 
 _EXPORTS = {
     "IMG_SIZE": (".annotate", "IMG_SIZE"),
-    "add_img_parser": (".util", "add_img_parser"),
     "coloring_str": (".util", "coloring_str"),
 }
 
