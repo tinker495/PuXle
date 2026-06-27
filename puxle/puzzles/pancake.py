@@ -1,13 +1,15 @@
 from collections.abc import Callable
 
 import chex
+import cv2
 import jax
 import jax.numpy as jnp
-from termcolor import colored
+import numpy as np
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import colored_str
 
 TYPE = jnp.uint8
 
@@ -70,7 +72,9 @@ class PancakeSorting(Puzzle):
                 size_str = "=" * (2 * (int(pancake) - 1) + 1)
                 result.append(
                     f"{i + 1:02d}:{pancake:02d} - "
-                    + colored(f"{size_str.center(self.size * 2)}", get_color(pancake))
+                    + colored_str(
+                        f"{size_str.center(self.size * 2)}", get_color(pancake)
+                    )
                 )
             result.append("Plate " + "┗━" + "━━" * self.size + "┛")
             return "\n".join(result)
@@ -79,15 +83,12 @@ class PancakeSorting(Puzzle):
 
     def get_img_parser(self) -> Callable:
         """Returns a function to convert a state to an image representation"""
-        import numpy as np
-
-        from puxle.render import Cv2Backend
-
-        backend = Cv2Backend()
 
         def img_func(state: "PancakeSorting.State", **kwargs):
             # IMG_SIZE is actually a tuple (width, height)
-            image = backend.canvas(size=IMG_SIZE, fill_bgr=(240, 240, 240))
+            image = np.full(
+                (IMG_SIZE[1], IMG_SIZE[0], 3), (240, 240, 240), dtype=np.uint8
+            )
             stack = state.stack
             max_size = self.size
 
@@ -100,14 +101,15 @@ class PancakeSorting(Puzzle):
             plate_y = img_height - 50  # Position plate at the bottom with some margin
             plate_height = pancake_height // 2
             plate_width = int(max_width * 1.1)
-            image = backend.ellipse(
+            image = cv2.ellipse(
                 image,
-                center=(IMG_SIZE[0] // 2, plate_y + plate_height // 2),
-                axes=(plate_width // 2, plate_height // 2),
-                angle=0,
-                start_angle=0,
-                end_angle=180,
-                color_bgr=(150, 150, 150),
+                (IMG_SIZE[0] // 2, plate_y + plate_height // 2),
+                (plate_width // 2, plate_height // 2),
+                0,
+                0,
+                180,
+                (150, 150, 150),
+                -1,
             )
 
             def draw_pancake(img, y_pos, size):
@@ -143,47 +145,52 @@ class PancakeSorting(Puzzle):
                 )
 
                 # Draw filled pancake with rounded corners
-                img = backend.fill_poly(img, points=[rect_points], color_bgr=color)
+                img = cv2.fillPoly(img, [rect_points], color)
 
                 # Add a highlight on top of the pancake
                 highlight_y = y_pos + 2
                 highlight_height = pancake_height // 4
-                img = backend.rect(
+                img = cv2.rectangle(
                     img,
-                    top_left=(x_start + 5, highlight_y),
-                    bottom_right=(x_end - 5, highlight_y + highlight_height),
-                    color_bgr=(
+                    (x_start + 5, highlight_y),
+                    (x_end - 5, highlight_y + highlight_height),
+                    (
                         min(color[0] + 40, 255),
                         min(color[1] + 40, 255),
                         min(color[2] + 40, 255),
                     ),
+                    -1,
                 )
 
                 # Add a shadow at the bottom
                 shadow_y = y_pos + pancake_height - highlight_height - 2
-                img = backend.rect(
+                img = cv2.rectangle(
                     img,
-                    top_left=(x_start + 5, shadow_y),
-                    bottom_right=(x_end - 5, shadow_y + highlight_height),
-                    color_bgr=(
+                    (x_start + 5, shadow_y),
+                    (x_end - 5, shadow_y + highlight_height),
+                    (
                         max(color[0] - 40, 0),
                         max(color[1] - 40, 0),
                         max(color[2] - 40, 0),
                     ),
+                    -1,
                 )
 
                 # Add size text in the middle of the pancake
                 text = str(int(size))
-                text_w, text_h = backend.text_size(text, font_scale=0.7, thickness=2)
+                (text_w, text_h), _ = cv2.getTextSize(
+                    text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2
+                )
                 text_x = (x_start + x_end - text_w) // 2
                 text_y = y_pos + (pancake_height + text_h) // 2
-                img = backend.text(
+                img = cv2.putText(
                     img,
-                    text=text,
-                    position=(text_x, text_y),
-                    color_bgr=(255, 255, 255),
-                    font_scale=0.7,
-                    thickness=2,
+                    text,
+                    (text_x, text_y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 255, 255),
+                    2,
                 )
 
                 return img

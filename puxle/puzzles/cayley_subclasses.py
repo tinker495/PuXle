@@ -20,13 +20,13 @@ Public helpers:
     discover(factory_name, *args, **kwargs) -> type[CayleyPuzzle]
     list_available_factories() -> list[str]
 
-No top-level cayleypy import — imports lazily inside __getattr__ and inside
-generated __init__ methods. Module loads cleanly without cayleypy installed.
+No top-level cayleypy import. Common generated class names can be imported
+without cayleypy installed; actual graph construction still imports cayleypy in
+the generated __init__ method.
 """
 
 from __future__ import annotations
 
-import inspect
 import re
 
 from puxle.puzzles.cayley_puzzle import CayleyPuzzle
@@ -35,6 +35,16 @@ from puxle.puzzles.cayley_puzzle import CayleyPuzzle
 # Cache: maps class name -> generated class object
 # ---------------------------------------------------------------------------
 _CLASS_CACHE: dict[str, type] = {}
+_DISCOVER_CACHE: dict = {}
+_KNOWN_FACTORIES = {
+    "all_cycles",
+    "consecutive_k_cycles",
+    "coxeter",
+    "cyclic",
+    "lrx",
+    "pancake",
+    "top_spin",
+}
 
 # ---------------------------------------------------------------------------
 # PascalCase -> snake_case converter
@@ -126,68 +136,23 @@ def _parse_name(name: str) -> tuple[str, tuple[int, ...], dict[str, int]]:
     )
 
 
-# ---------------------------------------------------------------------------
-# Signature-aware kwarg resolution
-# ---------------------------------------------------------------------------
+def _validate_factory_name(factory_name: str) -> None:
+    if factory_name in _KNOWN_FACTORIES:
+        return
 
+    try:
+        from cayleypy.graphs_lib import PermutationGroups
+    except ImportError as exc:
+        raise AttributeError(
+            f"Cannot validate unknown Cayley factory {factory_name!r} without cayleypy. "
+            "Call list_available_factories() when cayleypy is installed."
+        ) from exc
 
-def _resolve_kwargs_from_sig(
-    factory_name: str,
-    pos_args: tuple[int, ...],
-    kw_args: dict[str, int],
-) -> tuple[tuple[int, ...], dict[str, int]]:
-    """Validate pos_args+kw_args against the factory signature.
-
-    If kw_args contains {'k': v} from the K<n> form, rename 'k' to the
-    factory's actual last-parameter name (handles cases where the param is
-    not literally named 'k').
-
-    If pos_args has more elements than the factory accepts, raises AttributeError.
-    """
-    from cayleypy.graphs_lib import PermutationGroups
-
-    factory = getattr(PermutationGroups, factory_name, None)
-    if factory is None:
+    if getattr(PermutationGroups, factory_name, None) is None:
         raise AttributeError(
             f"cayleypy.graphs_lib.PermutationGroups has no factory {factory_name!r}. "
             "Call list_available_factories() for available factory names."
         )
-
-    try:
-        sig = inspect.signature(factory)
-    except (ValueError, TypeError):
-        # If signature cannot be introspected, pass through as-is.
-        return pos_args, kw_args
-
-    params = [
-        p
-        for p in sig.parameters.values()
-        if p.kind
-        in (
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.KEYWORD_ONLY,
-        )
-    ]
-    n_params = len(params)
-
-    if not kw_args:
-        # Pure positional: check count fits
-        if len(pos_args) > n_params:
-            raise AttributeError(
-                f"Factory {factory_name!r} accepts {n_params} parameters but "
-                f"{len(pos_args)} positional args were parsed from the class name. "
-                "Call list_available_factories() for available factory names."
-            )
-        return pos_args, {}
-
-    # We have kw_args (from K<n> form). The key is nominally 'k' but may need
-    # renaming to match the factory's actual last parameter.
-    if "k" in kw_args and n_params > 0:
-        last_param_name = params[-1].name
-        if last_param_name != "k":
-            kw_args = {last_param_name: kw_args["k"]}
-    return pos_args, kw_args
 
 
 # ---------------------------------------------------------------------------
@@ -251,11 +216,7 @@ def __getattr__(name: str):
     except AttributeError:
         raise
 
-    # Resolve kwargs against factory signature (lazy import of cayleypy).
-    try:
-        pos_args, kw_args = _resolve_kwargs_from_sig(factory_name, pos_args, kw_args)
-    except AttributeError:
-        raise
+    _validate_factory_name(factory_name)
 
     cls = _make_class(name, factory_name, pos_args, kw_args)
     _CLASS_CACHE[name] = cls
@@ -312,9 +273,6 @@ def discover(factory_name: str, *args, **kwargs) -> type:
     cls = _make_class(class_name, factory_name, tuple(args), dict(kwargs))
     _DISCOVER_CACHE[cache_key] = cls
     return cls
-
-
-_DISCOVER_CACHE: dict = {}
 
 
 def list_available_factories() -> list[str]:

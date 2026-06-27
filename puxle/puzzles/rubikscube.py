@@ -1,12 +1,13 @@
+import re
 from collections.abc import Callable
 from functools import partial
 from typing import Any
 
 import chex
+import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from tabulate import tabulate
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
@@ -48,6 +49,47 @@ rgb_map = {
     LEFT: (255, 128, 0),  # orange
     DOWN: (255, 255, 0),  # yellow
 }
+
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _visible_len(text: str) -> int:
+    return len(_ANSI_RE.sub("", text))
+
+
+def _pad_visible(text: str, width: int) -> str:
+    return text + " " * max(0, width - _visible_len(text))
+
+
+def _plain_table(rows: list[list[str]], sep: str = "  ") -> str:
+    split_rows = [[cell.splitlines() for cell in row] for row in rows]
+    col_count = max(len(row) for row in split_rows)
+    widths = [
+        max(
+            _visible_len(line)
+            for row in split_rows
+            for cell in row[col : col + 1]
+            for line in cell
+        )
+        for col in range(col_count)
+    ]
+
+    lines = []
+    for row in split_rows:
+        height = max(len(cell) for cell in row)
+        centered = []
+        for cell in row:
+            top = (height - len(cell)) // 2
+            centered.append([""] * top + cell + [""] * (height - len(cell) - top))
+        for i in range(height):
+            lines.append(
+                sep.join(
+                    _pad_visible(cell[i], widths[col])
+                    for col, cell in enumerate(centered)
+                ).rstrip()
+            )
+    return "\n".join(lines)
 
 
 def rot90_traceable(m, k=1, axes=(0, 1)):
@@ -322,7 +364,7 @@ class RubiksCube(Puzzle):
                 return string
 
             # Create the cube string representation
-            cube_str = tabulate(
+            cube_str = _plain_table(
                 [
                     [color_legend(), (".\n" + get_face_string(UP))],
                     [
@@ -332,9 +374,7 @@ class RubiksCube(Puzzle):
                         get_face_string(BACK),
                     ],
                     [get_empty_face_string(), get_face_string(DOWN)],
-                ],
-                tablefmt="plain",
-                rowalign="center",
+                ]
             )
             return cube_str
 
@@ -647,7 +687,7 @@ class RubiksCube(Puzzle):
         return cos45, sin45, scale, offset_x, offset_y, margin
 
     @staticmethod
-    def _draw_tile(img_target, pts, color_idx, value, color_embedding, *, backend):
+    def _draw_tile(img_target, pts, color_idx, value, color_embedding):
         """
         Draw a single cube face tile with color and optional numbering.
 
@@ -657,18 +697,15 @@ class RubiksCube(Puzzle):
             color_idx: Color index (0-5)
             value: Tile value for numbering
             color_embedding: Whether using color embedding mode
-            backend: Cv2Backend instance routing every drawing primitive.
         """
-        import numpy as np
-
         color = rgb_map[color_idx]
-        backend.fill_poly(img_target, points=[pts], color_bgr=color)
-        backend.polylines(
+        cv2.fillPoly(img_target, [pts], color)
+        cv2.polylines(
             img_target,
-            points=[pts],
-            is_closed=True,
-            color_bgr=(0, 0, 0),
-            thickness=LINE_THICKNESS,
+            [pts],
+            True,
+            (0, 0, 0),
+            LINE_THICKNESS,
         )
 
         if not color_embedding:
@@ -677,35 +714,31 @@ class RubiksCube(Puzzle):
             font_scale = max(0.3, min(1.2, edge / 32.0))
             thickness = max(1, int(round(LINE_THICKNESS / 2)))
             text = str(value)
-            text_width, text_height = backend.text_size(
-                text, font_scale=font_scale, thickness=thickness
+            (text_width, text_height), _ = cv2.getTextSize(
+                text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness
             )
             text_x = int(center[0] - text_width / 2)
             text_y = int(center[1] + text_height / 2)
 
-            backend.text(
+            cv2.putText(
                 img_target,
-                text=text,
-                position=(text_x, text_y),
-                color_bgr=(0, 0, 0),
-                font_scale=font_scale,
-                thickness=thickness,
+                text,
+                (text_x, text_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                (0, 0, 0),
+                thickness,
             )
 
     def get_img_parser(self) -> Callable:
         """
         This function is a decorator that adds an img_parser to the class.
         """
-        import numpy as np
-
-        from puxle.render import Cv2Backend
-
-        backend = Cv2Backend()
 
         def img_func(state: "RubiksCube.State", another_faces: bool = True, **kwargs):
             imgsize = IMG_SIZE[0]
             # Create a blank image with a neutral background
-            img = backend.canvas(size=(imgsize, imgsize), fill_bgr=(190, 190, 190))
+            img = np.full((imgsize, imgsize, 3), (190, 190, 190), dtype=np.uint8)
 
             # Set up projection parameters
             cos45, sin45, scale, offset_x, offset_y, margin = (
@@ -739,7 +772,6 @@ class RubiksCube(Puzzle):
                     color_idx,
                     value,
                     self.color_embedding,
-                    backend=backend,
                 )
 
             # Draw faces in correct order for proper depth.
@@ -800,7 +832,7 @@ class RubiksCube(Puzzle):
 
             # If another_faces is True, draw additional faces (DOWN, BACK, LEFT) as flat squares
             if another_faces:
-                img2 = backend.canvas(size=(imgsize, imgsize), fill_bgr=(190, 190, 190))
+                img2 = np.full((imgsize, imgsize, 3), (190, 190, 190), dtype=np.uint8)
 
                 # 4. Draw the back face (BACK)
                 for i in range(self.size):

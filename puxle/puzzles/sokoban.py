@@ -6,11 +6,11 @@ from importlib.resources import files
 import chex
 import jax
 import jax.numpy as jnp
-from termcolor import colored
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import colored_str
 
 TYPE = jnp.uint8
 
@@ -174,19 +174,19 @@ class Sokoban(Puzzle):
                 case Sokoban.Object.EMPTY.value:
                     return " "
                 case Sokoban.Object.WALL.value:
-                    return colored("■", "white")
+                    return colored_str("■", "white")
                 case Sokoban.Object.PLAYER.value:
-                    return colored("●", "green")
+                    return colored_str("●", "green")
                 case Sokoban.Object.BOX.value:
-                    return colored("■", "yellow")
+                    return colored_str("■", "yellow")
                 case Sokoban.Object.TARGET.value:
-                    return colored("x", "red")
+                    return colored_str("x", "red")
                 case Sokoban.Object.PLAYER_ON_TARGET.value:
-                    return colored("ⓧ", "red")
+                    return colored_str("ⓧ", "red")
                 case Sokoban.Object.BOX_ON_TARGET.value:
-                    return colored("■", "green")
+                    return colored_str("■", "green")
                 case Sokoban.Object.TARGET_PLAYER.value:
-                    return colored("●", "red")
+                    return colored_str("●", "red")
                 case _:
                     return "?"
 

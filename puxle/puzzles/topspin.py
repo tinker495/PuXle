@@ -1,8 +1,10 @@
 from collections.abc import Callable
 
 import chex
+import cv2
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
@@ -142,15 +144,11 @@ class TopSpin(Puzzle):
         return jnp.array([1, 0, 2])
 
     def get_img_parser(self):
-        import numpy as np
-
-        from puxle.render import Cv2Backend
-
-        backend = Cv2Backend()
-
         def img_func(state: "TopSpin.State", **kwargs):
             imgsize = IMG_SIZE[0]
-            img = backend.canvas(size=IMG_SIZE, fill_bgr=(240, 240, 240))
+            img = np.full(
+                (IMG_SIZE[1], IMG_SIZE[0], 3), (240, 240, 240), dtype=np.uint8
+            )
 
             n = self.n_discs
             ts = self.turnstile_size
@@ -181,26 +179,22 @@ class TopSpin(Puzzle):
                 color = (
                     (0, 0, 200) if is_turnstile else (50, 50, 50)
                 )  # Blue for turnstile, gray otherwise
-                img = backend.circle(
-                    img,
-                    center=(x, y),
-                    radius=disc_radius,
-                    color_bgr=color,
-                )
+                img = cv2.circle(img, (x, y), disc_radius, color, -1)
 
                 text = str(val)
-                text_w, text_h = backend.text_size(
-                    text, font_scale=font_scale, thickness=font_thickness
+                (text_w, text_h), _ = cv2.getTextSize(
+                    text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
                 )
                 text_x = x - text_w // 2
                 text_y = y + text_h // 2
-                img = backend.text(
+                img = cv2.putText(
                     img,
-                    text=text,
-                    position=(text_x, text_y),
-                    color_bgr=(255, 255, 255),
-                    font_scale=font_scale,
-                    thickness=font_thickness,
+                    text,
+                    (text_x, text_y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale,
+                    (255, 255, 255),
+                    font_thickness,
                 )
 
             # Draw the turnstile area indicator at the top
@@ -210,15 +204,15 @@ class TopSpin(Puzzle):
             end_angle_rad = -np.pi / 2 + (
                 np.pi * ts / n
             )  # End angle for turnstile area
-            img = backend.ellipse(
+            img = cv2.ellipse(
                 img,
-                center=(center_x, center_y),
-                axes=(radius + disc_radius + 5, radius + disc_radius + 5),
-                angle=0,
-                start_angle=float(np.degrees(start_angle_rad)),
-                end_angle=float(np.degrees(end_angle_rad)),
-                color_bgr=(200, 0, 0),
-                thickness=2,
+                (center_x, center_y),
+                (radius + disc_radius + 5, radius + disc_radius + 5),
+                0,
+                float(np.degrees(start_angle_rad)),
+                float(np.degrees(end_angle_rad)),
+                (200, 0, 0),
+                2,
             )
 
             return img

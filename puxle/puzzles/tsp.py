@@ -1,8 +1,10 @@
 from collections.abc import Callable
 
 import chex
+import cv2
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
@@ -177,11 +179,6 @@ class TSP(Puzzle):
         marks visited points in blue and unvisited in red, and outlines the current point with a black border.
         If all points are visited, it draws a line from the current point back to the start point.
         """
-        import numpy as np
-
-        from puxle.render import Cv2Backend
-
-        backend = Cv2Backend()
 
         def img_func(
             state: "TSP.State",
@@ -190,7 +187,9 @@ class TSP(Puzzle):
         ):
             imgsize = IMG_SIZE[0]
             # Create a white background image
-            img = backend.canvas(size=IMG_SIZE, fill_bgr=(255, 255, 255))
+            img = np.full(
+                (IMG_SIZE[1], IMG_SIZE[0], 3), (255, 255, 255), dtype=np.uint8
+            )
             path = kwargs.get("path", [])
             idx = kwargs.get("idx", 0)
 
@@ -228,12 +227,8 @@ class TSP(Puzzle):
             # up to the current index 'idx'
             if path and idx > 0 and len(path) > idx:
                 route_points = [scaled_points[path[i].point] for i in range(idx + 1)]
-                img = backend.polylines(
-                    img,
-                    points=[np.array(route_points, dtype=np.int32)],
-                    is_closed=False,
-                    color_bgr=(0, 0, 0),
-                    thickness=2,
+                img = cv2.polylines(
+                    img, [np.array(route_points, dtype=np.int32)], False, (0, 0, 0), 2
                 )
 
             # Draw each point with different colors based on status
@@ -246,36 +241,31 @@ class TSP(Puzzle):
                 else:
                     color = (0, 0, 255)
 
-                img = backend.circle(img, center=(x, y), radius=5, color_bgr=color)
+                img = cv2.circle(img, (x, y), 5, color, -1)
 
                 # Highlight the current point with an outer black circle
                 if i == state.point:
-                    img = backend.circle(
-                        img,
-                        center=(x, y),
-                        radius=8,
-                        color_bgr=(0, 0, 0),
-                        thickness=2,
-                    )
+                    img = cv2.circle(img, (x, y), 8, (0, 0, 0), 2)
 
                 # Optionally, label the point with its index
-                img = backend.text(
+                img = cv2.putText(
                     img,
-                    text=str(i),
-                    position=(x + 5, y - 5),
-                    color_bgr=(50, 50, 50),
-                    font_scale=0.5,
-                    thickness=1,
+                    str(i),
+                    (x + 5, y - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (50, 50, 50),
+                    1,
                 )
 
             # If all points are visited, draw a line from the current point to the start point to close the tour
             if np.all(visited):
-                img = backend.line(
+                img = cv2.line(
                     img,
-                    p1=scaled_points[state.point],
-                    p2=scaled_points[solve_config.start],
-                    color_bgr=(0, 0, 0),
-                    thickness=2,
+                    scaled_points[state.point],
+                    scaled_points[solve_config.start],
+                    (0, 0, 0),
+                    2,
                 )
 
             return img

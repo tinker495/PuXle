@@ -90,11 +90,7 @@ autodoc_mock_imports = [
     "chex",
     "xtructure",
     "pddl",
-    "termcolor",
-    "tabulate",
     "cv2",
-    "tqdm",
-    "pandas",
 ]
 
 # Prefer real JAX when available; fall back to mocks only when unavailable.

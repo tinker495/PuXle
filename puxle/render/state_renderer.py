@@ -7,12 +7,12 @@ inputs and exposing the result as a ``state.img(**kwargs)`` method.
 
 from __future__ import annotations
 
+from math import prod
 from typing import Callable, Type, TypeVar
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-from tqdm import trange
 from xtructure import StructuredType
 
 T = TypeVar("T")
@@ -46,13 +46,9 @@ def attach_state_renderer(cls: Type[T], imgfunc: Callable) -> Type[T]:
             return imgfunc(self, **kwargs)
         elif structured_type == StructuredType.BATCHED:
             batch_shape = self.batch_shape
-            batch_len = (
-                jnp.prod(jnp.array(batch_shape))
-                if len(batch_shape) != 1
-                else batch_shape[0]
-            )
+            batch_len = prod(batch_shape)
             results = []
-            for i in trange(batch_len):
+            for i in range(batch_len):
                 index = jnp.unravel_index(i, batch_shape)
                 current_state = jax.tree_util.tree_map(lambda x: x[index], self)
                 results.append(imgfunc(current_state, **kwargs))
