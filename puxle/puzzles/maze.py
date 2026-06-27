@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 import chex
+import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -49,7 +50,6 @@ class Maze(Puzzle):
         return SolveConfig
 
     def define_state_class(self) -> PuzzleState:
-
         str_parser = self.get_string_parser()
 
         @state_dataclass
@@ -367,9 +367,6 @@ class Maze(Puzzle):
         """
         This function is a decorator that adds an img_parser to the class.
         """
-        from puxle.render import Cv2Backend
-
-        backend = Cv2Backend()
         size = self.size
 
         grid_color = (200, 200, 200)
@@ -384,23 +381,28 @@ class Maze(Puzzle):
 
             maze_bool_np = np.array(solve_config.Maze_unpacked.reshape((size, size)))
             walls_mono = (~maze_bool_np).astype(np.uint8) * 255
-            img = backend.canvas_from_mono(size=IMG_SIZE, mono_pattern=walls_mono)
+            img = cv2.cvtColor(
+                cv2.resize(walls_mono, IMG_SIZE, interpolation=cv2.INTER_NEAREST),
+                cv2.COLOR_GRAY2BGR,
+            )
 
             cell_size = imgsize / size
 
             for i in range(size + 1):
-                img = backend.line(
+                img = cv2.line(
                     img,
-                    p1=(0, int(i * cell_size)),
-                    p2=(imgsize, int(i * cell_size)),
-                    color_bgr=grid_color,
+                    (0, int(i * cell_size)),
+                    (imgsize, int(i * cell_size)),
+                    grid_color,
+                    1,
                 )
             for j in range(size + 1):
-                img = backend.line(
+                img = cv2.line(
                     img,
-                    p1=(int(j * cell_size), 0),
-                    p2=(int(j * cell_size), imgsize),
-                    color_bgr=grid_color,
+                    (int(j * cell_size), 0),
+                    (int(j * cell_size), imgsize),
+                    grid_color,
+                    1,
                 )
 
             pos_player = state.pos
@@ -412,19 +414,9 @@ class Maze(Puzzle):
             player_radius = max(1, int(cell_size / 3))
 
             if (state.pos == solve_config.TargetState.pos).all():
-                img = backend.circle(
-                    img,
-                    center=player_center,
-                    radius=player_radius,
-                    color_bgr=on_target_color,
-                )
+                img = cv2.circle(img, player_center, player_radius, on_target_color, -1)
             else:
-                img = backend.circle(
-                    img,
-                    center=player_center,
-                    radius=player_radius,
-                    color_bgr=target_color,
-                )
+                img = cv2.circle(img, player_center, player_radius, target_color, -1)
 
                 tx0, ty0 = (
                     int(pos_target[1] * cell_size),
@@ -432,20 +424,8 @@ class Maze(Puzzle):
                 )
                 tx1 = int((pos_target[1] + 1) * cell_size)
                 ty1 = int((pos_target[0] + 1) * cell_size)
-                img = backend.line(
-                    img,
-                    p1=(tx0, ty0),
-                    p2=(tx1, ty1),
-                    color_bgr=target_color,
-                    thickness=2,
-                )
-                img = backend.line(
-                    img,
-                    p1=(tx1, ty0),
-                    p2=(tx0, ty1),
-                    color_bgr=target_color,
-                    thickness=2,
-                )
+                img = cv2.line(img, (tx0, ty0), (tx1, ty1), target_color, 2)
+                img = cv2.line(img, (tx1, ty0), (tx0, ty1), target_color, 2)
 
             return img
 

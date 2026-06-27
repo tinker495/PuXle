@@ -1,25 +1,19 @@
 """Architecture + behaviour guard for the Puzzle Renderer Module.
 
-Locks the contracts documented in CONTEXT.md "Puzzle Renderer" and
-"Puzzle Render Backend":
+Locks the contracts documented in CONTEXT.md "Puzzle Renderer":
 
 - ``puxle.core.puzzle_base`` consumes ``attach_state_renderer`` from
   ``puxle.render``, not the legacy ``add_img_parser`` from
   ``puxle.utils.util``.
 - The legacy ``puxle.utils.util.add_img_parser`` still works (deprecated
   alias contract) so external puzzle authors do not break.
-- ``puxle.render.Cv2Backend`` exposes the eight-method Puzzle Render
-  Backend Interface and produces valid ``(H, W, 3)`` uint8 BGR images.
-- Migrated puzzle modules (``slidepuzzle``, ``lightsout``, ``maze``) route
-  every cv2 primitive through ``Cv2Backend`` and do not import cv2
-  directly inside their own module bodies. Adding a new puzzle to the
-  migrated set means appending it to ``_MIGRATED_PUZZLES`` below.
+- Migrated puzzle modules render directly with cv2 and no longer depend on
+  the deleted ``Cv2Backend`` wrapper.
 """
 
 from __future__ import annotations
 
 import importlib
-import inspect
 from pathlib import Path
 
 import numpy as np
@@ -34,20 +28,6 @@ _MIGRATED_PUZZLES = (
     "topspin",
     "tsp",
     "rubikscube",
-)
-
-_BACKEND_INTERFACE_METHODS = (
-    "canvas",
-    "canvas_from_mono",
-    "rect",
-    "circle",
-    "line",
-    "text",
-    "text_size",
-    "text_centered",
-    "ellipse",
-    "fill_poly",
-    "polylines",
 )
 
 
@@ -111,72 +91,18 @@ def test_render_module_attach_state_renderer_attaches_img_method():
     assert hasattr(_StubCls, "img")
 
 
-def test_render_module_exposes_cv2_backend():
+def test_render_module_exposes_only_attachment_seam():
     render = importlib.import_module("puxle.render")
-    assert hasattr(render, "Cv2Backend"), (
-        "puxle.render must export Cv2Backend so puzzles can `from puxle.render "
-        "import Cv2Backend`."
-    )
+    assert render.__all__ == ["attach_state_renderer"]
+    assert not hasattr(render, "Cv2Backend")
 
 
-def test_cv2_backend_exposes_full_interface():
-    from puxle.render import Cv2Backend
-
-    backend = Cv2Backend()
-    for method_name in _BACKEND_INTERFACE_METHODS:
-        method = getattr(backend, method_name, None)
-        assert callable(method), (
-            f"Cv2Backend must define `{method_name}` per the eight-method "
-            "Puzzle Render Backend Interface in CONTEXT.md."
-        )
-
-    public_methods = {
-        name
-        for name, value in inspect.getmembers(backend, predicate=callable)
-        if not name.startswith("_")
-    }
-    extra = public_methods - set(_BACKEND_INTERFACE_METHODS)
-    assert not extra, (
-        "Cv2Backend exposes unexpected public methods beyond the documented "
-        f"Puzzle Render Backend Interface: {sorted(extra)}. Update CONTEXT.md "
-        "or remove the method to keep the seam small."
-    )
-
-
-def test_cv2_backend_canvas_round_trip():
-    from puxle.render import Cv2Backend
-
-    backend = Cv2Backend()
-    img = backend.canvas(size=(8, 8), fill_bgr=(10, 20, 30))
-    assert img.shape == (8, 8, 3)
-    assert img.dtype == np.uint8
-    assert tuple(img[0, 0]) == (10, 20, 30)
-
-    img = backend.rect(img, top_left=(1, 1), bottom_right=(4, 4), color_bgr=(255, 0, 0))
-    assert tuple(img[2, 2]) == (255, 0, 0)
-
-
-def test_migrated_puzzle_modules_do_not_import_cv2_directly():
-    """Migrated puzzles must consume Cv2Backend rather than importing cv2.
-
-    This guard prevents regressions where a contributor adds a new cv2 call
-    inside an already-migrated puzzle's ``imgfunc`` body. Puzzles still
-    pending migration are allowed to import cv2 inside their
-    ``get_img_parser`` bodies; they are intentionally absent from
-    ``_MIGRATED_PUZZLES``.
-    """
+def test_migrated_puzzle_modules_do_not_import_cv2_backend():
+    """Migrated puzzles must not depend on the deleted Cv2Backend wrapper."""
     for name in _MIGRATED_PUZZLES:
         source = _puzzle_module_source(name)
-        assert "import cv2" not in source, (
-            f"Migrated puzzle `{name}` must not import cv2 directly; consume "
-            "puxle.render.Cv2Backend instead. If you intentionally need a cv2 "
-            "primitive that is not yet on Cv2Backend, extend the backend "
-            "Interface and document the addition in CONTEXT.md."
-        )
-        assert "from puxle.render import Cv2Backend" in source, (
-            f"Migrated puzzle `{name}` should import Cv2Backend from "
-            "puxle.render to render through the canonical seam."
-        )
+        assert "Cv2Backend" not in source
+        assert "puxle.render.backends" not in source
 
 
 def test_migrated_puzzle_imgfuncs_produce_valid_images():

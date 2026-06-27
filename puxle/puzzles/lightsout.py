@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 import chex
+import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -240,9 +241,6 @@ class LightsOut(Puzzle):
         """
         This function is a decorator that adds an img_parser to the class.
         """
-        from puxle.render import Cv2Backend
-
-        backend = Cv2Backend()
         size = self.size
 
         on_color = (255, 255, 0)  # Yellow (BGR)
@@ -252,7 +250,7 @@ class LightsOut(Puzzle):
 
         def img_func(state: "LightsOut.State", **kwargs):
             imgsize = IMG_SIZE[0]
-            img = backend.canvas(size=IMG_SIZE, fill_bgr=bg_color)
+            img = np.full((IMG_SIZE[1], IMG_SIZE[0], 3), bg_color, dtype=np.uint8)
             cell_size = imgsize // size
             board = np.array(state.board_unpacked).reshape(size, size)
             for i in range(size):
@@ -260,19 +258,8 @@ class LightsOut(Puzzle):
                     top_left = (j * cell_size, i * cell_size)
                     bottom_right = ((j + 1) * cell_size, (i + 1) * cell_size)
                     cell_color = on_color if board[i, j] else off_color
-                    img = backend.rect(
-                        img,
-                        top_left=top_left,
-                        bottom_right=bottom_right,
-                        color_bgr=cell_color,
-                    )
-                    img = backend.rect(
-                        img,
-                        top_left=top_left,
-                        bottom_right=bottom_right,
-                        color_bgr=grid_color,
-                        thickness=1,
-                    )
+                    img = cv2.rectangle(img, top_left, bottom_right, cell_color, -1)
+                    img = cv2.rectangle(img, top_left, bottom_right, grid_color, 1)
             return img
 
         return img_func

@@ -1,8 +1,10 @@
 from collections.abc import Callable
 
 import chex
+import cv2
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
@@ -245,21 +247,21 @@ class DotKnot(Puzzle):
         """
         This function is a decorator that adds an img_parser to the class.
         """
-        from puxle.render import Cv2Backend
-
-        backend = Cv2Backend()
 
         def img_func(state: "DotKnot.State", **kwargs):
             imgsize = IMG_SIZE[0]
-            img = backend.canvas(size=IMG_SIZE, fill_bgr=(190, 190, 190))
-            img = backend.rect(
+            img = np.full(
+                (IMG_SIZE[1], IMG_SIZE[0], 3), (190, 190, 190), dtype=np.uint8
+            )
+            img = cv2.rectangle(
                 img,
-                top_left=(int(imgsize * 0.03), int(imgsize * 0.03)),
-                bottom_right=(
+                (int(imgsize * 0.03), int(imgsize * 0.03)),
+                (
                     int(imgsize - imgsize * 0.02),
                     int(imgsize - imgsize * 0.02),
                 ),
-                color_bgr=(50, 50, 50),
+                (50, 50, 50),
+                -1,
             )
             board_flat = state.board_unpacked
             knot_max = 2 * self.color_num  # Values <= knot_max represent knots
@@ -278,16 +280,11 @@ class DotKnot(Puzzle):
                 if val <= knot_max:
                     # Draw knot as a filled circle
                     radius = int(bs * 0.6)
-                    img = backend.circle(
-                        img, center=center, radius=radius, color_bgr=color
-                    )
+                    img = cv2.circle(img, center, radius, color, -1)
                 else:
                     # Draw path as a filled rectangle
-                    img = backend.rect(
-                        img,
-                        top_left=(stx, sty),
-                        bottom_right=(stx + bs, sty + bs),
-                        color_bgr=color,
+                    img = cv2.rectangle(
+                        img, (stx, sty), (stx + bs, sty + bs), color, -1
                     )
             return img
 

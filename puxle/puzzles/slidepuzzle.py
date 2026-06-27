@@ -1,8 +1,10 @@
 from collections.abc import Callable
 
 import chex
+import cv2
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
@@ -214,22 +216,20 @@ class SlidePuzzle(Puzzle):
         """
         This function is a decorator that adds an img_parser to the class.
         """
-        from puxle.render import Cv2Backend
-
-        backend = Cv2Backend()
         size = self.size
 
         def img_func(state: "SlidePuzzle.State", **kwargs):
             imgsize = IMG_SIZE[0]
-            img = backend.canvas(size=IMG_SIZE, fill_bgr=(144, 96, 8))
-            img = backend.rect(
+            img = np.full((IMG_SIZE[1], IMG_SIZE[0], 3), (144, 96, 8), dtype=np.uint8)
+            img = cv2.rectangle(
                 img,
-                top_left=(int(imgsize * 0.03), int(imgsize * 0.03)),
-                bottom_right=(
+                (int(imgsize * 0.03), int(imgsize * 0.03)),
+                (
                     int(imgsize - imgsize * 0.02),
                     int(imgsize - imgsize * 0.02),
                 ),
-                color_bgr=(104, 56, 8),
+                (104, 56, 8),
+                -1,
             )
             fontsize = 2.5
             cell_size = int(imgsize * 0.87 / size)
@@ -239,20 +239,28 @@ class SlidePuzzle(Puzzle):
                     continue
                 stx = int(imgsize * 0.04 + (imgsize * 0.95 / size) * (idx % size))
                 sty = int(imgsize * 0.04 + (imgsize * 0.95 / size) * (idx // size))
-                img = backend.rect(
+                img = cv2.rectangle(
                     img,
-                    top_left=(stx, sty),
-                    bottom_right=(stx + cell_size, sty + cell_size),
-                    color_bgr=(240, 240, 232),
+                    (stx, sty),
+                    (stx + cell_size, sty + cell_size),
+                    (240, 240, 232),
+                    -1,
                 )
-                img = backend.text_centered(
+                text = str(val)
+                (text_w, text_h), _ = cv2.getTextSize(
+                    text, cv2.FONT_HERSHEY_SIMPLEX, fontsize, 5
+                )
+                img = cv2.putText(
                     img,
-                    text=str(val),
-                    top_left=(stx, sty),
-                    cell_size=cell_size,
-                    color_bgr=(10, 10, 10),
-                    font_scale=fontsize,
-                    thickness=5,
+                    text,
+                    (
+                        int(stx + (cell_size - text_w) / 2),
+                        int(sty + (cell_size + text_h) / 2),
+                    ),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    fontsize,
+                    (10, 10, 10),
+                    5,
                 )
             return img
 
