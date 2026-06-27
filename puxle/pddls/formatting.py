@@ -35,40 +35,13 @@ def build_label_color_maps(domain) -> Tuple[Dict[str, str], Dict[str, str]]:
     except (AttributeError, TypeError):
         labels = set()
 
-    rich_palette = [
-        "cyan",
-        "magenta",
-        "green",
-        "yellow",
-        "blue",
-        "bright_cyan",
-        "bright_magenta",
-        "bright_green",
-        "bright_yellow",
-        "bright_blue",
-        "white",
-        "bright_white",
-        "deep_sky_blue1",
-        "plum1",
-        "gold1",
-        "turquoise2",
-        "spring_green2",
-        "orchid",
-        "dodger_blue2",
-        "sandy_brown",
-    ]
-    label_color_map: Dict[str, str] = {}
-    for idx, label in enumerate(sorted(labels)):
-        label_color_map[label] = rich_palette[idx % len(rich_palette)]
-    label_color_map.setdefault("default", "white")
-
     ansi_palette = ["cyan", "magenta", "green", "yellow", "blue", "white", "red"]
     label_text_color_map: Dict[str, str] = {}
     for idx, label in enumerate(sorted(labels)):
         label_text_color_map[label] = ansi_palette[idx % len(ansi_palette)]
     label_text_color_map.setdefault("default", "white")
 
-    return label_color_map, label_text_color_map
+    return dict(label_text_color_map), label_text_color_map
 
 
 def action_to_string(
@@ -137,106 +110,32 @@ def build_state_string_parser(env) -> Callable:
         show_summary = bool(kwargs.get("show_summary", False))
         show_more = bool(kwargs.get("show_more", False))
 
-        try:
-            from rich.console import Console
-            from rich.table import Table
-            from rich.text import Text
-
-            width = int(kwargs.get("width", 100))
-            console = Console(width=width, highlight=False, soft_wrap=True)
-
-            table = Table(
-                title="PDDL State", header_style="bold magenta", show_lines=False
-            )
-            table.add_column("Field", style="bold cyan", no_wrap=True)
-            table.add_column("Value")
-
-            if show_summary:
-                table.add_row("Total atoms", str(env.num_atoms))
-                table.add_row("True atoms", str(true_count))
-                table.add_row("Density", f"{density:.2f}%")
-                if goal_mask is not None:
-                    table.add_row("Goal atoms", str(goal_count))
-                    table.add_row("Goals satisfied", f"{goals_satisfied}/{goal_count}")
-
-            sample_table = Table(show_header=True, header_style="bold green")
-            sample_table.add_column("#", justify="right", no_wrap=True)
-            sample_table.add_column("Atom")
-            for row_idx, (idx, atom_str) in enumerate(
-                zip(sample_indices, sample_atoms), start=1
-            ):
-                label, args = split_atom(atom_str)
-                color = getattr(env, "_label_color_map", {}).get(label, "white")
-                text = Text()
-                text.append(label, style=color)
-                if args:
-                    text.append(" " + " ".join(args))
-                if goal_mask is not None and bool(goal_mask[idx]):
-                    try:
-                        satisfied = bool(atoms[idx])
-                    except (TypeError, IndexError):
-                        satisfied = True
-                    text.append(" - " + ("✓" if satisfied else "✗"))
-                sample_table.add_row(str(row_idx), text)
-
-            if truncated and not show_more:
-                sample_table.add_row("", "...")
-
-            if sample_atoms:
-                if show_summary:
-                    table.add_row("Sample true atoms", "")
-                    table.add_row("", sample_table)
-            else:
-                if show_summary:
-                    table.add_row("Sample true atoms", "<none>")
-
-            if show_more:
-                remaining = max(0, true_count - len(sample_atoms))
-                if remaining > 0:
-                    table.add_row("More", f"... and {remaining} more true atoms")
-
-            show_header = bool(kwargs.get("header", False))
-            show_raw = bool(kwargs.get("raw", False))
-            header_line = (
+        pieces: list[str] = []
+        if kwargs.get("header", False):
+            pieces.append(
                 f"State: {true_count}/{env.num_atoms} true atoms ({density:.2f}%)"
             )
-            with console.capture() as capture:
-                if show_summary:
-                    console.print(table)
-                else:
-                    console.print(sample_table)
-            parts = []
-            if show_header:
-                parts.append(header_line)
-            if show_raw:
-                parts.append(raw_sample_line)
-            parts.append(capture.get())
-            return "\n".join(parts)
-        except Exception:  # fallback if rich unavailable or rendering fails
-            pieces: list[str] = []
-            if kwargs.get("header", False):
-                pieces.append(
-                    f"State: {true_count}/{env.num_atoms} true atoms ({density:.2f}%)"
-                )
-            if show_summary:
-                pieces.append(f"Summary: true={true_count}, total={env.num_atoms}")
-                if goal_mask is not None:
-                    pieces.append(f"Goals satisfied: {goals_satisfied}/{goal_count}")
-            annotated_atoms: list[str] = []
-            for idx, atom_str in zip(sample_indices, sample_atoms):
-                if goal_mask is not None and bool(goal_mask[idx]):
-                    mark = "✓" if bool(atoms[idx]) else "✗"
-                    annotated_atoms.append(f"{atom_str} - {mark}")
-                else:
-                    annotated_atoms.append(atom_str)
-            pieces.append(", ".join(annotated_atoms) if annotated_atoms else "")
-            if truncated and not show_more:
-                pieces.append("...")
-            if show_more:
-                remaining = max(0, true_count - len(sample_atoms))
-                if remaining > 0:
-                    pieces.append(f"... and {remaining} more true atoms")
-            return "\n".join([p for p in pieces if p])
+        if kwargs.get("raw", False):
+            pieces.append(raw_sample_line)
+        if show_summary:
+            pieces.append(f"Summary: true={true_count}, total={env.num_atoms}")
+            if goal_mask is not None:
+                pieces.append(f"Goals satisfied: {goals_satisfied}/{goal_count}")
+        annotated_atoms: list[str] = []
+        for idx, atom_str in zip(sample_indices, sample_atoms):
+            if goal_mask is not None and bool(goal_mask[idx]):
+                mark = "✓" if bool(atoms[idx]) else "✗"
+                annotated_atoms.append(f"{atom_str} - {mark}")
+            else:
+                annotated_atoms.append(atom_str)
+        pieces.append(", ".join(annotated_atoms) if annotated_atoms else "")
+        if truncated and not show_more:
+            pieces.append("...")
+        if show_more:
+            remaining = max(0, true_count - len(sample_atoms))
+            if remaining > 0:
+                pieces.append(f"... and {remaining} more true atoms")
+        return "\n".join([p for p in pieces if p])
 
     return parser
 
@@ -258,75 +157,19 @@ def build_solve_config_string_parser(env) -> Callable:
         show_summary = bool(kwargs.get("show_summary", False))
         show_more = bool(kwargs.get("show_more", False))
 
-        try:
-            from rich.console import Console
-            from rich.table import Table
-            from rich.text import Text
-
-            width = int(kwargs.get("width", 100))
-            console = Console(width=width, highlight=False, soft_wrap=True)
-
-            table = Table(
-                title="PDDL Solve Config (Goal Mask)", header_style="bold magenta"
-            )
-            table.add_column("Field", style="bold cyan", no_wrap=True)
-            table.add_column("Value")
-
-            if show_summary:
-                table.add_row("Total atoms", str(env.num_atoms))
-                table.add_row("Goal atoms", str(goal_count))
-
-            sample_table = Table(show_header=True, header_style="bold green")
-            sample_table.add_column("#", justify="right", no_wrap=True)
-            sample_table.add_column("Goal Atom")
-            for idx, atom_str in enumerate(sample_atoms, start=1):
-                label, args = split_atom(atom_str)
-                color = getattr(env, "_label_color_map", {}).get(label, "white")
-                text = Text()
-                text.append(label, style=color)
-                if args:
-                    text.append(" " + " ".join(args))
-                sample_table.add_row(str(idx), text)
-
-            if sample_atoms:
-                if show_summary:
-                    table.add_row("Sample goals", "")
-                    table.add_row("", sample_table)
-            else:
-                if show_summary:
-                    table.add_row("Sample goals", "<none>")
-
-            if show_more:
-                remaining = max(0, goal_count - len(sample_atoms))
-                if remaining > 0:
-                    table.add_row("More", f"... and {remaining} more goal atoms")
-
-            show_header = bool(kwargs.get("header", False))
-            show_raw = bool(kwargs.get("raw", False))
-            header_line = f"Goal: {goal_count} atoms"
-            with console.capture() as capture:
-                if show_summary:
-                    console.print(table)
-                else:
-                    console.print(sample_table)
-            parts = []
-            if show_header:
-                parts.append(header_line)
-            if show_raw:
-                parts.append(raw_sample_line)
-            parts.append(capture.get())
-            return "\n".join(parts)
-        except Exception:  # fallback if rich unavailable or rendering fails
-            pieces: list[str] = []
-            if kwargs.get("header", False):
-                pieces.append(f"Goal: {goal_count} atoms")
-            if show_summary:
-                pieces.append(f"Goals: {goal_count}/{env.num_atoms}")
-            pieces.append(", ".join(sample_atoms) if sample_atoms else "")
-            if show_more:
-                remaining = max(0, goal_count - len(sample_atoms))
-                if remaining > 0:
-                    pieces.append(f"... and {remaining} more goal atoms")
-            return "\n".join([p for p in pieces if p])
+        pieces: list[str] = []
+        if kwargs.get("header", False):
+            pieces.append(f"Goal: {goal_count} atoms")
+        if kwargs.get("raw", False):
+            pieces.append(raw_sample_line)
+        if show_summary:
+            pieces.append(f"Goals: {goal_count}/{env.num_atoms}")
+        sample_text = ", ".join(sample_atoms) if sample_atoms else "<none>"
+        pieces.append(f"Goal atoms: {sample_text}")
+        if show_more:
+            remaining = max(0, goal_count - len(sample_atoms))
+            if remaining > 0:
+                pieces.append(f"... and {remaining} more goal atoms")
+        return "\n".join([p for p in pieces if p])
 
     return parser
