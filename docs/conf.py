@@ -90,7 +90,6 @@ autodoc_mock_imports = [
     "chex",
     "xtructure",
     "pddl",
-    "termcolor",
     "cv2",
     "tqdm",
 ]

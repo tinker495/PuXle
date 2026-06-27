@@ -175,9 +175,9 @@ class PDDL(Puzzle):
 
     def _build_label_color_map(self) -> None:
         """Assign deterministic colors to action and predicate names (delegated)."""
-        label_color_map, label_termcolor_map = build_label_color_maps(self.domain)
+        label_color_map, label_text_color_map = build_label_color_maps(self.domain)
         self._label_color_map = label_color_map
-        self._label_termcolor_map = label_termcolor_map
+        self._label_text_color_map = label_text_color_map
 
     def _collect_type_hierarchy(
         self,
@@ -355,7 +355,7 @@ class PDDL(Puzzle):
         return fmt_action_to_string(
             self.grounded_actions,
             action,
-            getattr(self, "_label_termcolor_map", {}),
+            getattr(self, "_label_text_color_map", {}),
             colored,
         )
 

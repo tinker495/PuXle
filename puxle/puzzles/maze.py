@@ -5,11 +5,11 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from termcolor import colored
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import colored_str
 
 TYPE = jnp.uint16
 
@@ -83,11 +83,11 @@ class Maze(Puzzle):
                 case 1:
                     return "■"
                 case 2:
-                    return colored("●", "red")  # player
+                    return colored_str("●", "red")  # player
                 case 3:
-                    return colored("x", "red")  # target
+                    return colored_str("x", "red")  # target
                 case 4:
-                    return colored("●", "green")  # player on target
+                    return colored_str("●", "green")  # player on target
                 case _:
                     raise ValueError(f"Invalid value: {x}")
 

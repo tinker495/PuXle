@@ -5,11 +5,11 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from termcolor import colored
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import colored_str
 
 TYPE = jnp.uint8
 
@@ -72,7 +72,9 @@ class PancakeSorting(Puzzle):
                 size_str = "=" * (2 * (int(pancake) - 1) + 1)
                 result.append(
                     f"{i + 1:02d}:{pancake:02d} - "
-                    + colored(f"{size_str.center(self.size * 2)}", get_color(pancake))
+                    + colored_str(
+                        f"{size_str.center(self.size * 2)}", get_color(pancake)
+                    )
                 )
             result.append("Plate " + "┗━" + "━━" * self.size + "┛")
             return "\n".join(result)

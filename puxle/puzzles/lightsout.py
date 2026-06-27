@@ -5,11 +5,11 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from termcolor import colored
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import colored_str
 
 TYPE = jnp.uint8
 _MOVE_MATRIX_CACHE: dict[int, np.ndarray] = {}
@@ -23,11 +23,11 @@ def action_to_char(action: int) -> str:
     36~61 -> A~Z
     """
     if action < 10:
-        return colored(str(action), "light_yellow")
+        return colored_str(str(action), "light_yellow")
     elif action < 36:
-        return colored(chr(action + 87), "light_yellow")
+        return colored_str(chr(action + 87), "light_yellow")
     else:
-        return colored(chr(action + 29), "light_yellow")
+        return colored_str(chr(action + 29), "light_yellow")
 
 
 class LightsOut(Puzzle):

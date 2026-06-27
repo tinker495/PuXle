@@ -5,11 +5,11 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from termcolor import colored
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.annotate import IMG_SIZE
+from puxle.utils.util import colored_str
 
 TYPE = jnp.uint8
 
@@ -97,7 +97,7 @@ class TowerOfHanoi(Puzzle):
                         # Get the disk at this position (index 1 + pos_from_top has the disk size)
                         disk_size = int(peg[1 + pos_from_top])
                         disk_str = "=" * (2 * disk_size - 1)
-                        colored_disk = colored(
+                        colored_disk = colored_str(
                             disk_str.center(2 * self.num_disks + 1),
                             get_color(disk_size),
                         )

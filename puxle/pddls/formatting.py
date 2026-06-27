@@ -1,7 +1,6 @@
 """Pretty-printing utilities for PDDL states, actions, and solve configs.
 
-Provides colour-coded terminal output (via ``termcolor`` and optional
-``rich``) for debugging and visualisation of grounded atoms and actions.
+Provides colour-coded terminal output for debugging and visualisation of grounded atoms and actions.
 """
 
 from __future__ import annotations
@@ -10,7 +9,8 @@ from collections.abc import Callable
 from typing import Dict, List, Tuple
 
 import jax.numpy as jnp
-import termcolor
+
+from puxle.utils.util import colored_str
 
 
 def split_atom(atom_str: str) -> tuple[str, list[str]]:
@@ -62,19 +62,19 @@ def build_label_color_maps(domain) -> Tuple[Dict[str, str], Dict[str, str]]:
         label_color_map[label] = rich_palette[idx % len(rich_palette)]
     label_color_map.setdefault("default", "white")
 
-    tc_palette = ["cyan", "magenta", "green", "yellow", "blue", "white", "red"]
-    label_termcolor_map: Dict[str, str] = {}
+    ansi_palette = ["cyan", "magenta", "green", "yellow", "blue", "white", "red"]
+    label_text_color_map: Dict[str, str] = {}
     for idx, label in enumerate(sorted(labels)):
-        label_termcolor_map[label] = tc_palette[idx % len(tc_palette)]
-    label_termcolor_map.setdefault("default", "white")
+        label_text_color_map[label] = ansi_palette[idx % len(ansi_palette)]
+    label_text_color_map.setdefault("default", "white")
 
-    return label_color_map, label_termcolor_map
+    return label_color_map, label_text_color_map
 
 
 def action_to_string(
     grounded_actions: List[Dict],
     index: int,
-    label_termcolor_map: Dict[str, str],
+    label_text_color_map: Dict[str, str],
     colored: bool = True,
 ) -> str:
     if 0 <= index < len(grounded_actions):
@@ -82,8 +82,8 @@ def action_to_string(
         name = action_data["name"]
         params = action_data["parameters"]
         if colored:
-            color = label_termcolor_map.get(name, "white")
-            colored_name = termcolor.colored(name, color)
+            color = label_text_color_map.get(name, "white")
+            colored_name = colored_str(name, color)
             params_str = " ".join(params)
             return f"{colored_name} {params_str}" if params_str else colored_name
         return f"({name} {' '.join(params)})"
