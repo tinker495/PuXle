@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import pickle
 import warnings
 from importlib.resources import files
@@ -61,4 +62,33 @@ def load_deepcubea_dataset(
         return load_deepcubea(handle)
 
 
-__all__ = ["DeepCubeAUnpickler", "load_deepcubea", "load_deepcubea_dataset"]
+def extract_tiles(raw_state: Any) -> Any:
+    """Return the tile array from a DeepCubeA state wrapper or a raw array."""
+    return getattr(raw_state, "tiles", raw_state)
+
+
+def infer_square_size(states: Any, label: str) -> int:
+    """Infer the square board edge length from the first DeepCubeA state.
+
+    ``label`` names the puzzle for the empty-dataset error message. Raises
+    ValueError when the dataset is empty or the state length is not a perfect
+    square.
+    """
+    if not states:
+        raise ValueError(f"{label} dataset does not contain any states.")
+    length = len(extract_tiles(states[0]))
+    size = int(math.isqrt(length))
+    if size * size != length:
+        raise ValueError(
+            f"Unable to infer puzzle size from state length {length}. Expected a perfect square."
+        )
+    return size
+
+
+__all__ = [
+    "DeepCubeAUnpickler",
+    "load_deepcubea",
+    "load_deepcubea_dataset",
+    "extract_tiles",
+    "infer_square_size",
+]

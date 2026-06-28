@@ -1,3 +1,4 @@
+import colorsys
 from collections.abc import Callable
 
 import chex
@@ -65,6 +66,16 @@ class TowerOfHanoi(Puzzle):
         self.num_disks = size
         self.max_disk_value = size
         self.action_size = self.num_pegs * (self.num_pegs - 1)
+        # (from_peg, to_peg) pairs indexed by action; built once and shared by
+        # get_actions (as a jnp array) and action_to_string.
+        self._possible_moves = jnp.array(
+            [
+                [from_peg, to_peg]
+                for from_peg in range(self.num_pegs)
+                for to_peg in range(self.num_pegs)
+                if from_peg != to_peg
+            ]
+        )
         super().__init__(**kwargs)
 
     def get_string_parser(self):
@@ -238,49 +249,28 @@ class TowerOfHanoi(Puzzle):
 
         return img_func
 
+    def _stacked_pegs(self, peg_idx: int) -> chex.Array:
+        """Build a pegs array with every disk stacked on ``peg_idx``.
+
+        Disks are placed smallest-on-top: index 1 holds the smallest disk and
+        index ``num_disks`` the largest (e.g. with 3 disks the peg column is
+        ``[3, 1, 2, 3]``).
+        """
+        pegs = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
+        pegs = pegs.at[peg_idx, 0].set(self.num_disks)
+        for i in range(self.num_disks):
+            pegs = pegs.at[peg_idx, i + 1].set(i + 1)
+        return pegs
+
     def get_initial_state(
         self, solve_config: "TowerOfHanoi.SolveConfig", key=None, data=None
     ) -> "TowerOfHanoi.State":
-        """Generate the initial state for the puzzle with all disks on the first peg"""
-        # Create an array with all disks on the first peg
-        pegs = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
-
-        # Set the number of disks on the first peg
-        pegs = pegs.at[0, 0].set(self.num_disks)
-
-        # Place disks on the first peg in ascending order (smallest at top)
-        # In this arrangement, index 1 = top disk, index num_disks = bottom disk
-        # For example, with 3 disks:
-        # pegs[0, 1] = 1 (smallest, at the top)
-        # pegs[0, 2] = 2 (medium, in the middle)
-        # pegs[0, 3] = 3 (largest, at the bottom)
-        for i in range(self.num_disks):
-            disk_size = i + 1  # Smallest disk size first (1), then increasing
-            # Top disk at index 1, bottom disk at highest index
-            pegs = pegs.at[0, i + 1].set(disk_size)
-
-        return self.State(pegs=pegs)
+        """Generate the initial state with all disks on the first peg."""
+        return self.State(pegs=self._stacked_pegs(0))
 
     def get_solve_config(self, key=None, data=None) -> "TowerOfHanoi.SolveConfig":
-        """Create the solving configuration (target state) - all disks on third peg"""
-        # Create an array with all disks on the third peg
-        pegs = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
-
-        # Set the number of disks on the third peg
-        pegs = pegs.at[2, 0].set(self.num_disks)
-
-        # Place disks on the third peg in ascending order (smallest at top)
-        # In this arrangement, index 1 = top disk, index num_disks = bottom disk
-        # For example, with 3 disks:
-        # pegs[2, 1] = 1 (smallest, at the top)
-        # pegs[2, 2] = 2 (medium, in the middle)
-        # pegs[2, 3] = 3 (largest, at the bottom)
-        for i in range(self.num_disks):
-            disk_size = i + 1  # Smallest disk size first (1), then increasing
-            # Top disk at index 1, bottom disk at highest index
-            pegs = pegs.at[2, i + 1].set(disk_size)
-
-        return self.SolveConfig(TargetState=self.State(pegs=pegs))
+        """Create the solving configuration (target) with all disks on the third peg."""
+        return self.SolveConfig(TargetState=self.State(pegs=self._stacked_pegs(2)))
 
     def get_actions(
         self,
@@ -294,21 +284,7 @@ class TowerOfHanoi(Puzzle):
         """
         pegs = state.pegs
 
-        # Generate all possible moves: (from_peg, to_peg)
-        # This needs to be consistent with action_to_string and inverse map if any
-        # Since num_pegs is small (default 3), we can generate this array.
-        # We need to index into it using 'action'.
-
-        possible_moves = jnp.array(
-            [
-                [from_peg, to_peg]
-                for from_peg in range(self.num_pegs)
-                for to_peg in range(self.num_pegs)
-                if from_peg != to_peg
-            ]
-        )
-
-        move = possible_moves[action]
+        move = self._possible_moves[action]
         from_peg, to_peg = move[0], move[1]
 
         def is_valid_move(pegs, from_peg, to_peg):
@@ -397,16 +373,8 @@ class TowerOfHanoi(Puzzle):
 
     def action_to_string(self, action: int) -> str:
         """Return a string representation of the action"""
-        # action maps to (from_peg, to_peg) pair in possible_moves
-        possible_moves = [
-            (from_peg, to_peg)
-            for from_peg in range(self.num_pegs)
-            for to_peg in range(self.num_pegs)
-            if from_peg != to_peg
-        ]
-
-        from_peg, to_peg = possible_moves[action]
-        return f"Move disk from peg {from_peg + 1} to peg {to_peg + 1}"
+        from_peg, to_peg = self._possible_moves[action]
+        return f"Move disk from peg {int(from_peg) + 1} to peg {int(to_peg) + 1}"
 
 
 def get_color(size):
@@ -417,31 +385,7 @@ def get_color(size):
 
 def get_disk_color(size, max_size):
     """Get disk color as RGB based on size"""
-    # Create a rainbow gradient
-    hue = 240 * (1 - size / max_size)  # From blue (240) to red (0)
-
-    # Convert HSV to RGB
-    h = hue / 60
-    i = int(h)
-    f = h - i
-
-    v = 0.9  # Value
-    s = 0.8  # Saturation
-    p = v * (1 - s)
-    q = v * (1 - s * f)
-    t = v * (1 - s * (1 - f))
-
-    if i == 0:
-        r, g, b = v, t, p
-    elif i == 1:
-        r, g, b = q, v, p
-    elif i == 2:
-        r, g, b = p, v, t
-    elif i == 3:
-        r, g, b = p, q, v
-    elif i == 4:
-        r, g, b = t, p, v
-    else:
-        r, g, b = v, p, q
-
+    # Rainbow gradient from blue (hue 240) for small disks to red (hue 0).
+    hue = 240 * (1 - size / max_size)
+    r, g, b = colorsys.hsv_to_rgb(hue / 360, 0.8, 0.9)
     return int(r * 255), int(g * 255), int(b * 255)

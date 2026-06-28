@@ -45,25 +45,6 @@ def _coerce_generators_type(raw) -> str:
     )
 
 
-def _modinv(a: int, m: int) -> int:
-    """Modular inverse via extended Euclidean algorithm.
-
-    Raises ValueError if ``gcd(a, m) != 1``.
-    """
-    a = int(a) % int(m)
-    g, x, _ = _extended_gcd(a, int(m))
-    if g != 1:
-        raise ValueError(f"value {a} is not invertible modulo {m} (gcd={g})")
-    return x % int(m)
-
-
-def _extended_gcd(a: int, b: int) -> tuple[int, int, int]:
-    if b == 0:
-        return a, 1, 0
-    g, x1, y1 = _extended_gcd(b, a % b)
-    return g, y1, x1 - (a // b) * y1
-
-
 def _modular_matrix_inverse(mat: np.ndarray, modulo: int) -> np.ndarray:
     """Compute the inverse of an integer matrix modulo ``modulo`` using the
     adjugate and the modular inverse of the determinant.
@@ -78,7 +59,7 @@ def _modular_matrix_inverse(mat: np.ndarray, modulo: int) -> np.ndarray:
     A = [[int(mat[i, j]) % int(modulo) for j in range(m)] for i in range(m)]
 
     det = _det_int(A) % int(modulo)
-    det_inv = _modinv(det, int(modulo))
+    det_inv = pow(det, -1, int(modulo))
 
     # Adjugate via cofactor expansion.
     adj = [[0] * m for _ in range(m)]

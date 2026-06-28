@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from functools import partial
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
-import jax
 import jax.numpy as jnp
 
 from puxle.benchmark._deepcubea import load_deepcubea_dataset
@@ -131,11 +129,6 @@ HARD_26_STATES = [
 ]
 
 
-def rot90_traceable(m, k=1, axes=(0, 1)):
-    k %= 4
-    return jax.lax.switch(k, [partial(jnp.rot90, m, k=i, axes=axes) for i in range(4)])
-
-
 class RubiksCubeDeepCubeABenchmark(Benchmark):
     """Benchmark exposing the DeepCubeA 3x3 Rubik's Cube dataset."""
 
@@ -149,13 +142,10 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         self._dataset_path = (
             Path(dataset_path).expanduser().resolve() if dataset_path else None
         )
-        self._solve_config_cache = None
         self._use_color_embedding = use_color_embedding
         self._explicit_states = states
 
     def build_puzzle(self):
-        from puxle.puzzles.rubikscube import RubiksCube
-
         return RubiksCube(
             size=3, initial_shuffle=100, color_embedding=self._use_color_embedding
         )
@@ -218,11 +208,6 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         faces = jnp.take(facelet_map, faces)
 
         return faces
-
-    def _ensure_solve_config(self):
-        if self._solve_config_cache is None:
-            self._solve_config_cache = self.puzzle.get_solve_config()
-        return self._solve_config_cache
 
     def _convert_state(self, raw_state: Any):
         colors = getattr(raw_state, "colors", raw_state)

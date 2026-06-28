@@ -49,8 +49,6 @@ class Room(Maze):
     """
 
     room_dim: int  # Internal dimension of each room
-    # Probability to open an additional door beyond those needed for basic connectivity
-    _prob_open_extra_door: float = 0.1
 
     def __init__(self, size: int = 11, prob_open_extra_door: float = 1.0, **kwargs):
         """Initialize with a specified size, calculating room dimension and

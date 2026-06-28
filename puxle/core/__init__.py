@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, TypeVar
-
 from puxle._lazy_imports import lazy_dir, load_lazy_export
 
-StateT = TypeVar("StateT", bound=Any)
-
-__all__ = ["Puzzle", "PuzzleState", "FieldDescriptor", "state_dataclass", "StateT"]
+__all__ = ["Puzzle", "PuzzleState", "FieldDescriptor", "state_dataclass"]
 
 _EXPORTS = {
     "Puzzle": (".puzzle_base", "Puzzle"),

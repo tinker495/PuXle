@@ -87,19 +87,24 @@ class Sokoban(Puzzle):
     def fixed_target(self) -> bool:
         return False
 
+    # Filename suffix selecting the bundled dataset (overridden by SokobanHard).
+    _data_suffix = ""
+
     def data_init(self):
+        init_name = f"init{self._data_suffix}.npy"
+        target_name = f"target{self._data_suffix}.npy"
         try:
             # Try to load as package resources first (for installed packages)
             data_pkg = files("puxle.data.sokoban")
-            self.init_puzzles = jnp.load(data_pkg / "init.npy")
-            self.target_puzzles = jnp.load(data_pkg / "target.npy")
+            self.init_puzzles = jnp.load(data_pkg / init_name)
+            self.target_puzzles = jnp.load(data_pkg / target_name)
         except (FileNotFoundError, ModuleNotFoundError):
             # Fallback to relative paths (for development/source directory)
             current_dir = os.path.dirname(os.path.abspath(__file__))
             data_dir = os.path.join(current_dir, "..", "data", "sokoban")
 
-            self.init_puzzles = jnp.load(os.path.join(data_dir, "init.npy"))
-            self.target_puzzles = jnp.load(os.path.join(data_dir, "target.npy"))
+            self.init_puzzles = jnp.load(os.path.join(data_dir, init_name))
+            self.target_puzzles = jnp.load(os.path.join(data_dir, target_name))
 
         self.num_puzzles = self.init_puzzles.shape[0]
 
@@ -352,79 +357,37 @@ class Sokoban(Puzzle):
             current_dir = os.path.dirname(os.path.abspath(__file__))
             image_dir = os.path.join(current_dir, "..", "data", "sokoban", "imgs")
 
-        assets = {
-            0: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "floor.png"), cv2.IMREAD_COLOR),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            1: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "wall.png"), cv2.IMREAD_COLOR),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            2: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            3: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "box.png"), cv2.IMREAD_COLOR),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            4: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(
-                        os.path.join(image_dir, "box_target.png"), cv2.IMREAD_COLOR
-                    ),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            5: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(
-                        os.path.join(image_dir, "agent_on_target.png"), cv2.IMREAD_COLOR
-                    ),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            6: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(
-                        os.path.join(image_dir, "box_on_target.png"), cv2.IMREAD_COLOR
-                    ),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            7: cv2.resize(
-                np.roll(
-                    cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
-                    -1,
-                    axis=2,  # color channel G -> R
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
+        tile_filenames = {
+            0: "floor.png",
+            1: "wall.png",
+            2: "agent.png",
+            3: "box.png",
+            4: "box_target.png",
+            5: "agent_on_target.png",
+            6: "box_on_target.png",
         }
+        assets = {
+            code: cv2.resize(
+                cv2.cvtColor(
+                    cv2.imread(os.path.join(image_dir, filename), cv2.IMREAD_COLOR),
+                    cv2.COLOR_BGR2RGB,
+                ),
+                (cell_w, cell_h),
+                interpolation=cv2.INTER_AREA,
+            )
+            for code, filename in tile_filenames.items()
+        }
+        # Entry 7 is the "player pushing" sprite: same agent art with the green
+        # channel rolled into red instead of a BGR->RGB conversion.
+        assets[7] = cv2.resize(
+            np.roll(
+                cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
+                -1,
+                axis=2,  # color channel G -> R
+            ),
+            (cell_w, cell_h),
+            interpolation=cv2.INTER_AREA,
+        )
 
         def img_func(
             state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs
@@ -659,18 +622,4 @@ class Sokoban(Puzzle):
 
 
 class SokobanHard(Sokoban):
-    def data_init(self):
-        try:
-            # Try to load as package resources first (for installed packages)
-            data_pkg = files("puxle.data.sokoban")
-            self.init_puzzles = jnp.load(data_pkg / "init_hard.npy")
-            self.target_puzzles = jnp.load(data_pkg / "target_hard.npy")
-        except (FileNotFoundError, ModuleNotFoundError):
-            # Fallback to relative paths (for development/source directory)
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            data_dir = os.path.join(current_dir, "..", "data", "sokoban")
-
-            self.init_puzzles = jnp.load(os.path.join(data_dir, "init_hard.npy"))
-            self.target_puzzles = jnp.load(os.path.join(data_dir, "target_hard.npy"))
-
-        self.num_puzzles = self.init_puzzles.shape[0]
+    _data_suffix = "_hard"
