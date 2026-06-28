@@ -87,19 +87,24 @@ class Sokoban(Puzzle):
     def fixed_target(self) -> bool:
         return False
 
+    # Filename suffix selecting the bundled dataset (overridden by SokobanHard).
+    _data_suffix = ""
+
     def data_init(self):
+        init_name = f"init{self._data_suffix}.npy"
+        target_name = f"target{self._data_suffix}.npy"
         try:
             # Try to load as package resources first (for installed packages)
             data_pkg = files("puxle.data.sokoban")
-            self.init_puzzles = jnp.load(data_pkg / "init.npy")
-            self.target_puzzles = jnp.load(data_pkg / "target.npy")
+            self.init_puzzles = jnp.load(data_pkg / init_name)
+            self.target_puzzles = jnp.load(data_pkg / target_name)
         except (FileNotFoundError, ModuleNotFoundError):
             # Fallback to relative paths (for development/source directory)
             current_dir = os.path.dirname(os.path.abspath(__file__))
             data_dir = os.path.join(current_dir, "..", "data", "sokoban")
 
-            self.init_puzzles = jnp.load(os.path.join(data_dir, "init.npy"))
-            self.target_puzzles = jnp.load(os.path.join(data_dir, "target.npy"))
+            self.init_puzzles = jnp.load(os.path.join(data_dir, init_name))
+            self.target_puzzles = jnp.load(os.path.join(data_dir, target_name))
 
         self.num_puzzles = self.init_puzzles.shape[0]
 
@@ -617,18 +622,4 @@ class Sokoban(Puzzle):
 
 
 class SokobanHard(Sokoban):
-    def data_init(self):
-        try:
-            # Try to load as package resources first (for installed packages)
-            data_pkg = files("puxle.data.sokoban")
-            self.init_puzzles = jnp.load(data_pkg / "init_hard.npy")
-            self.target_puzzles = jnp.load(data_pkg / "target_hard.npy")
-        except (FileNotFoundError, ModuleNotFoundError):
-            # Fallback to relative paths (for development/source directory)
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            data_dir = os.path.join(current_dir, "..", "data", "sokoban")
-
-            self.init_puzzles = jnp.load(os.path.join(data_dir, "init_hard.npy"))
-            self.target_puzzles = jnp.load(os.path.join(data_dir, "target_hard.npy"))
-
-        self.num_puzzles = self.init_puzzles.shape[0]
+    _data_suffix = "_hard"
