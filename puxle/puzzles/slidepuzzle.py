@@ -201,16 +201,14 @@ class SlidePuzzle(Puzzle):
         return self._get_blank_position(board)[0]
 
     def _get_inv_count(self, board: chex.Array):
-        def is_inv(a, b):
-            return jnp.logical_and(a > b, jnp.logical_and(a != 0, b != 0))
-
-        n = self.size
-        arr = board
-        inv_count = 0
-        for i in range(n * n):
-            for j in range(i + 1, n * n):
-                inv_count += is_inv(arr[i], arr[j])
-        return inv_count
+        # Count ordered pairs (i < j) where both tiles are non-blank and out of
+        # order. Vectorized equivalent of the O(n^4) double loop.
+        flat = self.size * self.size
+        a = board
+        out_of_order = a[:, None] > a[None, :]
+        both_nonzero = (a[:, None] != 0) & (a[None, :] != 0)
+        upper = jnp.triu(jnp.ones((flat, flat), dtype=bool), k=1)
+        return jnp.sum(out_of_order & both_nonzero & upper)
 
     def get_img_parser(self) -> Callable:
         """
