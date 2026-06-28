@@ -126,22 +126,11 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         if target_path:
             final_state = target_path[-1]
         else:
-            # Reconstruct path from sequence
-            puzzle = self.puzzle
-            action_lookup = {
-                puzzle.action_to_string(action): action
-                for action in range(puzzle.action_size)
-            }
-            current_state = sample.state
-            for i, notation in enumerate(target_sequence):
-                if notation not in action_lookup:
-                    raise KeyError(f"Unknown action notation '{notation}' at index {i}")
-                action_idx = action_lookup[notation]
-                neighbours, _ = puzzle.get_neighbours(
-                    sample.solve_config, current_state, filled=True
-                )
-                current_state = neighbours[action_idx]
-            final_state = current_state
+            # Reconstruct the path from the action sequence via the shared helper.
+            reconstructed = self._build_optimal_path(
+                sample.state, sample.solve_config, target_sequence
+            )
+            final_state = reconstructed[-1] if reconstructed else sample.state
 
         # 1. Check validity
         if not self.puzzle.is_solved(sample.solve_config, final_state):
