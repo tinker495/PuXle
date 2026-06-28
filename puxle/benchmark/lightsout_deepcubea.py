@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
 import jax.numpy as jnp
 import numpy as np
 
-from puxle.benchmark._deepcubea import load_deepcubea_dataset
+from puxle.benchmark._deepcubea import (
+    extract_tiles,
+    infer_square_size,
+    load_deepcubea_dataset,
+)
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_state import PuzzleState
 from puxle.puzzles.lightsout import LightsOut
@@ -61,18 +64,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
 
     def _ensure_size(self) -> int:
         if self._size is None:
-            dataset = self.dataset
-            states = dataset.get("states")
-            if not states:
-                raise ValueError("LightsOut dataset does not contain any states.")
-            tiles = self._extract_tiles(states[0])
-            length = len(tiles)
-            size = int(math.isqrt(length))
-            if size * size != length:
-                raise ValueError(
-                    f"Unable to infer puzzle size from state length {length}. Expected a perfect square."
-                )
-            self._size = size
+            self._size = infer_square_size(self.dataset.get("states"), "LightsOut")
         return self._size
 
     def _ensure_solve_config(self):
@@ -106,12 +98,8 @@ class LightsOutDeepCubeABenchmark(Benchmark):
 
         return result
 
-    @staticmethod
-    def _extract_tiles(raw_state: Any):
-        return getattr(raw_state, "tiles", raw_state)
-
     def _convert_state(self, raw_state: Any) -> PuzzleState:
-        tiles = self._extract_tiles(raw_state)
+        tiles = extract_tiles(raw_state)
         puzzle: LightsOut = self.puzzle
         board = np.asarray(tiles, dtype=np.bool_)
         if not puzzle.board_is_solvable(board, puzzle.size):

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import math
 from enum import Enum
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
 import jax.numpy as jnp
 
-from puxle.benchmark._deepcubea import load_deepcubea_dataset
+from puxle.benchmark._deepcubea import (
+    extract_tiles,
+    infer_square_size,
+    load_deepcubea_dataset,
+)
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_state import PuzzleState
 from puxle.puzzles.slidepuzzle import SlidePuzzle
@@ -138,18 +141,9 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
 
     def _ensure_board_size(self) -> int:
         if self._board_size is None:
-            dataset = self.dataset
-            states = dataset.get("states")
-            if not states:
-                raise ValueError("SlidePuzzle dataset does not contain any states.")
-            tiles = self._extract_tiles(states[0])
-            length = len(tiles)
-            size = int(math.isqrt(length))
-            if size * size != length:
-                raise ValueError(
-                    f"Unable to infer puzzle size from state length {length}. Expected a perfect square."
-                )
-            self._board_size = size
+            self._board_size = infer_square_size(
+                self.dataset.get("states"), "SlidePuzzle"
+            )
         return self._board_size
 
     def _ensure_solve_config(self):
@@ -157,11 +151,8 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
             self._solve_config_cache = self.puzzle.get_solve_config()
         return self._solve_config_cache
 
-    def _extract_tiles(self, raw_state: Any):
-        return getattr(raw_state, "tiles", raw_state)
-
     def _convert_state(self, raw_state: Any) -> PuzzleState:
-        tiles = jnp.asarray(self._extract_tiles(raw_state), dtype=jnp.uint8)
+        tiles = jnp.asarray(extract_tiles(raw_state), dtype=jnp.uint8)
         puzzle: SlidePuzzle = self.puzzle
         return puzzle.State.from_unpacked(board=tiles)
 
