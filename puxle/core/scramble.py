@@ -188,26 +188,28 @@ def _get_shuffled_state(
     return final_state
 
 
-def _batched_get_random_trajectory(
+def _drive_scramble_trajectory(
     puzzle: "Puzzle",
-    k_max: int,
     shuffle_parallel: int,
-    key: chex.PRNGKey,
-    non_backtracking_steps: int = 3,
+    non_backtracking_steps: int,
+    solve_configs: "Puzzle.SolveConfig",
+    start_states: "Puzzle.State",
+    step_keys: chex.PRNGKey,
+    neighbours_fn,
 ):
-    key_inits, key_scan = jax.random.split(key, 2)
-    solve_configs, initial_states = jax.vmap(puzzle.get_inits)(
-        jax.random.split(key_inits, shuffle_parallel)
-    )
-    step_keys = jax.random.split(key_scan, k_max)
+    """Shared scan driver for forward and inverse scramble trajectories.
 
+    The forward and inverse variants differ only in how the start states are
+    built and which batched neighbour method is used; the masking, sampling,
+    history bookkeeping and trajectory assembly are identical.
+    """
     if puzzle.is_reversible and non_backtracking_steps == 1:
         action_size = puzzle.action_size
         inv_map = puzzle.inverse_action_permutation
 
         def _scan_fast(carry, step_key):
             state, move_cost, previous_action = carry
-            neighbor_states, cost = puzzle.batched_get_neighbours(
+            neighbor_states, cost = neighbours_fn(
                 solve_configs,
                 state,
                 filleds=jnp.ones_like(move_cost),
@@ -235,24 +237,21 @@ def _batched_get_random_trajectory(
         ) = jax.lax.scan(
             _scan_fast,
             (
-                initial_states,
+                start_states,
                 jnp.zeros(shuffle_parallel),
                 jnp.full((shuffle_parallel,), -1, dtype=jnp.int32),
             ),
             step_keys,
-            length=k_max,
         )
     else:
         if non_backtracking_steps < 0:
             raise ValueError("non_backtracking_steps must be non-negative")
-        history_states = _initialize_history(
-            initial_states, int(non_backtracking_steps)
-        )
+        history_states = _initialize_history(start_states, int(non_backtracking_steps))
         use_history = history_states is not None
 
         def _scan_legacy(carry, step_key):
             history, state, move_cost = carry
-            neighbor_states, cost = puzzle.batched_get_neighbours(
+            neighbor_states, cost = neighbours_fn(
                 solve_configs,
                 state,
                 filleds=jnp.ones_like(move_cost),
@@ -286,9 +285,8 @@ def _batched_get_random_trajectory(
             (states, move_costs, actions, action_costs),
         ) = jax.lax.scan(
             _scan_legacy,
-            (history_states, initial_states, jnp.zeros(shuffle_parallel)),
+            (history_states, start_states, jnp.zeros(shuffle_parallel)),
             step_keys,
-            length=k_max,
         )
 
     states = jax.tree_util.tree_map(
@@ -313,6 +311,29 @@ def _batched_get_random_trajectory(
     )
 
 
+def _batched_get_random_trajectory(
+    puzzle: "Puzzle",
+    k_max: int,
+    shuffle_parallel: int,
+    key: chex.PRNGKey,
+    non_backtracking_steps: int = 3,
+):
+    key_inits, key_scan = jax.random.split(key, 2)
+    solve_configs, initial_states = jax.vmap(puzzle.get_inits)(
+        jax.random.split(key_inits, shuffle_parallel)
+    )
+    step_keys = jax.random.split(key_scan, k_max)
+    return _drive_scramble_trajectory(
+        puzzle,
+        shuffle_parallel,
+        non_backtracking_steps,
+        solve_configs,
+        initial_states,
+        step_keys,
+        puzzle.batched_get_neighbours,
+    )
+
+
 def _batched_get_random_inverse_trajectory(
     puzzle: "Puzzle",
     k_max: int,
@@ -328,112 +349,12 @@ def _batched_get_random_inverse_trajectory(
         solve_configs, jax.random.split(key_targets, shuffle_parallel)
     )
     step_keys = jax.random.split(key_scan, k_max)
-
-    if puzzle.is_reversible and non_backtracking_steps == 1:
-        action_size = puzzle.action_size
-        inv_map = puzzle.inverse_action_permutation
-
-        def _scan_fast(carry, step_key):
-            state, move_cost, previous_action = carry
-            neighbor_states, cost = puzzle.batched_get_inverse_neighbours(
-                solve_configs,
-                state,
-                filleds=jnp.ones_like(move_cost),
-                multi_solve_config=True,
-            )
-            mask = jnp.isfinite(cost)
-
-            final_mask = _mask_inverse_action(
-                previous_action, mask, inv_map, action_size
-            )
-            no_valid = jnp.sum(final_mask, axis=0) == 0
-            final_mask = jnp.where(no_valid[jnp.newaxis, :], mask, final_mask)
-            inv_actions = _masked_action_sample_uniform(final_mask, step_key)
-            next_state = _gather_by_action(neighbor_states, inv_actions)
-            batch_idx = jnp.arange(inv_actions.shape[0], dtype=jnp.int32)
-            step_cost = cost[inv_actions, batch_idx]
-            return (
-                (next_state, move_cost + step_cost, inv_actions),
-                (state, move_cost, inv_actions, step_cost),
-            )
-
-        (
-            (last_state, last_move_cost, _),
-            (states, move_costs, inv_actions, action_costs),
-        ) = jax.lax.scan(
-            _scan_fast,
-            (
-                target_states,
-                jnp.zeros(shuffle_parallel),
-                jnp.full((shuffle_parallel,), -1, dtype=jnp.int32),
-            ),
-            step_keys,
-            length=k_max,
-        )
-    else:
-        if non_backtracking_steps < 0:
-            raise ValueError("non_backtracking_steps must be non-negative")
-        history_states = _initialize_history(target_states, int(non_backtracking_steps))
-        use_history = history_states is not None
-
-        def _scan_legacy(carry, step_key):
-            history, state, move_cost = carry
-            neighbor_states, cost = puzzle.batched_get_inverse_neighbours(
-                solve_configs,
-                state,
-                filleds=jnp.ones_like(move_cost),
-                multi_solve_config=True,
-            )
-            action_mask = jnp.isfinite(cost)
-            history_block = (
-                _match_history(neighbor_states, history)
-                if use_history
-                else jnp.zeros_like(action_mask)
-            )
-            same_block = _states_equal(neighbor_states, state)
-            backtracking_mask = (~history_block) & (~same_block)
-            masked = action_mask & backtracking_mask
-            no_valid_backtracking = jnp.sum(masked, axis=0) == 0
-            final_mask = jnp.where(
-                no_valid_backtracking[jnp.newaxis, :], action_mask, masked
-            )
-            inv_actions = _masked_action_sample_uniform(final_mask, step_key)
-            next_state = _gather_by_action(neighbor_states, inv_actions)
-            batch_idx = jnp.arange(inv_actions.shape[0], dtype=jnp.int32)
-            step_cost = cost[inv_actions, batch_idx]
-            next_history = _roll_history(history, state) if use_history else history
-            return (
-                (next_history, next_state, move_cost + step_cost),
-                (state, move_cost, inv_actions, step_cost),
-            )
-
-        (
-            (_, last_state, last_move_cost),
-            (states, move_costs, inv_actions, action_costs),
-        ) = jax.lax.scan(
-            _scan_legacy,
-            (history_states, target_states, jnp.zeros(shuffle_parallel)),
-            step_keys,
-            length=k_max,
-        )
-
-    states = jax.tree_util.tree_map(
-        lambda s_seq, s_last: jnp.concatenate(
-            [s_seq, s_last[jnp.newaxis, ...]], axis=0
-        ),
-        states,
-        last_state,
-    )
-    move_costs = jnp.concatenate([move_costs, last_move_cost[jnp.newaxis, ...]], axis=0)
-    move_costs_tm1 = jnp.concatenate(
-        [jnp.zeros_like(move_costs[:1, ...]), move_costs[:-1, ...]], axis=0
-    )
-
-    return PuzzleTrajectory(
-        solve_configs=solve_configs,
-        states=states,
-        move_costs=move_costs,
-        move_costs_tm1=move_costs_tm1,
-        actions=inv_actions,
-        action_costs=action_costs,
+    return _drive_scramble_trajectory(
+        puzzle,
+        shuffle_parallel,
+        non_backtracking_steps,
+        solve_configs,
+        target_states,
+        step_keys,
+        puzzle.batched_get_inverse_neighbours,
     )
