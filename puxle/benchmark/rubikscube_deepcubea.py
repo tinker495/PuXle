@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from functools import partial
 from pathlib import Path
 from typing import Any, Hashable, Iterable, Sequence
 
-import jax
 import jax.numpy as jnp
 
 from puxle.benchmark._deepcubea import load_deepcubea_dataset
@@ -129,11 +127,6 @@ HARD_26_STATES = [
         5,
     ],
 ]
-
-
-def rot90_traceable(m, k=1, axes=(0, 1)):
-    k %= 4
-    return jax.lax.switch(k, [partial(jnp.rot90, m, k=i, axes=axes) for i in range(4)])
 
 
 class RubiksCubeDeepCubeABenchmark(Benchmark):
