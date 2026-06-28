@@ -89,7 +89,6 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         preset_board_size = preset.board_size if preset else None
         self._dataset_name = dataset_name or preset_dataset_name
         self._board_size = board_size or preset_board_size
-        self._solve_config_cache = None
         self._subset_indices = preset.indices if preset else None
         self._explicit_states = preset.states if preset else None
 
@@ -145,11 +144,6 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
                 self.dataset.get("states"), "SlidePuzzle"
             )
         return self._board_size
-
-    def _ensure_solve_config(self):
-        if self._solve_config_cache is None:
-            self._solve_config_cache = self.puzzle.get_solve_config()
-        return self._solve_config_cache
 
     def _convert_state(self, raw_state: Any) -> PuzzleState:
         tiles = jnp.asarray(extract_tiles(raw_state), dtype=jnp.uint8)

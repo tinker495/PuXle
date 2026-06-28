@@ -34,7 +34,6 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         )
         self._dataset_name = dataset_name
         self._size = size
-        self._solve_config_cache = None
 
     def build_puzzle(self) -> LightsOut:
         return LightsOut(size=self._ensure_size())
@@ -66,11 +65,6 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         if self._size is None:
             self._size = infer_square_size(self.dataset.get("states"), "LightsOut")
         return self._size
-
-    def _ensure_solve_config(self):
-        if self._solve_config_cache is None:
-            self._solve_config_cache = self.puzzle.get_solve_config()
-        return self._solve_config_cache
 
     def verify_solution(
         self,

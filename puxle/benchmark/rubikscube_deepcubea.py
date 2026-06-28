@@ -149,7 +149,6 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         self._dataset_path = (
             Path(dataset_path).expanduser().resolve() if dataset_path else None
         )
-        self._solve_config_cache = None
         self._use_color_embedding = use_color_embedding
         self._explicit_states = states
 
@@ -218,11 +217,6 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         faces = jnp.take(facelet_map, faces)
 
         return faces
-
-    def _ensure_solve_config(self):
-        if self._solve_config_cache is None:
-            self._solve_config_cache = self.puzzle.get_solve_config()
-        return self._solve_config_cache
 
     def _convert_state(self, raw_state: Any):
         colors = getattr(raw_state, "colors", raw_state)

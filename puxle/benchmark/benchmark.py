@@ -54,6 +54,7 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         self._puzzle: Puzzle | None = None
         self._dataset: Any = None
         self._notation_to_action: dict[str, int] | None = None
+        self._solve_config_cache: SolveConfigT | None = None
 
     @property
     def puzzle(self) -> Puzzle:
@@ -160,6 +161,12 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
             return False
 
         return True
+
+    def _ensure_solve_config(self) -> SolveConfigT:
+        """Return the puzzle solve configuration, building it once and caching it."""
+        if self._solve_config_cache is None:
+            self._solve_config_cache = self.puzzle.get_solve_config()
+        return self._solve_config_cache
 
     def _build_action_lookup(self) -> dict[str, int]:
         """Build a mapping from action notation to action index."""
