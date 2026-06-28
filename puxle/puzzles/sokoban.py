@@ -352,79 +352,37 @@ class Sokoban(Puzzle):
             current_dir = os.path.dirname(os.path.abspath(__file__))
             image_dir = os.path.join(current_dir, "..", "data", "sokoban", "imgs")
 
-        assets = {
-            0: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "floor.png"), cv2.IMREAD_COLOR),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            1: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "wall.png"), cv2.IMREAD_COLOR),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            2: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            3: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, "box.png"), cv2.IMREAD_COLOR),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            4: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(
-                        os.path.join(image_dir, "box_target.png"), cv2.IMREAD_COLOR
-                    ),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            5: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(
-                        os.path.join(image_dir, "agent_on_target.png"), cv2.IMREAD_COLOR
-                    ),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            6: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(
-                        os.path.join(image_dir, "box_on_target.png"), cv2.IMREAD_COLOR
-                    ),
-                    cv2.COLOR_BGR2RGB,
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
-            7: cv2.resize(
-                np.roll(
-                    cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
-                    -1,
-                    axis=2,  # color channel G -> R
-                ),
-                (cell_w, cell_h),
-                interpolation=cv2.INTER_AREA,
-            ),
+        tile_filenames = {
+            0: "floor.png",
+            1: "wall.png",
+            2: "agent.png",
+            3: "box.png",
+            4: "box_target.png",
+            5: "agent_on_target.png",
+            6: "box_on_target.png",
         }
+        assets = {
+            code: cv2.resize(
+                cv2.cvtColor(
+                    cv2.imread(os.path.join(image_dir, filename), cv2.IMREAD_COLOR),
+                    cv2.COLOR_BGR2RGB,
+                ),
+                (cell_w, cell_h),
+                interpolation=cv2.INTER_AREA,
+            )
+            for code, filename in tile_filenames.items()
+        }
+        # Entry 7 is the "player pushing" sprite: same agent art with the green
+        # channel rolled into red instead of a BGR->RGB conversion.
+        assets[7] = cv2.resize(
+            np.roll(
+                cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
+                -1,
+                axis=2,  # color channel G -> R
+            ),
+            (cell_w, cell_h),
+            interpolation=cv2.INTER_AREA,
+        )
 
         def img_func(
             state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs
