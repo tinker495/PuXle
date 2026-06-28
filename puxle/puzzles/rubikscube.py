@@ -23,7 +23,6 @@ BACK = 3
 LEFT = 4
 DOWN = 5
 
-rotate_face_map = {UP: "u", FRONT: "f", RIGHT: "r", BACK: "b", LEFT: "l", DOWN: "d"}
 face_map_legend = {
     UP: "up",
     FRONT: "front",

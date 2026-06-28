@@ -121,8 +121,6 @@ def _parse_name(name: str) -> tuple[str, tuple[int, ...], dict[str, int]]:
     if k_match:
         first_arg = int(k_match.group("first"))
         k_val = int(k_match.group("kval"))
-        # We use the kwarg name 'k' here; _resolve_kwargs_from_sig may override
-        # it to match the factory's actual last parameter name.
         return factory_name, (first_arg,), {"k": k_val}
 
     # Try positional _ form: e.g. "8", "8_3", "8_4_2"

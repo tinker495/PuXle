@@ -67,7 +67,6 @@ class RubiksCubeSantaBenchmark(Benchmark):
         self._dataset_path = (
             Path(dataset_path).expanduser().resolve() if dataset_path else None
         )
-        self._solve_config_cache = None
 
         # Extract size from puzzle_type
         if not self.puzzle_type.startswith("cube_"):

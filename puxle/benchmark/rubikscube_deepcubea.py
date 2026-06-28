@@ -146,8 +146,6 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         self._explicit_states = states
 
     def build_puzzle(self):
-        from puxle.puzzles.rubikscube import RubiksCube
-
         return RubiksCube(
             size=3, initial_shuffle=100, color_embedding=self._use_color_embedding
         )
