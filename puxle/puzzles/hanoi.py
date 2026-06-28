@@ -239,49 +239,28 @@ class TowerOfHanoi(Puzzle):
 
         return img_func
 
+    def _stacked_pegs(self, peg_idx: int) -> chex.Array:
+        """Build a pegs array with every disk stacked on ``peg_idx``.
+
+        Disks are placed smallest-on-top: index 1 holds the smallest disk and
+        index ``num_disks`` the largest (e.g. with 3 disks the peg column is
+        ``[3, 1, 2, 3]``).
+        """
+        pegs = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
+        pegs = pegs.at[peg_idx, 0].set(self.num_disks)
+        for i in range(self.num_disks):
+            pegs = pegs.at[peg_idx, i + 1].set(i + 1)
+        return pegs
+
     def get_initial_state(
         self, solve_config: "TowerOfHanoi.SolveConfig", key=None, data=None
     ) -> "TowerOfHanoi.State":
-        """Generate the initial state for the puzzle with all disks on the first peg"""
-        # Create an array with all disks on the first peg
-        pegs = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
-
-        # Set the number of disks on the first peg
-        pegs = pegs.at[0, 0].set(self.num_disks)
-
-        # Place disks on the first peg in ascending order (smallest at top)
-        # In this arrangement, index 1 = top disk, index num_disks = bottom disk
-        # For example, with 3 disks:
-        # pegs[0, 1] = 1 (smallest, at the top)
-        # pegs[0, 2] = 2 (medium, in the middle)
-        # pegs[0, 3] = 3 (largest, at the bottom)
-        for i in range(self.num_disks):
-            disk_size = i + 1  # Smallest disk size first (1), then increasing
-            # Top disk at index 1, bottom disk at highest index
-            pegs = pegs.at[0, i + 1].set(disk_size)
-
-        return self.State(pegs=pegs)
+        """Generate the initial state with all disks on the first peg."""
+        return self.State(pegs=self._stacked_pegs(0))
 
     def get_solve_config(self, key=None, data=None) -> "TowerOfHanoi.SolveConfig":
-        """Create the solving configuration (target state) - all disks on third peg"""
-        # Create an array with all disks on the third peg
-        pegs = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
-
-        # Set the number of disks on the third peg
-        pegs = pegs.at[2, 0].set(self.num_disks)
-
-        # Place disks on the third peg in ascending order (smallest at top)
-        # In this arrangement, index 1 = top disk, index num_disks = bottom disk
-        # For example, with 3 disks:
-        # pegs[2, 1] = 1 (smallest, at the top)
-        # pegs[2, 2] = 2 (medium, in the middle)
-        # pegs[2, 3] = 3 (largest, at the bottom)
-        for i in range(self.num_disks):
-            disk_size = i + 1  # Smallest disk size first (1), then increasing
-            # Top disk at index 1, bottom disk at highest index
-            pegs = pegs.at[2, i + 1].set(disk_size)
-
-        return self.SolveConfig(TargetState=self.State(pegs=pegs))
+        """Create the solving configuration (target) with all disks on the third peg."""
+        return self.SolveConfig(TargetState=self.State(pegs=self._stacked_pegs(2)))
 
     def get_actions(
         self,
