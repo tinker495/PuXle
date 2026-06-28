@@ -66,6 +66,16 @@ class TowerOfHanoi(Puzzle):
         self.num_disks = size
         self.max_disk_value = size
         self.action_size = self.num_pegs * (self.num_pegs - 1)
+        # (from_peg, to_peg) pairs indexed by action; built once and shared by
+        # get_actions (as a jnp array) and action_to_string.
+        self._possible_moves = jnp.array(
+            [
+                [from_peg, to_peg]
+                for from_peg in range(self.num_pegs)
+                for to_peg in range(self.num_pegs)
+                if from_peg != to_peg
+            ]
+        )
         super().__init__(**kwargs)
 
     def get_string_parser(self):
@@ -274,21 +284,7 @@ class TowerOfHanoi(Puzzle):
         """
         pegs = state.pegs
 
-        # Generate all possible moves: (from_peg, to_peg)
-        # This needs to be consistent with action_to_string and inverse map if any
-        # Since num_pegs is small (default 3), we can generate this array.
-        # We need to index into it using 'action'.
-
-        possible_moves = jnp.array(
-            [
-                [from_peg, to_peg]
-                for from_peg in range(self.num_pegs)
-                for to_peg in range(self.num_pegs)
-                if from_peg != to_peg
-            ]
-        )
-
-        move = possible_moves[action]
+        move = self._possible_moves[action]
         from_peg, to_peg = move[0], move[1]
 
         def is_valid_move(pegs, from_peg, to_peg):
@@ -377,16 +373,8 @@ class TowerOfHanoi(Puzzle):
 
     def action_to_string(self, action: int) -> str:
         """Return a string representation of the action"""
-        # action maps to (from_peg, to_peg) pair in possible_moves
-        possible_moves = [
-            (from_peg, to_peg)
-            for from_peg in range(self.num_pegs)
-            for to_peg in range(self.num_pegs)
-            if from_peg != to_peg
-        ]
-
-        from_peg, to_peg = possible_moves[action]
-        return f"Move disk from peg {from_peg + 1} to peg {to_peg + 1}"
+        from_peg, to_peg = self._possible_moves[action]
+        return f"Move disk from peg {int(from_peg) + 1} to peg {int(to_peg) + 1}"
 
 
 def get_color(size):
