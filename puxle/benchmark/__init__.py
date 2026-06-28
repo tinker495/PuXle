@@ -1,15 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence
-
 from puxle._lazy_imports import lazy_dir, load_lazy_export
 
-BenchmarkSequence = Sequence[Any]
-SampleIterable = Iterable[Any]
-
 __all__ = [
-    "BenchmarkSequence",
-    "SampleIterable",
     "Benchmark",
     "BenchmarkSample",
     "LightsOutDeepCubeABenchmark",
