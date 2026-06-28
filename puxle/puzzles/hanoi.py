@@ -1,3 +1,4 @@
+import colorsys
 from collections.abc import Callable
 
 import chex
@@ -417,31 +418,7 @@ def get_color(size):
 
 def get_disk_color(size, max_size):
     """Get disk color as RGB based on size"""
-    # Create a rainbow gradient
-    hue = 240 * (1 - size / max_size)  # From blue (240) to red (0)
-
-    # Convert HSV to RGB
-    h = hue / 60
-    i = int(h)
-    f = h - i
-
-    v = 0.9  # Value
-    s = 0.8  # Saturation
-    p = v * (1 - s)
-    q = v * (1 - s * f)
-    t = v * (1 - s * (1 - f))
-
-    if i == 0:
-        r, g, b = v, t, p
-    elif i == 1:
-        r, g, b = q, v, p
-    elif i == 2:
-        r, g, b = p, v, t
-    elif i == 3:
-        r, g, b = p, q, v
-    elif i == 4:
-        r, g, b = t, p, v
-    else:
-        r, g, b = v, p, q
-
+    # Rainbow gradient from blue (hue 240) for small disks to red (hue 0).
+    hue = 240 * (1 - size / max_size)
+    r, g, b = colorsys.hsv_to_rgb(hue / 360, 0.8, 0.9)
     return int(r * 255), int(g * 255), int(b * 255)
