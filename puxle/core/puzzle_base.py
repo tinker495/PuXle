@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Any, Optional, TypeVar
+from typing import Any, Optional
 
 import chex
 import jax
@@ -8,8 +8,6 @@ import jax.numpy as jnp
 
 from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.render import attach_state_renderer
-
-T = TypeVar("T")
 
 
 class Puzzle(ABC):
