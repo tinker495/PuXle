@@ -160,34 +160,24 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         return optimal_action_sequence, float(len(optimal_action_sequence))
 
 
-def _slide_preset_class(name: str, preset: SlidePuzzlePreset):
+class SlidePuzzleDeepCubeA15Benchmark(SlidePuzzleDeepCubeABenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
-        SlidePuzzleDeepCubeABenchmark.__init__(
-            self, dataset_path=dataset_path, preset=preset
-        )
-
-    return type(
-        name,
-        (SlidePuzzleDeepCubeABenchmark,),
-        {"__init__": __init__, "__module__": __name__},
-    )
+        super().__init__(dataset_path=dataset_path, preset=SlidePuzzlePreset.SIZE15)
 
 
-SlidePuzzleDeepCubeA15Benchmark: type[SlidePuzzleDeepCubeABenchmark]
-SlidePuzzleDeepCubeA24Benchmark: type[SlidePuzzleDeepCubeABenchmark]
-SlidePuzzleDeepCubeA35Benchmark: type[SlidePuzzleDeepCubeABenchmark]
-SlidePuzzleDeepCubeA48Benchmark: type[SlidePuzzleDeepCubeABenchmark]
+class SlidePuzzleDeepCubeA24Benchmark(SlidePuzzleDeepCubeABenchmark):
+    def __init__(self, dataset_path: str | Path | None = None) -> None:
+        super().__init__(dataset_path=dataset_path, preset=SlidePuzzlePreset.SIZE24)
 
-for _size, _preset in (
-    (15, SlidePuzzlePreset.SIZE15),
-    (24, SlidePuzzlePreset.SIZE24),
-    (35, SlidePuzzlePreset.SIZE35),
-    (48, SlidePuzzlePreset.SIZE48),
-):
-    _name = f"SlidePuzzleDeepCubeA{_size}Benchmark"
-    globals()[_name] = _slide_preset_class(_name, _preset)
 
-del _size, _preset, _name
+class SlidePuzzleDeepCubeA35Benchmark(SlidePuzzleDeepCubeABenchmark):
+    def __init__(self, dataset_path: str | Path | None = None) -> None:
+        super().__init__(dataset_path=dataset_path, preset=SlidePuzzlePreset.SIZE35)
+
+
+class SlidePuzzleDeepCubeA48Benchmark(SlidePuzzleDeepCubeABenchmark):
+    def __init__(self, dataset_path: str | Path | None = None) -> None:
+        super().__init__(dataset_path=dataset_path, preset=SlidePuzzlePreset.SIZE48)
 
 
 class SlidePuzzleDeepCubeA15HardBenchmark(SlidePuzzleDeepCubeABenchmark):
