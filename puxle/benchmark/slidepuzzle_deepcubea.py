@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Hashable, Iterable, Sequence
+from typing import Any, Hashable, Sequence
 
 import jax.numpy as jnp
 
@@ -79,9 +79,7 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         preset: SlidePuzzlePreset | None = SlidePuzzlePreset.SIZE15,
     ) -> None:
         super().__init__()
-        self._dataset_path = (
-            Path(dataset_path).expanduser().resolve() if dataset_path else None
-        )
+        self._dataset_path = self._normalize_dataset_path(dataset_path)
         preset_dataset_name = preset.dataset_name if preset else DEFAULT_DATASET_NAME
         preset_board_size = preset.board_size if preset else None
         self._dataset_name = dataset_name or preset_dataset_name
@@ -102,9 +100,6 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
             "puxle.data.slidepuzzle",
             fallback_dir,
         )
-
-    def sample_ids(self) -> Iterable[Hashable]:
-        return range(len(self.dataset["states"]))
 
     def get_sample(self, sample_id: Hashable) -> BenchmarkSample:
         index = int(sample_id)
@@ -133,11 +128,10 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         )
 
     def _ensure_board_size(self) -> int:
-        if self._board_size is None:
-            self._board_size = infer_square_size(
-                self.dataset.get("states"), "SlidePuzzle"
-            )
-        return self._board_size
+        return self._ensure_cached(
+            "_board_size",
+            lambda: infer_square_size(self.dataset.get("states"), "SlidePuzzle"),
+        )
 
     def _convert_state(self, raw_state: Any) -> PuzzleState:
         tiles = jnp.asarray(extract_tiles(raw_state), dtype=jnp.uint8)

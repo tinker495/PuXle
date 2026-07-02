@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Hashable, Iterable, Sequence
+from typing import Any, Hashable, Sequence
 
 import jax.numpy as jnp
 
@@ -139,9 +139,7 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
         states: Sequence[Any] | None = None,
     ) -> None:
         super().__init__()
-        self._dataset_path = (
-            Path(dataset_path).expanduser().resolve() if dataset_path else None
-        )
+        self._dataset_path = self._normalize_dataset_path(dataset_path)
         self._use_color_embedding = use_color_embedding
         self._explicit_states = states
 
@@ -161,9 +159,6 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
             "puxle.data.rubikscube",
             fallback_dir,
         )
-
-    def sample_ids(self) -> Iterable[Hashable]:
-        return range(len(self.dataset["states"]))
 
     def get_sample(self, sample_id: Hashable) -> BenchmarkSample:
         index = int(sample_id)
