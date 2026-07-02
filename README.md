@@ -27,7 +27,6 @@ Full API documentation is automatically built and deployed to **[GitHub Pages](h
 
 - **[API Reference](https://tinker495.github.io/PuXle/api/index.html)** — All modules, classes, and functions
 - **Bitpacked runtime states (xtructure)**: [`docs/tutorials/xtructure_bitpacking.md`](docs/tutorials/xtructure_bitpacking.md)
-- **PDDLFuse: Diverse Planning Domain Generator**: [`docs/pddlfuse.md`](docs/pddlfuse.md) — Based on the [PDDLFuse paper](https://arxiv.org/pdf/2411.19886)
 - **cayleypy bridge — Cayley/Schreier graphs as PuXle puzzles**: [`docs/tutorials/cayley_bridge.md`](docs/tutorials/cayley_bridge.md)
 
 ## 📦 Installation
