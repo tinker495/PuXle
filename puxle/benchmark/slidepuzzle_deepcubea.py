@@ -37,25 +37,21 @@ HARD_17_STATES = [
 
 
 class SlidePuzzlePreset(Enum):
-    SIZE15 = ("size15-deepcubeA.pkl", 4, None)
-    SIZE24 = ("size24-deepcubeA.pkl", 5, None)
-    SIZE35 = ("size35-deepcubeA.pkl", 6, None)
-    SIZE48 = ("size48-deepcubeA.pkl", 7, None)
-    SIZE15_HARD = (
-        "size15-deepcubeA.pkl",
-        4,
-        HARD_17_STATES,
-    )
+    SIZE15 = ("size15-deepcubeA.pkl", 4)
+    SIZE24 = ("size24-deepcubeA.pkl", 5)
+    SIZE35 = ("size35-deepcubeA.pkl", 6)
+    SIZE48 = ("size48-deepcubeA.pkl", 7)
+    SIZE15_HARD = ("size15-deepcubeA.pkl", 4)
 
-    def __init__(
-        self,
-        dataset_name: str,
-        board_size: int,
-        states: Sequence[Any] | None,
-    ):
+    def __init__(self, dataset_name: str, board_size: int):
         self.dataset_name = dataset_name
         self.board_size = board_size
-        self.states = states
+
+    @property
+    def states(self) -> Sequence[Any] | None:
+        if self is SlidePuzzlePreset.SIZE15_HARD:
+            return HARD_17_STATES
+        return None
 
 
 DEFAULT_DATASET_NAME = SlidePuzzlePreset.SIZE15.dataset_name
