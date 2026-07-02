@@ -166,14 +166,10 @@ class Puzzle(ABC):
                 f"{self.__class__.__name__} must define `action_size` before calling Puzzle.__init__"
             )
 
-        inv_map = self.inverse_action_map
-        if inv_map is not None:
-            # _inverse_action_permutation is an array of indices such that
-            # the i-th inverse neighbour is neighbours[_inverse_action_permutation[i]]
-            # where neighbours are the forward neighbours from get_neighbours.
-            self._inverse_action_permutation = inv_map
-        else:
-            self._inverse_action_permutation = None
+        # _inverse_action_permutation is either None or an array of indices such that
+        # the i-th inverse neighbour is neighbours[_inverse_action_permutation[i]]
+        # where neighbours are the forward neighbours from get_neighbours.
+        self._inverse_action_permutation = self.inverse_action_map
 
     @property
     def inverse_action_permutation(self) -> Optional[jnp.ndarray]:
