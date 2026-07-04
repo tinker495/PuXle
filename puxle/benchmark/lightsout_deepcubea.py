@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Hashable, Iterable, Sequence
+from typing import Any, Hashable, Sequence
 
 import jax.numpy as jnp
 import numpy as np
@@ -29,9 +29,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         size: int | None = None,
     ) -> None:
         super().__init__()
-        self._dataset_path = (
-            Path(dataset_path).expanduser().resolve() if dataset_path else None
-        )
+        self._dataset_path = self._normalize_dataset_path(dataset_path)
         self._dataset_name = dataset_name
         self._size = size
 
@@ -43,9 +41,6 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         return load_deepcubea_dataset(
             self._dataset_path, self._dataset_name, "puxle.data.lightsout", fallback_dir
         )
-
-    def sample_ids(self) -> Iterable[Hashable]:
-        return range(len(self.dataset["states"]))
 
     def get_sample(self, sample_id: Hashable) -> BenchmarkSample:
         index = int(sample_id)
@@ -62,9 +57,10 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         )
 
     def _ensure_size(self) -> int:
-        if self._size is None:
-            self._size = infer_square_size(self.dataset.get("states"), "LightsOut")
-        return self._size
+        return self._ensure_cached(
+            "_size",
+            lambda: infer_square_size(self.dataset.get("states"), "LightsOut"),
+        )
 
     def verify_solution(
         self,

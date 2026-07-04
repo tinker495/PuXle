@@ -73,6 +73,39 @@ class MockBenchmark(Benchmark):
         return self.dataset[sample_id]
 
 
+class DefaultSampleIdsBenchmark(Benchmark):
+    def build_puzzle(self):
+        return MockPuzzle()
+
+    def load_dataset(self):
+        return {"states": ["a", "b", "c"]}
+
+    def get_sample(self, sample_id):
+        raise NotImplementedError
+
+
+def test_benchmark_default_sample_ids_uses_states_dataset():
+    bm = DefaultSampleIdsBenchmark()
+    assert list(bm.sample_ids()) == [0, 1, 2]
+
+
+def test_benchmark_path_normalization_and_cached_helper(tmp_path):
+    bm = DefaultSampleIdsBenchmark()
+    bm._size = None
+    calls = 0
+
+    def factory():
+        nonlocal calls
+        calls += 1
+        return 7
+
+    assert Benchmark._normalize_dataset_path(tmp_path) == tmp_path.resolve()
+    assert Benchmark._normalize_dataset_path(None) is None
+    assert bm._ensure_cached("_size", factory) == 7
+    assert bm._ensure_cached("_size", factory) == 7
+    assert calls == 1
+
+
 def test_verify_solution_valid_optimal():
     bm = MockBenchmark()
     sample = bm.get_sample("test1")

@@ -27,7 +27,6 @@ Full API documentation is automatically built and deployed to **[GitHub Pages](h
 
 - **[API Reference](https://tinker495.github.io/PuXle/api/index.html)** — All modules, classes, and functions
 - **Bitpacked runtime states (xtructure)**: [`docs/tutorials/xtructure_bitpacking.md`](docs/tutorials/xtructure_bitpacking.md)
-- **PDDLFuse: Diverse Planning Domain Generator**: [`docs/pddlfuse.md`](docs/pddlfuse.md) — Based on the [PDDLFuse paper](https://arxiv.org/pdf/2411.19886)
 - **cayleypy bridge — Cayley/Schreier graphs as PuXle puzzles**: [`docs/tutorials/cayley_bridge.md`](docs/tutorials/cayley_bridge.md)
 
 ## 📦 Installation
@@ -324,28 +323,24 @@ Or use the convenience factory that walks `PermutationGroups → MatrixGroups �
 puzzle = CayleyPuzzle.from_cayleypy_factory("top_spin", 8, k=4)
 ```
 
-### 2. Auto-generated subclasses — pattern-based naming
+### 2. Registry subclasses
 
-For one-shot use as a no-arg `Puzzle` (e.g. registering into JAxtar's puzzle registry), import names of the form `Cayley<FactoryPascalCase>[_<arg>…]`:
+For one-shot use as a no-arg `Puzzle` in JAxtar's puzzle registry, PuXle exposes
+the five subclasses that are actually registered downstream:
 
 ```python
 from puxle import (
     CayleyPancake7,            # PermutationGroups.pancake(7)
-    CayleyLRX12,               # PermutationGroups.lrx(12)
-    CayleyTopSpin8K4,          # PermutationGroups.top_spin(8, k=4)  (kwarg form)
-    CayleyTopSpin8_4,          # PermutationGroups.top_spin(8, 4)    (positional)
-    CayleyConsecutiveKCycles8_3,
-    CayleyAllCycles6,
+    CayleyPancake8,            # PermutationGroups.pancake(8)
+    CayleyLRX8,                # PermutationGroups.lrx(8)
+    CayleyTopSpin8K4,          # PermutationGroups.top_spin(8, k=4)
+    CayleyCoxeter8,            # PermutationGroups.coxeter(8)
 )
+puzzle = CayleyTopSpin8K4(num_shuffle=20)
 ```
 
-The class is generated lazily on first attribute access via a module-level `__getattr__`; subsequent lookups return the same object. New cayleypy factories require **zero PuXle code changes** — name the class and it works. List available factories:
-
-```python
-from puxle.puzzles.cayley_subclasses import list_available_factories, discover
-print(list_available_factories())  # ['all_cycles', 'lrx', 'pancake', ...]
-cls = discover("pancake", 9)        # build without name parsing
-```
+Use `CayleyPuzzle.from_cayleypy_factory(...)` directly for any other cayleypy
+graph.
 
 ### Optional dependency
 
@@ -355,7 +350,7 @@ Install the cayleypy extra to enable the bridge:
 pip install "puxle[cayley]"
 ```
 
-The adapter module itself imports cleanly without cayleypy installed; construction raises `ImportError` naming `[cayley]`. See [`docs/tutorials/cayley_bridge.md`](docs/tutorials/cayley_bridge.md) for a longer walk-through of the adapter API, the auto-generated subclasses, and empirical JAxtar A\* benchmarks across the cayleypy catalog.
+The adapter module itself imports cleanly without cayleypy installed; construction raises `ImportError` naming `[cayley]`. See [`docs/tutorials/cayley_bridge.md`](docs/tutorials/cayley_bridge.md) for a longer walk-through of the adapter API, registry subclasses, and empirical JAxtar A\* benchmarks across the cayleypy catalog.
 
 ## See Also
 

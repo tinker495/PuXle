@@ -97,30 +97,6 @@ def _flatten_batch_time_trajectory(
     )
 
 
-def _flatten_chain_trajectory(
-    *,
-    solve_configs,
-    states,
-    move_costs: chex.Array,
-    move_costs_tm1: chex.Array,
-    actions: chex.Array,
-    action_costs: chex.Array,
-    shuffle_parallel: int,
-    k_max: int,
-) -> PuzzleTrajectory:
-    return _flatten_batch_time_trajectory(
-        solve_configs=solve_configs,
-        states=states,
-        move_costs=move_costs,
-        move_costs_tm1=move_costs_tm1,
-        actions=actions,
-        action_costs=action_costs,
-        parent_indices=_chain_parent_indices(shuffle_parallel, k_max),
-        trajectory_indices=_trajectory_indices(shuffle_parallel, k_max),
-        step_indices=_step_indices(shuffle_parallel, k_max),
-    )
-
-
 def create_target_shuffled_path(
     puzzle: "Puzzle",
     k_max: int,
@@ -158,15 +134,16 @@ def create_target_shuffled_path(
     action_costs = action_costs.transpose((1, 0))
 
     solve_configs = _repeat_solve_configs_for_steps(solve_configs, k_max)
-    return _flatten_chain_trajectory(
+    return _flatten_batch_time_trajectory(
         solve_configs=solve_configs,
         states=states,
         move_costs=move_costs,
         move_costs_tm1=move_costs_tm1,
         actions=inv_actions,
         action_costs=action_costs,
-        shuffle_parallel=shuffle_parallel,
-        k_max=k_max,
+        parent_indices=_chain_parent_indices(shuffle_parallel, k_max),
+        trajectory_indices=_trajectory_indices(shuffle_parallel, k_max),
+        step_indices=_step_indices(shuffle_parallel, k_max),
     )
 
 
@@ -238,15 +215,16 @@ def create_hindsight_target_shuffled_path(
     action_costs = action_costs.transpose((1, 0))
 
     solve_configs = _repeat_solve_configs_for_steps(solve_configs, k_max)
-    return _flatten_chain_trajectory(
+    return _flatten_batch_time_trajectory(
         solve_configs=solve_configs,
         states=states,
         move_costs=move_costs,
         move_costs_tm1=move_costs_tm1,
         actions=actions,
         action_costs=action_costs,
-        shuffle_parallel=shuffle_parallel,
-        k_max=k_max,
+        parent_indices=_chain_parent_indices(shuffle_parallel, k_max),
+        trajectory_indices=_trajectory_indices(shuffle_parallel, k_max),
+        step_indices=_step_indices(shuffle_parallel, k_max),
     )
 
 

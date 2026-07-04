@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Hashable, Iterable, Sequence
+from typing import Any, Hashable, Sequence
 
 import jax.numpy as jnp
 
@@ -37,25 +37,21 @@ HARD_17_STATES = [
 
 
 class SlidePuzzlePreset(Enum):
-    SIZE15 = ("size15-deepcubeA.pkl", 4, None)
-    SIZE24 = ("size24-deepcubeA.pkl", 5, None)
-    SIZE35 = ("size35-deepcubeA.pkl", 6, None)
-    SIZE48 = ("size48-deepcubeA.pkl", 7, None)
-    SIZE15_HARD = (
-        "size15-deepcubeA.pkl",
-        4,
-        HARD_17_STATES,
-    )
+    SIZE15 = ("size15-deepcubeA.pkl", 4)
+    SIZE24 = ("size24-deepcubeA.pkl", 5)
+    SIZE35 = ("size35-deepcubeA.pkl", 6)
+    SIZE48 = ("size48-deepcubeA.pkl", 7)
+    SIZE15_HARD = ("size15-deepcubeA.pkl", 4)
 
-    def __init__(
-        self,
-        dataset_name: str,
-        board_size: int,
-        states: Sequence[Any] | None,
-    ):
+    def __init__(self, dataset_name: str, board_size: int):
         self.dataset_name = dataset_name
         self.board_size = board_size
-        self.states = states
+
+    @property
+    def states(self) -> Sequence[Any] | None:
+        if self is SlidePuzzlePreset.SIZE15_HARD:
+            return HARD_17_STATES
+        return None
 
 
 DEFAULT_DATASET_NAME = SlidePuzzlePreset.SIZE15.dataset_name
@@ -79,9 +75,7 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         preset: SlidePuzzlePreset | None = SlidePuzzlePreset.SIZE15,
     ) -> None:
         super().__init__()
-        self._dataset_path = (
-            Path(dataset_path).expanduser().resolve() if dataset_path else None
-        )
+        self._dataset_path = self._normalize_dataset_path(dataset_path)
         preset_dataset_name = preset.dataset_name if preset else DEFAULT_DATASET_NAME
         preset_board_size = preset.board_size if preset else None
         self._dataset_name = dataset_name or preset_dataset_name
@@ -102,9 +96,6 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
             "puxle.data.slidepuzzle",
             fallback_dir,
         )
-
-    def sample_ids(self) -> Iterable[Hashable]:
-        return range(len(self.dataset["states"]))
 
     def get_sample(self, sample_id: Hashable) -> BenchmarkSample:
         index = int(sample_id)
@@ -133,11 +124,10 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         )
 
     def _ensure_board_size(self) -> int:
-        if self._board_size is None:
-            self._board_size = infer_square_size(
-                self.dataset.get("states"), "SlidePuzzle"
-            )
-        return self._board_size
+        return self._ensure_cached(
+            "_board_size",
+            lambda: infer_square_size(self.dataset.get("states"), "SlidePuzzle"),
+        )
 
     def _convert_state(self, raw_state: Any) -> PuzzleState:
         tiles = jnp.asarray(extract_tiles(raw_state), dtype=jnp.uint8)
@@ -160,34 +150,24 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
         return optimal_action_sequence, float(len(optimal_action_sequence))
 
 
-def _slide_preset_class(name: str, preset: SlidePuzzlePreset):
+class SlidePuzzleDeepCubeA15Benchmark(SlidePuzzleDeepCubeABenchmark):
     def __init__(self, dataset_path: str | Path | None = None) -> None:
-        SlidePuzzleDeepCubeABenchmark.__init__(
-            self, dataset_path=dataset_path, preset=preset
-        )
-
-    return type(
-        name,
-        (SlidePuzzleDeepCubeABenchmark,),
-        {"__init__": __init__, "__module__": __name__},
-    )
+        super().__init__(dataset_path=dataset_path, preset=SlidePuzzlePreset.SIZE15)
 
 
-SlidePuzzleDeepCubeA15Benchmark: type[SlidePuzzleDeepCubeABenchmark]
-SlidePuzzleDeepCubeA24Benchmark: type[SlidePuzzleDeepCubeABenchmark]
-SlidePuzzleDeepCubeA35Benchmark: type[SlidePuzzleDeepCubeABenchmark]
-SlidePuzzleDeepCubeA48Benchmark: type[SlidePuzzleDeepCubeABenchmark]
+class SlidePuzzleDeepCubeA24Benchmark(SlidePuzzleDeepCubeABenchmark):
+    def __init__(self, dataset_path: str | Path | None = None) -> None:
+        super().__init__(dataset_path=dataset_path, preset=SlidePuzzlePreset.SIZE24)
 
-for _size, _preset in (
-    (15, SlidePuzzlePreset.SIZE15),
-    (24, SlidePuzzlePreset.SIZE24),
-    (35, SlidePuzzlePreset.SIZE35),
-    (48, SlidePuzzlePreset.SIZE48),
-):
-    _name = f"SlidePuzzleDeepCubeA{_size}Benchmark"
-    globals()[_name] = _slide_preset_class(_name, _preset)
 
-del _size, _preset, _name
+class SlidePuzzleDeepCubeA35Benchmark(SlidePuzzleDeepCubeABenchmark):
+    def __init__(self, dataset_path: str | Path | None = None) -> None:
+        super().__init__(dataset_path=dataset_path, preset=SlidePuzzlePreset.SIZE35)
+
+
+class SlidePuzzleDeepCubeA48Benchmark(SlidePuzzleDeepCubeABenchmark):
+    def __init__(self, dataset_path: str | Path | None = None) -> None:
+        super().__init__(dataset_path=dataset_path, preset=SlidePuzzlePreset.SIZE48)
 
 
 class SlidePuzzleDeepCubeA15HardBenchmark(SlidePuzzleDeepCubeABenchmark):

@@ -5,7 +5,7 @@ PuXle ships an adapter that consumes [cayleypy](https://github.com/cayleypy/cayl
 The bridge has two layers:
 
 1. The adapter class `CayleyPuzzle(Puzzle)` — wraps a single `CayleyGraphDef` instance.
-2. A meta-module `puxle.puzzles.cayley_subclasses` — auto-generates no-arg subclasses of `CayleyPuzzle` by name, for one-shot registration into puzzle registries.
+2. A small `puxle.puzzles.cayley_subclasses` module — exposes no-arg subclasses of `CayleyPuzzle` for JAxtar registry entries.
 
 ## Installation
 
@@ -48,41 +48,23 @@ The classmethod `CayleyPuzzle.from_cayleypy_factory(name, *args, **kwargs)` look
 puzzle = CayleyPuzzle.from_cayleypy_factory("top_spin", 8, k=4)
 ```
 
-## 2. The auto-generated subclasses
+## 2. Registry subclasses
 
-Some downstream registries (e.g. JAxtar's `config/puzzle_registry.py`) expect no-arg `Puzzle` classes. The meta-module `puxle.puzzles.cayley_subclasses` generates one on demand whenever you import a name of the form `Cayley<FactoryPascalCase>[_<arg>…]`:
+Some downstream registries (e.g. JAxtar's `config/puzzle_registry.py`) expect no-arg `Puzzle` classes. PuXle exposes only the registry subclasses it actually uses:
 
 ```python
 from puxle import (
     CayleyPancake7,            # PermutationGroups.pancake(7)
-    CayleyLRX12,               # PermutationGroups.lrx(12)
-    CayleyTopSpin8K4,          # PermutationGroups.top_spin(8, k=4)  — kwarg form
-    CayleyTopSpin8_4,          # PermutationGroups.top_spin(8, 4)    — positional
-    CayleyConsecutiveKCycles8_3,
-    CayleyAllCycles6,
-    CayleyCoxeter8,
+    CayleyPancake8,            # PermutationGroups.pancake(8)
+    CayleyLRX8,                # PermutationGroups.lrx(8)
+    CayleyTopSpin8K4,          # PermutationGroups.top_spin(8, k=4)
+    CayleyCoxeter8,            # PermutationGroups.coxeter(8)
 )
+
+puzzle = CayleyTopSpin8K4(num_shuffle=20)
 ```
 
-### Naming rules
-
-- PascalCase factory name maps to snake_case (`TopSpin → top_spin`, `LRX → lrx`, `ConsecutiveKCycles → consecutive_k_cycles`). All-uppercase tokens stay glued.
-- Trailing `_<digit>` segments become positional args.
-- A trailing `K<digit>` segment (legacy form) is parsed as a kwarg using the factory's last parameter name.
-- Unknown factories raise `AttributeError` with a hint to call `list_available_factories()`.
-
-### Programmatic API
-
-```python
-from puxle.puzzles.cayley_subclasses import discover, list_available_factories
-
-print(list_available_factories())   # ['all_cycles', 'block_interchange', 'burnt_pancake', ...]
-
-cls = discover("pancake", 9)        # type[CayleyPuzzle], no name parsing
-puzzle = cls()
-```
-
-`discover()` and the name-based `__getattr__` cache generated classes in the module's `globals()`, so repeated lookups return the same class object — safe for `isinstance` checks.
+Use `CayleyPuzzle.from_cayleypy_factory(...)` directly for any other cayleypy graph.
 
 ## Using the bridge with JAxtar
 

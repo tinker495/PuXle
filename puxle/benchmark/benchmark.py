@@ -3,7 +3,17 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Generic, Hashable, Iterable, Optional, Sequence, TypeVar
+from pathlib import Path
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Hashable,
+    Iterable,
+    Optional,
+    Sequence,
+    TypeVar,
+)
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.core.puzzle_state import PuzzleState
@@ -42,12 +52,13 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
 
     * :meth:`build_puzzle` — create the :class:`Puzzle` instance.
     * :meth:`load_dataset` — load or generate the raw dataset.
-    * :meth:`sample_ids` — enumerate available sample IDs.
     * :meth:`get_sample` — retrieve a :class:`BenchmarkSample` by ID.
 
     The base class provides lazy caching for ``puzzle`` and ``dataset``
-    and a generic :meth:`verify_solution` that checks both validity
-    (is the final state solved?) and optimality (is the cost ≤ optimal?).
+    plus a default ``sample_ids`` implementation for datasets with a
+    ``"states"`` list. It also provides generic :meth:`verify_solution`
+    logic that checks both validity (is the final state solved?) and
+    optimality (is the cost ≤ optimal?).
     """
 
     def __init__(self) -> None:
@@ -78,9 +89,9 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
     def load_dataset(self) -> Any:
         """Return the raw dataset object backing the benchmark."""
 
-    @abstractmethod
     def sample_ids(self) -> Iterable[Hashable]:
         """Return iterable sample identifiers available in the dataset."""
+        return range(len(self.dataset["states"]))
 
     @abstractmethod
     def get_sample(self, sample_id: Hashable) -> BenchmarkSample[StateT, SolveConfigT]:
@@ -167,6 +178,17 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         if self._solve_config_cache is None:
             self._solve_config_cache = self.puzzle.get_solve_config()
         return self._solve_config_cache
+
+    @staticmethod
+    def _normalize_dataset_path(dataset_path: str | Path | None) -> Path | None:
+        return Path(dataset_path).expanduser().resolve() if dataset_path else None
+
+    def _ensure_cached(self, attr_name: str, factory: Callable[[], Any]) -> Any:
+        value = getattr(self, attr_name)
+        if value is None:
+            value = factory()
+            setattr(self, attr_name, value)
+        return value
 
     def _build_action_lookup(self) -> dict[str, int]:
         """Build a mapping from action notation to action index."""
