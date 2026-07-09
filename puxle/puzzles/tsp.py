@@ -117,26 +117,25 @@ class TSP(Puzzle):
             points=points, distance_matrix=distance_matrix, start=start
         )
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: Puzzle.SolveConfig,
         state: Puzzle.State,
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple[Puzzle.State, chex.Array]:
-        """
-        This function returns the next state and cost for a given action (next point index).
-        If moving to a point already visited, the cost is infinity.
+        """Pure transition: revisiting an already-visited point costs infinity.
+
+        The closing leg back to the start is added once every point is visited.
         """
         mask = state.mask_unpacked
         point = state.point
         idx = action
 
-        masked = mask[idx] & filled
+        visited = mask[idx]
         new_mask = mask.at[idx].set(True)
         all_visited = jnp.all(new_mask)
         cost = solve_config.distance_matrix[point, idx]
-        cost = jnp.where(masked, jnp.inf, cost) + jnp.where(
+        cost = jnp.where(visited, jnp.inf, cost) + jnp.where(
             all_visited,
             jnp.linalg.norm(
                 solve_config.points[solve_config.start] - solve_config.points[idx],
@@ -145,7 +144,6 @@ class TSP(Puzzle):
             0,
         )
         new_state = self.State.from_unpacked(mask=new_mask, point=idx.astype(TYPE))
-        cost = jnp.where(filled, cost, jnp.inf)
         return new_state, cost
 
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: Puzzle.State) -> bool:

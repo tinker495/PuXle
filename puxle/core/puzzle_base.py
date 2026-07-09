@@ -333,27 +333,56 @@ class Puzzle(ABC):
                 solve_configs, states, actions, filleds
             )
 
-    @abstractmethod
     def get_actions(
         self,
         solve_config: SolveConfig,
         state: State,
-        actions: chex.Array,
+        action: chex.Array,
         filled: bool = True,
     ) -> tuple[State, chex.Array]:
-        """Apply a single action to a state and return the result.
+        """Apply a single action, enforcing the filled/inf-cost contract.
+
+        Puzzles implement the pure transition in :meth:`_apply`; this method
+        owns the invariant shared by every puzzle: a move is taken only when it
+        is both intrinsically valid (finite ``_apply`` cost) and ``filled``,
+        otherwise the original ``state`` is returned with ``jnp.inf`` cost.
 
         Args:
             solve_config: Current goal configuration.
             state: Current puzzle state.
-            actions: Scalar action index.
-            filled: If ``True``, invalid actions return the same state with
-                ``jnp.inf`` cost; if ``False``, behaviour is puzzle-specific.
+            action: Scalar action index.
+            filled: If ``False``, the move is blocked regardless of validity.
 
         Returns:
-            ``(next_state, cost)`` where ``cost`` is ``jnp.inf`` for invalid moves.
+            ``(next_state, cost)`` where ``cost`` is ``jnp.inf`` for blocked or
+            invalid moves and ``next_state`` is then the unchanged ``state``.
         """
-        pass
+        next_state, cost = self._apply(solve_config, state, action)
+        cost = jnp.asarray(cost, dtype=jnp.float32)
+        valid = jnp.logical_and(filled, jnp.isfinite(cost))
+        return jax.lax.cond(
+            valid,
+            lambda: (next_state, cost),
+            lambda: (state, jnp.asarray(jnp.inf, dtype=jnp.float32)),
+        )
+
+    def _apply(
+        self,
+        solve_config: SolveConfig,
+        state: State,
+        action: chex.Array,
+    ) -> tuple[State, chex.Array]:
+        """Pure state transition for one action — the puzzle-specific seam.
+
+        Return ``(next_state, cost)`` for taking ``action`` in ``state``. Set
+        ``cost = jnp.inf`` for intrinsically invalid actions; do **not** inspect
+        ``filled`` or reset the state — :meth:`get_actions` composes that
+        contract once for every puzzle. Puzzles whose transition does not fit
+        this shape may override :meth:`get_actions` directly instead.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement _apply() or override get_actions()"
+        )
 
     def batched_get_neighbours(
         self,

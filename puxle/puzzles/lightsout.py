@@ -2,7 +2,6 @@ from collections.abc import Callable
 
 import chex
 import cv2
-import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -94,16 +93,13 @@ class LightsOut(Puzzle):
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         return self.SolveConfig(TargetState=self.get_target_state(key))
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: Puzzle.SolveConfig,
         state: "LightsOut.State",
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple["LightsOut.State", chex.Array]:
-        """
-        This function returns the next state and cost for a given action.
-        """
+        """Pure transition: every toggle is valid with unit cost."""
         board = state.board_unpacked
 
         # Decode action to (x, y)
@@ -131,11 +127,8 @@ class LightsOut(Puzzle):
             # XOR flip where mask is true
             return jnp.where(mask, jnp.logical_not(board), board)
 
-        next_board, cost = jax.lax.cond(
-            filled, lambda: (flip(board, x, y), 1.0), lambda: (board, jnp.inf)
-        )
-        next_state = state.set_unpacked(board=next_board)
-        return next_state, cost
+        next_state = state.set_unpacked(board=flip(board, x, y))
+        return next_state, 1.0
 
     def is_solved(
         self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State"

@@ -112,16 +112,13 @@ class DotKnot(Puzzle):
     ) -> "DotKnot.SolveConfig":
         return self.SolveConfig()
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: "DotKnot.SolveConfig",
         state: "DotKnot.State",
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple["DotKnot.State", chex.Array]:
-        """
-        This function returns the next state and cost for a given action.
-        """
+        """Pure transition: an out-of-bounds or blocked move costs infinity."""
         # Unpack the board for processing.
         unpacked_board = state.board_unpacked
 
@@ -149,7 +146,6 @@ class DotKnot(Puzzle):
                 (new_pos >= 0).all()
                 & (new_pos < self.size).all()
                 & (not_blocked | is_merge)
-                & filled
             )
             return is_merge, valid
 

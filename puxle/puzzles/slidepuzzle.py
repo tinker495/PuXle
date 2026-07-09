@@ -75,16 +75,13 @@ class SlidePuzzle(Puzzle):
         target_state = self.State.from_unpacked(board=target)
         return self.SolveConfig(TargetState=target_state)
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: Puzzle.SolveConfig,
         state: "SlidePuzzle.State",
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple["SlidePuzzle.State", chex.Array]:
-        """
-        This function should return a state and the cost of the move.
-        """
+        """Pure transition: sliding the blank off the board costs infinity."""
         board = state.board_unpacked
         x, y = self._get_blank_position(board)
         pos = jnp.asarray((x, y))
@@ -110,7 +107,7 @@ class SlidePuzzle(Puzzle):
 
         next_x, next_y = next_pos
         next_board, cost = jax.lax.cond(
-            jnp.logical_and(is_valid(next_x, next_y), filled),
+            is_valid(next_x, next_y),
             lambda: (swap(board, x, y, next_x, next_y), 1.0),
             lambda: (board, jnp.inf),
         )

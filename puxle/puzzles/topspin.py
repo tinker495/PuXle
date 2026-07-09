@@ -87,16 +87,13 @@ class TopSpin(Puzzle):
         # Start from solved state and apply random moves
         return self._get_shuffled_state(solve_config, solve_config.TargetState, key, 18)
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: Puzzle.SolveConfig,
         state: "TopSpin.State",
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple["TopSpin.State", chex.Array]:
-        """
-        Returns the next state and cost for a given action.
-        """
+        """Pure transition: every TopSpin action is valid with unit cost."""
         p = state.permutation
 
         def get_next_state(action):
@@ -113,10 +110,7 @@ class TopSpin(Puzzle):
                 ],
             )
 
-        next_state = get_next_state(action)
-        cost = jnp.where(filled, 1.0, jnp.inf)
-
-        return next_state, cost
+        return get_next_state(action), 1.0
 
     def is_solved(
         self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State"

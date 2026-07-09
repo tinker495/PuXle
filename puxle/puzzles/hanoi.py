@@ -272,16 +272,13 @@ class TowerOfHanoi(Puzzle):
         """Create the solving configuration (target) with all disks on the third peg."""
         return self.SolveConfig(TargetState=self.State(pegs=self._stacked_pegs(2)))
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: "TowerOfHanoi.SolveConfig",
         state: "TowerOfHanoi.State",
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple["TowerOfHanoi.State", chex.Array]:
-        """
-        Get the next state by performing the action (moving a disk).
-        """
+        """Pure transition: an illegal disk move costs infinity."""
         pegs = state.pegs
 
         move = self._possible_moves[action]
@@ -344,26 +341,17 @@ class TowerOfHanoi(Puzzle):
 
             return new_pegs
 
-        def move_disk():
-            # Check if the move is valid
-            valid = is_valid_move(pegs, from_peg, to_peg)
+        valid = is_valid_move(pegs, from_peg, to_peg)
 
-            # If valid, make the move; otherwise, keep the original pegs
-            new_pegs = jax.lax.cond(
-                valid, lambda: make_move(pegs, from_peg, to_peg), lambda: pegs
-            )
+        # If valid, make the move; otherwise, keep the original pegs
+        new_pegs = jax.lax.cond(
+            valid, lambda: make_move(pegs, from_peg, to_peg), lambda: pegs
+        )
 
-            # Cost is 1 if valid, infinity if invalid
-            cost = jax.lax.cond(
-                valid, lambda: jnp.array(1.0), lambda: jnp.array(jnp.inf)
-            )
+        # Cost is 1 if valid, infinity if invalid
+        cost = jax.lax.cond(valid, lambda: jnp.array(1.0), lambda: jnp.array(jnp.inf))
 
-            return self.State(pegs=new_pegs), cost
-
-        def no_move():
-            return self.State(pegs=pegs), jnp.inf
-
-        return jax.lax.cond(filled, move_disk, no_move)
+        return self.State(pegs=new_pegs), cost
 
     def is_solved(
         self, solve_config: "TowerOfHanoi.SolveConfig", state: "TowerOfHanoi.State"

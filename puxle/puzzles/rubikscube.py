@@ -395,15 +395,14 @@ class RubiksCube(Puzzle):
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         return self.SolveConfig(TargetState=self.get_target_state(key))
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: Puzzle.SolveConfig,
         state: "RubiksCube.State",
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple["RubiksCube.State", chex.Array]:
-        """
-        Returns the next state and cost for a given action.
+        """Pure transition: every face rotation is valid with unit cost.
+
         Action decoding:
         - clockwise: action % 2
         - axis: (action // 2) % 3
@@ -413,12 +412,7 @@ class RubiksCube(Puzzle):
         axis = (action // 2) % 3
         index_idx = action // 6
         index = self.index_grid[index_idx]
-
-        return jax.lax.cond(
-            filled,
-            lambda: (self._rotate(state, axis, index, clockwise), 1.0),
-            lambda: (state, jnp.inf),
-        )
+        return self._rotate(state, axis, index, clockwise), 1.0
 
     def state_symmetries(self, state: "RubiksCube.State") -> "RubiksCube.State":
         """

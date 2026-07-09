@@ -277,16 +277,13 @@ class Maze(Puzzle):
 
         return maze  # Return the boolean maze grid
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: "Maze.SolveConfig",
         state: "Maze.State",
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple["Maze.State", chex.Array]:
-        """
-        Returns the next state and cost for a given action.
-        """
+        """Pure transition: stepping out of bounds or into a wall costs infinity."""
         # Define possible moves: up, down, left, right
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
         bool_maze = solve_config.Maze_unpacked.reshape((self.size, self.size))
@@ -299,7 +296,6 @@ class Maze(Puzzle):
             (new_pos >= 0).all()
             & (new_pos < self.size).all()
             & (~bool_maze[new_pos[0], new_pos[1]])  # Check against False (path)
-            & filled
         )
 
         # If the move is valid, update the position. Otherwise, keep the old position.

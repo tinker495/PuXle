@@ -336,16 +336,14 @@ class CayleyPuzzle(Puzzle):
             solve_config, solve_config.TargetState, key, self._num_shuffle
         )
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: Puzzle.SolveConfig,
         state: "CayleyPuzzle.State",
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple["CayleyPuzzle.State", chex.Array]:
-        next_state, finite_cost = self._step_kernel(state, action)
-        cost = jnp.where(filled, finite_cost, jnp.inf)
-        return next_state, cost
+        """Pure transition: every generator is valid and costs ``1.0``."""
+        return self._step_kernel(state, action)
 
     def is_solved(
         self, solve_config: Puzzle.SolveConfig, state: "CayleyPuzzle.State"

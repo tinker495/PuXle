@@ -238,16 +238,13 @@ class Sokoban(Puzzle):
 
         return parser
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: Puzzle.SolveConfig,
         state: "Sokoban.State",
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple["Sokoban.State", chex.Array]:
-        """
-        Returns the next state and cost for a given action.
-        """
+        """Pure transition: out-of-bounds moves and blocked pushes cost infinity."""
         # Unpack the board so that we work on a flat representation.
         board = state.board_unpacked
         x, y = self._get_player_position(state)
@@ -296,7 +293,6 @@ class Sokoban(Puzzle):
                 valid_push = jnp.logical_and(
                     is_valid_pos(push_x, push_y), is_empty(push_x, push_y)
                 )
-                valid_push = jnp.logical_and(valid_push, filled)
 
                 def do_push():
                     new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
@@ -320,9 +316,7 @@ class Sokoban(Puzzle):
                 ),
             )
 
-        next_state, cost = jax.lax.cond(valid_move, process_move, invalid_case)
-        cost = jnp.where(filled, cost, jnp.inf)
-        return next_state, cost
+        return jax.lax.cond(valid_move, process_move, invalid_case)
 
     def _get_visualize_format(self):
         size = self.size

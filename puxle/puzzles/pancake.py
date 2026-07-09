@@ -219,15 +219,14 @@ class PancakeSorting(Puzzle):
         target_stack = jnp.arange(1, self.size + 1, dtype=TYPE)
         return self.SolveConfig(TargetState=self.State(stack=target_stack))
 
-    def get_actions(
+    def _apply(
         self,
         solve_config: "PancakeSorting.SolveConfig",
         state: "PancakeSorting.State",
         action: chex.Array,
-        filled: bool = True,
     ) -> tuple["PancakeSorting.State", chex.Array]:
-        """
-        Get the next state by flipping pancakes at the position determined by action.
+        """Pure transition: every flip is valid with unit cost.
+
         flip_pos = action + 1
         """
         stack = state.stack
@@ -262,12 +261,7 @@ class PancakeSorting(Puzzle):
 
             return new_stack
 
-        next_stack, cost = jax.lax.cond(
-            filled,
-            lambda: (flip_stack(stack, flip_pos), 1.0),
-            lambda: (stack, jnp.inf),
-        )
-        return self.State(stack=next_stack), cost
+        return self.State(stack=flip_stack(stack, flip_pos)), 1.0
 
     def is_solved(
         self, solve_config: "PancakeSorting.SolveConfig", state: "PancakeSorting.State"
