@@ -1,6 +1,6 @@
 import os
 from collections.abc import Callable
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Optional, Union
 
 import chex
 import jax.numpy as jnp
@@ -18,24 +18,10 @@ from .formatting import (
     build_solve_config_string_parser,
     build_state_string_parser,
 )
-from .grounding import ground_actions as gr_ground_actions
-from .grounding import ground_predicates as gr_ground_predicates
-from .masks import (
-    build_goal_mask as mk_build_goal_mask,
-)
-from .masks import (
-    build_initial_state as mk_build_initial_state,
-)
-from .masks import (
-    build_masks as mk_build_masks,
-)
+from .grounding import ground_actions, ground_predicates
+from .masks import build_goal_mask, build_initial_state, build_masks
 from .state_defs import build_solve_config_class, build_state_class
-from .type_system import (
-    collect_type_hierarchy,
-)
-from .type_system import (
-    extract_objects_by_type as ts_extract_objects_by_type,
-)
+from .type_system import collect_type_hierarchy, extract_objects_by_type
 
 
 class PDDL(Puzzle):
@@ -149,87 +135,29 @@ class PDDL(Puzzle):
 
     def data_init(self) -> None:
         """Initialize PDDL data: ground atoms and actions, build masks."""
-        # Extract objects by type
-        self.objects_by_type = self._extract_objects_by_type()
+        type_hierarchy = collect_type_hierarchy(self.domain)
+        objects_by_type = extract_objects_by_type(
+            self.problem, type_hierarchy, domain=self.domain
+        )
 
-        # Ground predicates to atoms
-        self.grounded_atoms, self.atom_to_idx = self._ground_predicates()
+        self.grounded_atoms, atom_to_idx = ground_predicates(
+            self.domain.predicates, objects_by_type, type_hierarchy
+        )
         self.num_atoms = len(self.grounded_atoms)
 
-        # Ground actions
-        self.grounded_actions, self.action_to_idx = self._ground_actions()
-        self.num_actions = len(self.grounded_actions)
-
-        # Build masks for JAX operations
-        self.pre_mask, self.pre_neg_mask, self.add_mask, self.del_mask = (
-            self._build_masks()
+        self.grounded_actions, _ = ground_actions(
+            self.domain.actions, objects_by_type, type_hierarchy
         )
-        self._build_initial_state()
-        self._build_goal_mask()
-
-        # Set action size for Puzzle base class
+        self.num_actions = len(self.grounded_actions)
         self.action_size = self.num_actions
 
-        # Build label->color map for visualization (actions and predicates)
-        self._build_label_color_map()
-
-    def _build_label_color_map(self) -> None:
-        """Assign deterministic colors to action and predicate names (delegated)."""
-        label_color_map, label_text_color_map = build_label_color_maps(self.domain)
-        self._label_color_map = label_color_map
-        self._label_text_color_map = label_text_color_map
-
-    def _collect_type_hierarchy(
-        self,
-    ) -> tuple[dict[str, str], dict[str, set[str]], dict[str, set[str]]]:
-        """Extract type hierarchy from the domain (delegated)."""
-        return collect_type_hierarchy(self.domain)
-
-    def _extract_objects_by_type(self) -> Dict[str, List[str]]:
-        """Extract objects grouped by types, respecting hierarchy (delegated)."""
-        if not hasattr(self, "_type_hierarchy_cache"):
-            self._type_hierarchy_cache = self._collect_type_hierarchy()
-        return ts_extract_objects_by_type(
-            self.problem, self._type_hierarchy_cache, domain=self.domain
+        self.pre_mask, self.pre_neg_mask, self.add_mask, self.del_mask = build_masks(
+            self.grounded_actions, atom_to_idx, self.num_atoms
         )
+        self.init_state = build_initial_state(self.problem, atom_to_idx, self.num_atoms)
+        self.goal_mask = build_goal_mask(self.problem, atom_to_idx, self.num_atoms)
 
-    def _ground_predicates(self) -> Tuple[List[str], Dict[str, int]]:
-        """Ground all predicates to create atom universe (delegated)."""
-        if not hasattr(self, "_type_hierarchy_cache"):
-            self._type_hierarchy_cache = self._collect_type_hierarchy()
-        return gr_ground_predicates(
-            getattr(self.domain, "predicates", []),
-            self.objects_by_type,
-            self._type_hierarchy_cache,
-        )
-
-    def _ground_actions(self) -> Tuple[List[Dict], Dict[str, int]]:
-        """Ground all actions to create action universe (delegated)."""
-        if not hasattr(self, "_type_hierarchy_cache"):
-            self._type_hierarchy_cache = self._collect_type_hierarchy()
-        return gr_ground_actions(
-            getattr(self.domain, "actions", []),
-            self.objects_by_type,
-            self._type_hierarchy_cache,
-        )
-
-    def _build_masks(
-        self,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-        """Builds action masks (delegated)."""
-        return mk_build_masks(self.grounded_actions, self.atom_to_idx, self.num_atoms)
-
-    def _build_initial_state(self):
-        """Build initial state as boolean array (delegated)."""
-        self.init_state = mk_build_initial_state(
-            self.problem, self.atom_to_idx, self.num_atoms
-        )
-
-    def _build_goal_mask(self):
-        """Build goal mask for conjunctive positive goals (delegated)."""
-        self.goal_mask = mk_build_goal_mask(
-            self.problem, self.atom_to_idx, self.num_atoms
-        )
+        _, self._label_text_color_map = build_label_color_maps(self.domain)
 
     def define_state_class(self) -> PuzzleState:
         """Define state class with packed atoms."""
@@ -355,7 +283,7 @@ class PDDL(Puzzle):
         return fmt_action_to_string(
             self.grounded_actions,
             action,
-            getattr(self, "_label_text_color_map", {}),
+            self._label_text_color_map,
             colored,
         )
 
