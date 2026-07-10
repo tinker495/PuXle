@@ -82,6 +82,40 @@ def test_random_trajectory_legacy_path():
     assert traj.move_costs.shape == (6, 2), "Move costs shape mismatch"
 
 
+def test_random_trajectory_transitions_are_finite_and_aligned():
+    sp = SlidePuzzle(size=3)
+    traj = sp.batched_get_random_trajectory(
+        k_max=20,
+        shuffle_parallel=64,
+        key=jax.random.PRNGKey(0),
+        non_backtracking_steps=3,
+    )
+
+    replayed_states, selected_costs = jax.vmap(
+        lambda states, actions: sp.batched_get_actions(
+            traj.solve_configs,
+            states,
+            actions,
+            filleds=jnp.ones(64, dtype=jnp.bool_),
+            multi_solve_config=True,
+        )
+    )(traj.states[:-1], traj.actions)
+
+    assert jnp.all(jnp.isfinite(selected_costs))
+    assert jnp.array_equal(selected_costs, traj.action_costs)
+    assert jnp.array_equal(
+        traj.move_costs[1:] - traj.move_costs[:-1], traj.action_costs
+    )
+    _assert_tree_equal(replayed_states, traj.states[1:])
+    for lag in range(1, 5):
+        assert not jnp.any(
+            jnp.all(
+                traj.states.board_unpacked[lag:] == traj.states.board_unpacked[:-lag],
+                axis=-1,
+            )
+        )
+
+
 def test_random_inverse_trajectory_fast_path():
     rc = RubiksCube(size=3)
     key = jax.random.PRNGKey(42)
@@ -244,9 +278,10 @@ def test_create_hindsight_target_triangular_shuffled_path():
         non_backtracking_steps=1,
     )
 
-    assert wrapped.states.board_unpacked.shape == (10, 100), (
-        "Triangular Wrapper output shape mismatch"
-    )
+    assert wrapped.states.board_unpacked.shape == (
+        10,
+        100,
+    ), "Triangular Wrapper output shape mismatch"
 
 
 def test_chain_trajectory_indices_are_canonical():
