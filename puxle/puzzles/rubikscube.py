@@ -279,6 +279,7 @@ class RubiksCube(Puzzle):
         self.index_grid = jnp.asarray(indices, dtype=jnp.uint8)
         self.action_size = 3 * len(self.index_grid) * 2
         super().__init__(**kwargs)
+        self._action_permutations = self._build_action_permutations()
 
     def _validate_tile_capacity(self):
         if not self.color_embedding and self._num_tiles > 256:
@@ -403,16 +404,12 @@ class RubiksCube(Puzzle):
     ) -> tuple["RubiksCube.State", chex.Array]:
         """Pure transition: every face rotation is valid with unit cost.
 
-        Action decoding:
-        - clockwise: action % 2
-        - axis: (action // 2) % 3
-        - index: index_grid[action // 6]
+        Each action is a fixed permutation of the cube's stickers, so the hot
+        path is a single gather rather than reconstructing the rotation.
         """
-        clockwise = action % 2
-        axis = (action // 2) % 3
-        index_idx = action // 6
-        index = self.index_grid[index_idx]
-        return self._rotate(state, axis, index, clockwise), 1.0
+        faces = state.faces_unpacked.reshape(-1)
+        faces = faces[self._action_permutations[action]].reshape((6, self._tile_count))
+        return state.set_unpacked(faces=faces), 1.0
 
     def state_symmetries(self, state: "RubiksCube.State") -> "RubiksCube.State":
         """
@@ -553,7 +550,26 @@ class RubiksCube(Puzzle):
         # axis is the axis of the rotation, 0 for x, 1 for y, 2 for z
         # index is the index of the edge to rotate
         # clockwise is a boolean, True for clockwise, False for counterclockwise
-        faces = state.faces_unpacked
+        faces = self._rotate_faces(state.faces_unpacked, axis, index, clockwise)
+        return state.set_unpacked(faces=faces)
+
+    def _build_action_permutations(self) -> chex.Array:
+        identity = jnp.arange(self._num_tiles, dtype=jnp.int32).reshape(
+            (6, self._tile_count)
+        )
+        actions = jnp.arange(self.action_size, dtype=jnp.int32)
+
+        def rotate(action: chex.Array) -> chex.Array:
+            axis = (action // 2) % 3
+            index = self.index_grid[action // 6]
+            clockwise = action % 2
+            return self._rotate_faces(identity, axis, index, clockwise).reshape(-1)
+
+        return jax.jit(jax.vmap(rotate))(actions)
+
+    def _rotate_faces(
+        self, faces: chex.Array, axis: int, index: int, clockwise: bool = True
+    ) -> chex.Array:
         shaped_faces = faces.reshape((6, self.size, self.size))
 
         rotate_edge_map = jnp.array(
@@ -617,8 +633,7 @@ class RubiksCube(Puzzle):
                 ),  # 6: back
             ],
         )
-        faces = jnp.reshape(shaped_faces, (6, self.size * self.size))
-        return state.set_unpacked(faces=faces)
+        return jnp.reshape(shaped_faces, (6, self._tile_count))
 
     def _compute_projection_params(self, imgsize: int):
         """

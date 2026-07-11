@@ -1,8 +1,47 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from puxle.puzzles.rubikscube import RubiksCube
+
+
+@pytest.mark.parametrize(
+    ("size", "metric", "color_embedding"),
+    [
+        (2, "QTM", False),
+        (3, "QTM", True),
+        (3, "UQTM", False),
+        (4, "QTM", False),
+    ],
+)
+def test_rubikscube_actions_match_slice_rotation_reference(
+    size: int, metric: str, color_embedding: bool
+) -> None:
+    cube = RubiksCube(
+        size=size,
+        initial_shuffle=0,
+        color_embedding=color_embedding,
+        metric=metric,
+    )
+    solve_config = cube.get_solve_config()
+    state = cube.get_target_state()
+
+    neighbours, costs = cube.get_neighbours(solve_config, state)
+
+    for action in range(cube.action_size):
+        axis = (action // 2) % 3
+        index = int(cube.index_grid[action // 6])
+        clockwise = bool(action % 2)
+        reference = cube._rotate(state, axis, index, clockwise)
+        np.testing.assert_array_equal(
+            np.asarray(neighbours.faces_unpacked[action]),
+            np.asarray(reference.faces_unpacked),
+        )
+
+    np.testing.assert_array_equal(
+        np.asarray(costs), np.ones(cube.action_size, dtype=np.float32)
+    )
 
 
 def _ref_state_symmetries(cube: RubiksCube, state: RubiksCube.State) -> jnp.ndarray:
