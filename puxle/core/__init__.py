@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from puxle._lazy_imports import lazy_dir, load_lazy_export
 
-__all__ = ["Puzzle", "PuzzleState", "FieldDescriptor", "state_dataclass"]
+__all__ = ["Puzzle"]
 
 _EXPORTS = {
     "Puzzle": (".puzzle_base", "Puzzle"),
-    "PuzzleState": (".puzzle_state", "PuzzleState"),
-    "FieldDescriptor": (".puzzle_state", "FieldDescriptor"),
-    "state_dataclass": (".puzzle_state", "state_dataclass"),
 }
 
 

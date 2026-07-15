@@ -5,8 +5,9 @@ from typing import Any, Optional
 import chex
 import jax
 import jax.numpy as jnp
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure.core.layout import get_type_layout
 
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.render import attach_state_renderer
 
 
@@ -16,18 +17,22 @@ class Puzzle(ABC):
     Every concrete puzzle subclass must:
 
     1. Set ``action_size`` (number of possible actions).
-    2. Implement :meth:`define_state_class` to return a ``@state_dataclass``-decorated class.
-    3. Implement :meth:`get_actions`, :meth:`is_solved`, :meth:`get_solve_config`,
+    2. Implement :meth:`define_state_class` to return a ``@xtructure_dataclass``-decorated class.
+    3. Implement :meth:`get_actions`, :meth:`get_solve_config`,
        :meth:`get_initial_state`, :meth:`get_string_parser`, and :meth:`get_img_parser`.
+       Override :meth:`is_solved` when the goal is not one complete state.
 
     The base class handles JIT compilation of core methods and provides
     default batch and inverse-neighbour logic.
 
     Attributes:
         action_size: Number of discrete actions available in this puzzle.
-        State: The ``@state_dataclass`` class representing states (set during ``__init__``).
-        SolveConfig: The ``@state_dataclass`` class representing goal configurations
-            (set during ``__init__``).
+        State: The ``@xtructure_dataclass`` class representing states (set during ``__init__``).
+        InstanceContext: The ``@xtructure_dataclass`` class for action validity,
+            transitions, and edge costs.
+        GoalSpec: The ``@xtructure_dataclass`` class for solved predicates, rewards,
+            and objectives.
+        SolveConfig: The fixed two-child ``@xtructure_dataclass`` configuration class.
     """
 
     action_size: int = None
@@ -58,77 +63,69 @@ class Puzzle(ABC):
         """
         return self.inverse_action_map is not None
 
-    class State(PuzzleState):
-        pass
+    State = InstanceContext = GoalSpec = SolveConfig = Xtructurable
 
-    class SolveConfig(PuzzleState):
-        pass
+    def define_instance_context_class(self) -> type[Xtructurable]:
+        """Return the instance-specific transition context type.
 
-    def define_solve_config_class(self) -> PuzzleState:
-        """Return the ``@state_dataclass`` class used for goal/solve configuration.
-
-        The default implementation creates a ``SolveConfig`` with a single
-        ``TargetState`` field.  Override this when the goal representation
-        requires additional fields (e.g., a goal mask for PDDL domains).
-
-        Returns:
-            A ``@state_dataclass`` class describing the solve configuration.
+        The default context is empty because most puzzles encode all transition
+        rules in their class and state.
         """
 
-        @state_dataclass
-        class SolveConfig:
-            TargetState: FieldDescriptor.scalar(dtype=self.State)
+        @xtructure_dataclass
+        class InstanceContext:
+            pass
 
-            def __str__(self, **kwargs):
-                return self.TargetState.str(**kwargs)
+        return InstanceContext
 
-        return SolveConfig
+    def define_goal_spec_class(self) -> type[Xtructurable]:
+        """Return the objective type.
+
+        A goal described by one target state uses the state class directly.
+        """
+        return self.State
 
     @abstractmethod
-    def define_state_class(self) -> PuzzleState:
-        """Return the ``@state_dataclass`` class used for puzzle states.
+    def define_state_class(self) -> type[Xtructurable]:
+        """Return the ``@xtructure_dataclass`` class used for puzzle states.
 
         Subclasses **must** implement this method.  The returned class should
         use :class:`FieldDescriptor` to declare its fields.
 
         Returns:
-            A ``@state_dataclass`` class describing the puzzle state.
+            A ``@xtructure_dataclass`` class describing the puzzle state.
         """
         pass
 
     @property
     def has_target(self) -> bool:
-        """
-        This function should return a boolean that indicates whether the environment has a target state or not.
-        """
-        return "TargetState" in self.SolveConfig.__annotations__.keys()
+        """Return whether the goal specification class is exactly ``State``."""
+        return self.GoalSpec is self.State
 
     @property
-    def only_target(self) -> bool:
-        """
-        This function should return a boolean that indicates whether the environment has only a target state or not.
-        """
-        return self.has_target and len(self.SolveConfig.__annotations__.keys()) == 1
+    def has_goal_data(self) -> bool:
+        """Return whether the goal specification has stored data leaves."""
+        return bool(get_type_layout(self.GoalSpec).leaves)
 
     @property
     def fixed_target(self) -> bool:
         """
         This function should return a boolean that indicates whether the target state is fixed and doesn't change.
-        default is only_target, but if the target state is not fixed, you should redefine this function.
+        default is has_target, but if the target state is not fixed, you should redefine this function.
         """
-        return self.only_target
+        return self.has_target
 
     def __init__(self, **kwargs):
         """Initialise the puzzle.
 
         Subclass constructors **must** call ``super().__init__(**kwargs)``
         after setting ``action_size`` and any instance attributes needed by
-        :meth:`define_state_class` / :meth:`data_init`.
+        the dynamic class builders or :meth:`data_init`.
 
         This method:
 
         1. Calls :meth:`data_init` for optional dataset loading.
-        2. Builds ``State`` and ``SolveConfig`` classes.
+        2. Builds ``State``, ``InstanceContext``, ``GoalSpec``, and ``SolveConfig`` classes.
         3. JIT-compiles core methods (``get_neighbours``, ``is_solved``, etc.).
         4. Validates ``action_size`` and pre-computes the inverse-action permutation.
 
@@ -139,7 +136,19 @@ class Puzzle(ABC):
         self.data_init()
 
         self.State = self.define_state_class()
-        self.SolveConfig = self.define_solve_config_class()
+        self.InstanceContext = self.define_instance_context_class()
+        self.GoalSpec = self.define_goal_spec_class()
+        string_parser = self.get_solve_config_string_parser()
+
+        @xtructure_dataclass
+        class SolveConfig:
+            InstanceContext: FieldDescriptor.scalar(dtype=self.InstanceContext)
+            GoalSpec: FieldDescriptor.scalar(dtype=self.GoalSpec)
+
+            def __str__(solve_config, **kwargs):
+                return string_parser(solve_config, **kwargs)
+
+        self.SolveConfig = SolveConfig
         self.State = attach_state_renderer(self.State, self.get_img_parser())
         self.SolveConfig = attach_state_renderer(
             self.SolveConfig, self.get_solve_config_img_parser()
@@ -186,21 +195,20 @@ class Puzzle(ABC):
         """Return a callable that renders a ``SolveConfig`` as a string.
 
         The default implementation delegates to :meth:`get_string_parser` on
-        ``solve_config.TargetState``.  Override when the solve config
-        contains fields beyond ``TargetState``.
+        ``solve_config.GoalSpec``. Override when the goal is not one state.
 
         Returns:
             A function ``(solve_config: SolveConfig) -> str``.
         """
-        assert self.only_target, (
+        assert self.has_target, (
             "You should redefine this function, because this function is only for target state"
-            f"has_target: {self.has_target}, only_target: {self.only_target}"
-            f"SolveConfig: {self.SolveConfig.__annotations__.keys()}"
+            f"has_target: {self.has_target}"
+            f"GoalSpec: {get_type_layout(self.GoalSpec).field_names}"
         )
         stringparser_state = self.get_string_parser()
 
-        def stringparser(solve_config: "Puzzle.SolveConfig") -> str:
-            return stringparser_state(solve_config.TargetState)
+        def stringparser(solve_config: "Puzzle.SolveConfig", **kwargs) -> str:
+            return stringparser_state(solve_config.GoalSpec, **kwargs)
 
         return stringparser
 
@@ -217,21 +225,20 @@ class Puzzle(ABC):
         """Return a callable that renders a ``SolveConfig`` as an image array.
 
         The default implementation delegates to :meth:`get_img_parser` on
-        ``solve_config.TargetState``.  Override when the solve config
-        contains fields beyond ``TargetState``.
+        ``solve_config.GoalSpec``. Override when the goal is not one state.
 
         Returns:
             A function ``(solve_config: SolveConfig) -> jnp.ndarray``.
         """
-        assert self.only_target, (
+        assert self.has_target, (
             "You should redefine this function, because this function is only for target state"
-            f"has_target: {self.has_target}, only_target: {self.only_target}"
-            f"SolveConfig: {self.SolveConfig.__annotations__.keys()}"
+            f"has_target: {self.has_target}"
+            f"GoalSpec: {get_type_layout(self.GoalSpec).field_names}"
         )
         imgparser_state = self.get_img_parser()
 
-        def imgparser(solve_config: "Puzzle.SolveConfig") -> jnp.ndarray:
-            return imgparser_state(solve_config.TargetState)
+        def imgparser(solve_config: "Puzzle.SolveConfig", **kwargs) -> jnp.ndarray:
+            return imgparser_state(solve_config.GoalSpec, **kwargs)
 
         return imgparser
 
@@ -258,14 +265,14 @@ class Puzzle(ABC):
 
     @abstractmethod
     def get_solve_config(self, key=None, data=None) -> SolveConfig:
-        """Build and return a goal / solve configuration.
+        """Build and return an instance context and goal specification.
 
         Args:
             key: Optional JAX PRNG key for stochastic goal generation.
             data: Optional puzzle-specific data from :meth:`get_data`.
 
         Returns:
-            A ``SolveConfig`` instance describing the puzzle objective.
+            A fixed two-child ``SolveConfig`` instance.
         """
         pass
 
@@ -273,10 +280,10 @@ class Puzzle(ABC):
     def get_initial_state(
         self, solve_config: SolveConfig, key=None, data=None
     ) -> State:
-        """Build and return the initial (scrambled) state for a given goal.
+        """Build and return the initial state for a solve configuration.
 
         Args:
-            solve_config: The goal configuration for this episode.
+            solve_config: The instance context and goal for this episode.
             key: Optional JAX PRNG key for random scrambling.
             data: Optional puzzle-specific data from :meth:`get_data`.
 
@@ -348,7 +355,7 @@ class Puzzle(ABC):
         otherwise the original ``state`` is returned with ``jnp.inf`` cost.
 
         Args:
-            solve_config: Current goal configuration.
+            solve_config: Current solve configuration.
             state: Current puzzle state.
             action: Scalar action index.
             filled: If ``False``, the move is blocked regardless of validity.
@@ -423,7 +430,7 @@ class Puzzle(ABC):
         and the original state.
 
         Args:
-            solve_config: Current goal configuration.
+            solve_config: Current solve configuration.
             state: Current puzzle state.
             filled: If ``True``, invalid actions are filled with
                 ``(state, jnp.inf)``.
@@ -461,16 +468,14 @@ class Puzzle(ABC):
         else:
             return jax.vmap(self.is_solved, in_axes=(None, 0))(solve_configs, states)
 
-    @abstractmethod
     def is_solved(self, solve_config: SolveConfig, state: State) -> bool:
+        """Return whether ``state`` equals the single-state goal.
+
+        Override when :attr:`GoalSpec` describes a predicate rather than one
+        complete target state.
         """
-        This function should return True if the state is the target state.
-        if the puzzle has multiple target states, this function should return
-        True if the state is one of the target conditions.
-        e.g sokoban puzzle has multiple target states. box's position should
-        be the same as the target position but the player's position can be different.
-        """
-        pass
+        assert self.has_target, "This puzzle must define its solved predicate"
+        return state == solve_config.GoalSpec
 
     def action_to_string(self, action: int) -> str:
         """Return a human-readable name for the given action index.
@@ -531,50 +536,42 @@ class Puzzle(ABC):
     ) -> State:
         """Convert a ``SolveConfig`` into the corresponding target ``State``.
 
-        The default implementation simply extracts ``solve_config.TargetState``.
+        The default implementation simply extracts ``solve_config.GoalSpec``.
         Override for puzzles whose goal is not a single target state.
 
         Args:
-            solve_config: The goal configuration.
+            solve_config: The solve configuration.
             key: Optional PRNG key (unused in default implementation).
 
         Returns:
             The target ``State`` encoded in the configuration.
 
         Raises:
-            AssertionError: If the puzzle does not have a target state or
-                the config has additional fields.
+            AssertionError: If ``GoalSpec`` is not exactly ``State``.
         """
         assert self.has_target, "This puzzle does not have target state"
-        assert self.only_target, (
-            "Default solve config to state transform is for only target state,you should redefine this function"
-        )
-        return solve_config.TargetState
+        return solve_config.GoalSpec
 
     def hindsight_transform(
         self, solve_config: SolveConfig, states: State
     ) -> SolveConfig:
         """Hindsight experience replay: rewrite the goal to match *states*.
 
-        Creates a new ``SolveConfig`` whose ``TargetState`` equals the given
-        state, enabling hindsight relabelling for training neural heuristics.
+        Creates a new ``SolveConfig`` whose ``GoalSpec`` equals the given state,
+        preserving its ``InstanceContext``.
 
         Args:
             solve_config: Original solve configuration (used as template).
             states: State to embed as the new target.
 
         Returns:
-            A new ``SolveConfig`` with ``TargetState`` replaced.
+            A new ``SolveConfig`` with ``GoalSpec`` replaced.
 
         Raises:
             AssertionError: If the puzzle goal is not a simple target state.
         """
         assert self.has_target, "This puzzle does not have target state"
-        assert self.only_target, (
-            "Default hindsight transform is for only target state,you should redefine this function"
-        )
-        solve_config = solve_config.replace(TargetState=states)
-        return solve_config
+        return solve_config.replace(GoalSpec=states)
 
     def get_inverse_neighbours(
         self, solve_config: SolveConfig, state: State, filled: bool = True
@@ -645,7 +642,7 @@ class Puzzle(ABC):
         For non-reversible puzzles, it falls back to O(A*N) dense tensor comparison.
 
         Args:
-            solve_config: Goal configuration (passed to ``get_neighbours``).
+            solve_config: Solve configuration (passed to ``get_neighbours``).
             init_state: State to start scrambling from (usually the solved state).
             key: JAX PRNG key.
             num_shuffle: Base number of random actions to apply.
@@ -686,8 +683,8 @@ class Puzzle(ABC):
         )
 
     def __repr__(self):
-        state_fields = list(self.State.__annotations__.keys())
-        solve_config_fields = list(self.SolveConfig.__annotations__.keys())
+        state_fields = list(get_type_layout(self.State).field_names)
+        solve_config_fields = list(get_type_layout(self.SolveConfig).field_names)
         return (
             f"Puzzle({self.__class__.__name__}, "
             f"action_size={self.action_size}, "

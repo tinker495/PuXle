@@ -218,7 +218,7 @@ def test_get_shuffled_state_call_sites_smoke(puzzle):
     key = jax.random.PRNGKey(42)
     solve_config = puzzle.get_solve_config(key)
     state = puzzle._get_shuffled_state(
-        solve_config, solve_config.TargetState, key, num_shuffle=2
+        solve_config, solve_config.GoalSpec, key, num_shuffle=2
     )
     assert state is not None
 

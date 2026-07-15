@@ -349,14 +349,14 @@ def test_state_field_name_kwarg_rejected():
 
 def test_state_field_per_mode(perm_puzzle, mat_puzzle):
     perm_cfg = perm_puzzle.get_solve_config()
-    perm_state = perm_cfg.TargetState
+    perm_state = perm_cfg.GoalSpec
     assert hasattr(perm_state, "permutation"), (
         "PERMUTATION state must have .permutation"
     )
     assert not hasattr(perm_state, "vector"), "PERMUTATION state must not have .vector"
 
     mat_cfg = mat_puzzle.get_solve_config()
-    mat_state = mat_cfg.TargetState
+    mat_state = mat_cfg.GoalSpec
     assert hasattr(mat_state, "vector"), "MATRIX state must have .vector"
     assert not hasattr(mat_state, "permutation"), (
         "MATRIX state must not have .permutation"
@@ -382,7 +382,7 @@ def test_jaxtar_astar_smoke():
     cfg = puzzle.get_solve_config()
 
     # Scramble by exactly 2 known actions (both rot_left).
-    state = cfg.TargetState
+    state = cfg.GoalSpec
     state, _ = puzzle.get_actions(cfg, state, jnp.array(0), filled=True)
     state, _ = puzzle.get_actions(cfg, state, jnp.array(0), filled=True)
 
@@ -468,7 +468,7 @@ def test_cayleypy_parity():
         perm_gd = PermutationGroups.cyclic(6)
         perm_puzzle = CayleyPuzzle(perm_gd, ensure_inverse_closed=True, num_shuffle=2)
         perm_cfg = perm_puzzle.get_solve_config()
-        perm_state = perm_cfg.TargetState
+        perm_state = perm_cfg.GoalSpec
 
         # Pick action 0 and apply via adapter.
         next_perm_state, _ = perm_puzzle.get_actions(
@@ -494,7 +494,7 @@ def test_cayleypy_parity():
         mat_gd = MatrixGroups.cyclic(3, modulo=5)
         mat_puzzle = CayleyPuzzle(mat_gd, ensure_inverse_closed=True, num_shuffle=2)
         mat_cfg = mat_puzzle.get_solve_config()
-        mat_state = mat_cfg.TargetState
+        mat_state = mat_cfg.GoalSpec
 
         next_mat_state, _ = mat_puzzle.get_actions(
             mat_cfg, mat_state, jnp.array(0), filled=True

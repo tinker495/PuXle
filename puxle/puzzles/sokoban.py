@@ -6,9 +6,9 @@ from importlib.resources import files
 import chex
 import jax
 import jax.numpy as jnp
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint8
@@ -53,12 +53,12 @@ class Sokoban(Puzzle):
         ALL_BOXES_ON_TARGET = 0
         ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET = 1
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for Sokoban using xtructure."""
         str_parser = self.get_string_parser()
         size = self.size
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             board: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=2)
 
@@ -141,14 +141,16 @@ class Sokoban(Puzzle):
         else:
             # Otherwise, use the pre-packed target data directly.
             target_state = self.State(board=target_data)
-        return self.SolveConfig(TargetState=target_state)
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(), GoalSpec=target_state
+        )
 
     def is_solved(
         self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State"
     ) -> bool:
         # Unpack boards for comparison.
         board = state.board_unpacked
-        t_board = solve_config.TargetState.board_unpacked
+        t_board = solve_config.GoalSpec.board_unpacked
         # Remove the player from the current board.
         if (
             self.solve_condition
@@ -166,7 +168,7 @@ class Sokoban(Puzzle):
 
     def get_solve_config_string_parser(self) -> Callable:
         def parser(solve_config: "Sokoban.SolveConfig", **kwargs):
-            return solve_config.TargetState.str(solve_config=solve_config)
+            return solve_config.GoalSpec.str(solve_config=solve_config)
 
         return parser
 
@@ -200,7 +202,7 @@ class Sokoban(Puzzle):
             # Unpack the board before visualization.
             board = state.board_unpacked
             if solve_config is not None:
-                goal = solve_config.TargetState.board_unpacked
+                goal = solve_config.GoalSpec.board_unpacked
                 for i in range(self.size):
                     for j in range(self.size):
                         if goal[i * self.size + j] == Sokoban.Object.BOX.value:
@@ -390,7 +392,7 @@ class Sokoban(Puzzle):
 
             board = np.array(state.board_unpacked)
             if solve_config is not None:
-                goal = np.array(solve_config.TargetState.board_unpacked)
+                goal = np.array(solve_config.GoalSpec.board_unpacked)
             else:
                 goal = None
             for i in range(self.size):
@@ -495,7 +497,7 @@ class Sokoban(Puzzle):
         """
         This function shoulde transformt the solve config to the state.
         """
-        board = solve_config.TargetState.board_unpacked
+        board = solve_config.GoalSpec.board_unpacked
         if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET:
             board = self._place_agent_randomly(board, key)
 
@@ -513,11 +515,11 @@ class Sokoban(Puzzle):
                 board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board
             )
             solve_config = solve_config.replace(
-                TargetState=self.State.from_unpacked(board=rm_player)
+                GoalSpec=self.State.from_unpacked(board=rm_player)
             )
         else:
             solve_config = solve_config.replace(
-                TargetState=self.State.from_unpacked(board=board)
+                GoalSpec=self.State.from_unpacked(board=board)
             )
         return solve_config
 

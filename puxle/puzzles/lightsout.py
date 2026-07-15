@@ -4,9 +4,9 @@ import chex
 import cv2
 import jax.numpy as jnp
 import numpy as np
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint8
@@ -45,12 +45,12 @@ class LightsOut(Puzzle):
 
     size: int
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for LightsOut using xtructure."""
         str_parser = self.get_string_parser()
         size = self.size
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             board: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1)
 
@@ -81,7 +81,7 @@ class LightsOut(Puzzle):
     ) -> "LightsOut.State":
         return self._get_shuffled_state(
             solve_config,
-            solve_config.TargetState,
+            solve_config.GoalSpec,
             key,
             num_shuffle=self.initial_shuffle,
         )
@@ -91,7 +91,10 @@ class LightsOut(Puzzle):
         return self.State.from_unpacked(board=board)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
-        return self.SolveConfig(TargetState=self.get_target_state(key))
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(),
+            GoalSpec=self.get_target_state(key),
+        )
 
     def _apply(
         self,
@@ -129,11 +132,6 @@ class LightsOut(Puzzle):
 
         next_state = state.set_unpacked(board=flip(board, x, y))
         return next_state, 1.0
-
-    def is_solved(
-        self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State"
-    ) -> bool:
-        return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
         """
@@ -268,20 +266,21 @@ class LightsOutRandom(LightsOut):
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         solve_config = super().get_solve_config(key, data)
-        solve_config.TargetState = self._get_shuffled_state(
-            solve_config,
-            solve_config.TargetState,
-            key,
-            num_shuffle=self.initial_shuffle,
+        return solve_config.replace(
+            GoalSpec=self._get_shuffled_state(
+                solve_config,
+                solve_config.GoalSpec,
+                key,
+                num_shuffle=self.initial_shuffle,
+            )
         )
-        return solve_config
 
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> LightsOut.State:
         return self._get_shuffled_state(
             solve_config,
-            solve_config.TargetState,
+            solve_config.GoalSpec,
             key,
             num_shuffle=self.initial_shuffle,
         )

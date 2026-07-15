@@ -16,22 +16,3 @@ Puzzle
    :show-inheritance:
    :special-members: __init__
    :no-index:
-
-PuzzleState
------------
-
-.. autoclass:: puxle.core.puzzle_state.PuzzleState
-   :members:
-   :show-inheritance:
-
-state_dataclass
----------------
-
-.. autofunction:: puxle.core.puzzle_state.state_dataclass
-
-FieldDescriptor
----------------
-
-Re-exported from `xtructure <https://github.com/tinker495/Xtructure>`_ for
-convenience.  See
-:py:data:`puxle.core.puzzle_state.FieldDescriptor`.

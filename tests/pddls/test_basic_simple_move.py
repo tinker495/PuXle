@@ -276,13 +276,11 @@ class TestPDDLWrapper:
         """Test puzzle property flags."""
         # Test boolean properties
         assert isinstance(puzzle.has_target, bool)
-        assert isinstance(puzzle.only_target, bool)
         assert isinstance(puzzle.fixed_target, bool)
         assert isinstance(puzzle.is_reversible, bool)
 
-        # PDDL puzzles should have targets (goal masks)
-        assert puzzle.has_target
-        assert not puzzle.only_target  # Has goal mask, not just target state
+        assert not puzzle.has_target
+        assert puzzle.has_goal_data
         assert puzzle.fixed_target
 
     def test_state_equality(self, puzzle, rng_key):

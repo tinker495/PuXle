@@ -73,8 +73,8 @@ def build_state_string_parser(env) -> Callable:
         goal_mask = None
         goal_count = 0
         goals_satisfied = 0
-        if solve_config is not None and hasattr(solve_config, "GoalMask"):
-            goal_mask = solve_config.GoalMask
+        if solve_config is not None:
+            goal_mask = solve_config.GoalSpec.GoalMask
             try:
                 goal_count = int(jnp.sum(goal_mask))
                 goals_satisfied = int(jnp.sum(jnp.logical_and(goal_mask, atoms)))
@@ -142,7 +142,7 @@ def build_state_string_parser(env) -> Callable:
 
 def build_solve_config_string_parser(env) -> Callable:
     def parser(solve_config, **kwargs):
-        goal_mask = solve_config.GoalMask
+        goal_mask = solve_config.GoalSpec.GoalMask
         goal_indices = [i for i in range(env.num_atoms) if bool(goal_mask[i])]
         goal_count = len(goal_indices)
         max_show = int(kwargs.get("max_show", 12))

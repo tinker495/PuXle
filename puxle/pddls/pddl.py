@@ -6,9 +6,9 @@ import chex
 import jax.numpy as jnp
 import pddl
 from pddl.core import Domain, Problem
+from xtructure import Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import PuzzleState
 
 from .formatting import (
     action_to_string as fmt_action_to_string,
@@ -20,7 +20,11 @@ from .formatting import (
 )
 from .grounding import ground_actions, ground_predicates
 from .masks import build_goal_mask, build_initial_state, build_masks
-from .state_defs import build_solve_config_class, build_state_class
+from .state_defs import (
+    build_goal_spec_class,
+    build_instance_context_class,
+    build_state_class,
+)
 from .type_system import collect_type_hierarchy, extract_objects_by_type
 
 
@@ -159,17 +163,19 @@ class PDDL(Puzzle):
 
         _, self._label_text_color_map = build_label_color_maps(self.domain)
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         """Define state class with packed atoms."""
         # Delegate to builder for clarity
         str_parser = self.get_string_parser()
         return build_state_class(self, self.num_atoms, self.init_state, str_parser)
 
-    def define_solve_config_class(self) -> PuzzleState:
-        """Define solve config with goal mask instead of target state."""
-        # Delegate to builder for clarity
-        str_parser = self.get_solve_config_string_parser()
-        return build_solve_config_class(self, self.goal_mask, str_parser)
+    def define_instance_context_class(self) -> type[Xtructurable]:
+        """Define grounded action masks used by transitions."""
+        return build_instance_context_class(self)
+
+    def define_goal_spec_class(self) -> type[Xtructurable]:
+        """Define the conjunctive goal mask."""
+        return build_goal_spec_class(self)
 
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
@@ -179,7 +185,15 @@ class PDDL(Puzzle):
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         """Return solve config with goal mask."""
-        return self.SolveConfig(GoalMask=self.goal_mask)
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(
+                pre_mask=self.pre_mask,
+                pre_neg_mask=self.pre_neg_mask,
+                add_mask=self.add_mask,
+                del_mask=self.del_mask,
+            ),
+            GoalSpec=self.GoalSpec(GoalMask=self.goal_mask),
+        )
 
     def get_actions(
         self,
@@ -195,10 +209,11 @@ class PDDL(Puzzle):
         s = state.unpacked_atoms
 
         # Get masks for this action
-        pre = self.pre_mask[action]
-        pre_neg = self.pre_neg_mask[action]  # Added pre_neg
-        add = self.add_mask[action]
-        dele = self.del_mask[action]
+        context = solve_config.InstanceContext
+        pre = context.pre_mask[action]
+        pre_neg = context.pre_neg_mask[action]
+        add = context.add_mask[action]
+        dele = context.del_mask[action]
 
         # Check applicability
         # Positive preconditions: (~pre | s)
@@ -224,7 +239,7 @@ class PDDL(Puzzle):
     def is_solved(self, solve_config: Puzzle.SolveConfig, state: "PDDL.State") -> bool:
         """Check if state satisfies goal conditions."""
         s = state.unpacked_atoms
-        goal_mask = solve_config.GoalMask
+        goal_mask = solve_config.GoalSpec.GoalMask
 
         # Check if all goal atoms are true: all(~goal_mask | s)
         return jnp.all(jnp.logical_or(~goal_mask, s))
@@ -245,8 +260,8 @@ class PDDL(Puzzle):
 
             # Optional goal context
             goal_mask = None
-            if solve_config is not None and hasattr(solve_config, "GoalMask"):
-                goal_mask = solve_config.GoalMask
+            if solve_config is not None:
+                goal_mask = solve_config.GoalSpec.GoalMask
 
             # Create a square grid
             grid_size = int(jnp.ceil(jnp.sqrt(self.num_atoms)))
@@ -288,16 +303,6 @@ class PDDL(Puzzle):
         )
 
     @property
-    def has_target(self) -> bool:
-        """Override to handle goal mask instead of target state."""
-        return True
-
-    @property
-    def only_target(self) -> bool:
-        """Override to handle goal mask instead of target state."""
-        return False
-
-    @property
     def fixed_target(self) -> bool:
         """Override to handle goal mask instead of target state."""
         return True
@@ -312,7 +317,7 @@ class PDDL(Puzzle):
 
         def img_parser(solve_config: "PDDL.SolveConfig", **kwargs):
             # Create a simple visualization of goal mask
-            goal_mask = solve_config.GoalMask
+            goal_mask = solve_config.GoalSpec.GoalMask
 
             # Create a square grid
             grid_size = int(jnp.ceil(jnp.sqrt(self.num_atoms)))

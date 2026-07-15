@@ -5,9 +5,9 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import IMG_SIZE
 
 # Use 16-bit unsigned integers so that problem sizes >255 are handled without overflow.
@@ -34,12 +34,12 @@ class TSP(Puzzle):
 
     size: int
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for TSP using xtructure."""
         str_parser = self.get_string_parser()
         size = self.size
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             mask: FieldDescriptor.packed_tensor(shape=(size,), packed_bits=1)
             point: FieldDescriptor.scalar(dtype=TYPE)
@@ -49,22 +49,23 @@ class TSP(Puzzle):
 
         return State
 
-    def define_solve_config_class(self) -> PuzzleState:
-        """Defines the solve config class for TSP using xtructure."""
-        str_parser = self.get_solve_config_string_parser()
-
-        @state_dataclass
-        class SolveConfig:
+    def define_instance_context_class(self) -> type[Xtructurable]:
+        @xtructure_dataclass
+        class InstanceContext:
             points: FieldDescriptor.tensor(dtype=jnp.float32, shape=(self.size, 2))
             distance_matrix: FieldDescriptor.tensor(
                 dtype=jnp.float32, shape=(self.size, self.size)
             )
             start: FieldDescriptor.scalar(dtype=TYPE)
 
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
+        return InstanceContext
 
-        return SolveConfig
+    def define_goal_spec_class(self) -> type[Xtructurable]:
+        @xtructure_dataclass
+        class GoalSpec:
+            pass
+
+        return GoalSpec
 
     def __init__(self, size: int = 16, **kwargs):
         self.size = size
@@ -73,7 +74,10 @@ class TSP(Puzzle):
 
     def get_solve_config_string_parser(self) -> Callable:
         def parser(solve_config: "TSP.SolveConfig", **kwargs):
-            return f"TSP SolveConfig: {self.size} points, start at {solve_config.start}"
+            return (
+                "TSP SolveConfig: "
+                f"{self.size} points, start at {solve_config.InstanceContext.start}"
+            )
 
         return parser
 
@@ -96,7 +100,7 @@ class TSP(Puzzle):
         self, solve_config: Puzzle.SolveConfig, key=jax.random.PRNGKey(0), data=None
     ) -> Puzzle.State:
         mask = jnp.zeros(self.size, dtype=jnp.bool_)
-        point = solve_config.start
+        point = solve_config.InstanceContext.start
         mask = mask.at[point].set(True)
         return self.State.from_unpacked(mask=mask, point=point)
 
@@ -114,7 +118,10 @@ class TSP(Puzzle):
             key_start, shape=(), minval=0, maxval=self.size, dtype=TYPE
         )
         return self.SolveConfig(
-            points=points, distance_matrix=distance_matrix, start=start
+            InstanceContext=self.InstanceContext(
+                points=points, distance_matrix=distance_matrix, start=start
+            ),
+            GoalSpec=self.GoalSpec(),
         )
 
     def _apply(
@@ -130,17 +137,15 @@ class TSP(Puzzle):
         mask = state.mask_unpacked
         point = state.point
         idx = action
+        context = solve_config.InstanceContext
 
         visited = mask[idx]
         new_mask = mask.at[idx].set(True)
         all_visited = jnp.all(new_mask)
-        cost = solve_config.distance_matrix[point, idx]
+        cost = context.distance_matrix[point, idx]
         cost = jnp.where(visited, jnp.inf, cost) + jnp.where(
             all_visited,
-            jnp.linalg.norm(
-                solve_config.points[solve_config.start] - solve_config.points[idx],
-                axis=-1,
-            ),
+            jnp.linalg.norm(context.points[context.start] - context.points[action]),
             0,
         )
         new_state = self.State.from_unpacked(mask=new_mask, point=idx.astype(TYPE))
@@ -194,7 +199,8 @@ class TSP(Puzzle):
             # Get the visited mask as booleans
             visited = state.mask_unpacked
             # Convert the TSP points (assumed to be an array of shape [number_of_points, 2]) to a numpy array
-            points_np = np.array(solve_config.points)
+            context = solve_config.InstanceContext
+            points_np = np.array(context.points)
 
             # Compute scaling parameters to fit all points within the image with a margin
             margin = 20
@@ -232,7 +238,7 @@ class TSP(Puzzle):
             # Draw each point with different colors based on status
             for i, (x, y) in enumerate(scaled_points):  # Renamed idx to i for clarity
                 # Color: green for start, blue for visited, red for unvisited
-                if i == solve_config.start:
+                if i == context.start:
                     color = (0, 255, 0)
                 elif visited[i]:
                     color = (255, 0, 0)
@@ -261,7 +267,7 @@ class TSP(Puzzle):
                 img = cv2.line(
                     img,
                     scaled_points[state.point],
-                    scaled_points[solve_config.start],
+                    scaled_points[context.start],
                     (0, 0, 0),
                     2,
                 )

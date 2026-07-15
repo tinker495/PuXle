@@ -5,9 +5,9 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint8
@@ -38,11 +38,11 @@ class PancakeSorting(Puzzle):
 
     size: int
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for PancakeSorting using xtructure."""
         str_parser = self.get_string_parser()
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             stack: FieldDescriptor.tensor(dtype=TYPE, shape=(self.size,))
 
@@ -217,7 +217,10 @@ class PancakeSorting(Puzzle):
         """Create the solving configuration (target state)"""
         # Target is the sorted order, largest at the bottom (index size-1)
         target_stack = jnp.arange(1, self.size + 1, dtype=TYPE)
-        return self.SolveConfig(TargetState=self.State(stack=target_stack))
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(),
+            GoalSpec=self.State(stack=target_stack),
+        )
 
     def _apply(
         self,
@@ -262,12 +265,6 @@ class PancakeSorting(Puzzle):
             return new_stack
 
         return self.State(stack=flip_stack(stack, flip_pos)), 1.0
-
-    def is_solved(
-        self, solve_config: "PancakeSorting.SolveConfig", state: "PancakeSorting.State"
-    ) -> bool:
-        """Check if the current state matches the target state (sorted)"""
-        return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
         """Return a string representation of the action"""

@@ -56,10 +56,8 @@ class TestMaze:
         assert jnp.all(state.pos >= 0)
         assert jnp.all(state.pos < maze.size)
 
-        # Verify solve config has target state and maze
-        assert hasattr(sc, "TargetState")
-        assert hasattr(sc, "Maze_unpacked")
-        assert sc.Maze_unpacked.shape == (maze.size * maze.size,)
+        assert sc.GoalSpec is not None
+        assert sc.InstanceContext.Maze_unpacked.shape == (maze.size * maze.size,)
 
     def test_action_strings(self):
         """Test action_to_string returns valid directional strings."""
@@ -83,7 +81,7 @@ class TestMaze:
         )
 
         # Target state should always be solved
-        assert maze.is_solved(sc, sc.TargetState)
+        assert maze.is_solved(sc, sc.GoalSpec)
 
     def test_valid_moves(self, rng_key):
         """Test that get_actions respects maze walls."""
@@ -121,7 +119,7 @@ class TestMaze:
         sc = maze.get_solve_config(key=rng_key)
 
         # Unpack maze and check structure
-        maze_grid = sc.Maze_unpacked.reshape((maze.size, maze.size))
+        maze_grid = sc.InstanceContext.Maze_unpacked.reshape((maze.size, maze.size))
 
         # Should have both walls (True) and paths (False)
         assert jnp.any(maze_grid)  # Has walls
@@ -161,7 +159,7 @@ class TestPancakeSorting:
         pancake = PancakeSorting(size=10)
         sc = pancake.get_solve_config(key=rng_key)
 
-        target_stack = sc.TargetState.stack
+        target_stack = sc.GoalSpec.stack
         expected = jnp.arange(1, pancake.size + 1, dtype=jnp.uint8)
         assert jnp.array_equal(target_stack, expected)
 
@@ -180,7 +178,7 @@ class TestPancakeSorting:
         sc = pancake.get_solve_config(key=rng_key)
 
         # Target state should be solved
-        assert pancake.is_solved(sc, sc.TargetState)
+        assert pancake.is_solved(sc, sc.GoalSpec)
 
         # Random state is unlikely to be solved
         state = pancake.get_initial_state(sc, key=rng_key)
@@ -271,7 +269,7 @@ class TestRoom:
         sc = room.get_solve_config(key=rng_key)
 
         # Target state should always be solved
-        assert room.is_solved(sc, sc.TargetState)
+        assert room.is_solved(sc, sc.GoalSpec)
 
     def test_room_structure(self, rng_key):
         """Test that generated map has proper room structure."""
@@ -279,7 +277,7 @@ class TestRoom:
         sc = room.get_solve_config(key=rng_key)
 
         # Unpack maze and check structure
-        maze_grid = sc.Maze_unpacked.reshape((room.size, room.size))
+        maze_grid = sc.InstanceContext.Maze_unpacked.reshape((room.size, room.size))
 
         # Verify room interiors are carved (not all walls)
         room_dim = room.room_dim
@@ -365,7 +363,7 @@ class TestSokoban:
         sc = sokoban.get_solve_config(key=rng_key)
 
         # Target state should be solved
-        assert sokoban.is_solved(sc, sc.TargetState)
+        assert sokoban.is_solved(sc, sc.GoalSpec)
 
     def test_not_reversible(self):
         """Test that Sokoban is not marked as reversible."""
@@ -585,9 +583,9 @@ class TestTowerOfHanoi:
         sc = hanoi.get_solve_config(key=rng_key)
 
         # Target state should have all disks on third peg
-        assert sc.TargetState.pegs[2, 0] == hanoi.num_disks
-        assert sc.TargetState.pegs[0, 0] == 0
-        assert sc.TargetState.pegs[1, 0] == 0
+        assert sc.GoalSpec.pegs[2, 0] == hanoi.num_disks
+        assert sc.GoalSpec.pegs[0, 0] == 0
+        assert sc.GoalSpec.pegs[1, 0] == 0
 
     def test_action_strings(self):
         """Test action_to_string returns valid move descriptions."""
@@ -604,7 +602,7 @@ class TestTowerOfHanoi:
         sc = hanoi.get_solve_config(key=rng_key)
 
         # Target state should be solved
-        assert hanoi.is_solved(sc, sc.TargetState)
+        assert hanoi.is_solved(sc, sc.GoalSpec)
 
         # Initial state should not be solved
         state = hanoi.get_initial_state(sc, key=rng_key)
@@ -667,7 +665,7 @@ class TestLightsOut:
         sc = lightsout.get_solve_config(key=rng_key)
 
         # Target should have all lights off
-        assert jnp.all(sc.TargetState.board_unpacked == 0)
+        assert jnp.all(sc.GoalSpec.board_unpacked == 0)
 
     def test_action_strings(self):
         """Test action_to_string returns valid strings."""
@@ -683,7 +681,7 @@ class TestLightsOut:
         sc = lightsout.get_solve_config(key=rng_key)
 
         # Target state should be solved
-        assert lightsout.is_solved(sc, sc.TargetState)
+        assert lightsout.is_solved(sc, sc.GoalSpec)
 
     def test_valid_moves(self, rng_key):
         """Test that get_actions returns valid moves."""
@@ -758,7 +756,7 @@ class TestSlidePuzzle:
 
         # Target should be [1, 2, ..., 15, 0]
         expected = jnp.array([*range(1, slide.size**2), 0], dtype=jnp.uint8)
-        assert jnp.array_equal(sc.TargetState.board_unpacked, expected)
+        assert jnp.array_equal(sc.GoalSpec.board_unpacked, expected)
 
     def test_action_strings(self):
         """Test action_to_string returns valid directional strings."""
@@ -775,7 +773,7 @@ class TestSlidePuzzle:
         sc = slide.get_solve_config(key=rng_key)
 
         # Target state should be solved
-        assert slide.is_solved(sc, sc.TargetState)
+        assert slide.is_solved(sc, sc.GoalSpec)
 
     def test_valid_moves(self, rng_key):
         """Test that get_actions returns valid moves."""
@@ -853,7 +851,7 @@ class TestTopSpin:
 
         # Target should be [1, 2, ..., n_discs]
         expected = jnp.arange(1, topspin.n_discs + 1, dtype=jnp.uint8)
-        assert jnp.array_equal(sc.TargetState.permutation, expected)
+        assert jnp.array_equal(sc.GoalSpec.permutation, expected)
 
     def test_action_strings(self):
         """Test action_to_string returns valid move descriptions."""
@@ -872,7 +870,7 @@ class TestTopSpin:
         sc = topspin.get_solve_config(key=rng_key)
 
         # Target state should be solved
-        assert topspin.is_solved(sc, sc.TargetState)
+        assert topspin.is_solved(sc, sc.GoalSpec)
 
     def test_valid_moves(self, rng_key):
         """Test that get_actions returns valid moves."""
@@ -946,12 +944,10 @@ class TestTSP:
         tsp = TSP(size=10)
         sc = tsp.get_solve_config(key=rng_key)
 
-        # Verify solve config has points and distance matrix
-        assert hasattr(sc, "points")
-        assert hasattr(sc, "distance_matrix")
-        assert hasattr(sc, "start")
-        assert sc.points.shape == (tsp.size, 2)
-        assert sc.distance_matrix.shape == (tsp.size, tsp.size)
+        context = sc.InstanceContext
+        assert context.points.shape == (tsp.size, 2)
+        assert context.distance_matrix.shape == (tsp.size, tsp.size)
+        assert context.start.shape == ()
 
     def test_action_strings(self):
         """Test action_to_string returns valid city indices."""

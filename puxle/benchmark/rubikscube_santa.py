@@ -199,7 +199,9 @@ class RubiksCubeSantaBenchmark(Benchmark):
         initial_state = puzzle.State.from_unpacked(faces=initial_faces.reshape(6, -1))
         target_state = puzzle.State.from_unpacked(faces=target_faces.reshape(6, -1))
 
-        solve_config = puzzle.SolveConfig(TargetState=target_state)
+        solve_config = puzzle.SolveConfig(
+            InstanceContext=puzzle.InstanceContext(), GoalSpec=target_state
+        )
 
         return BenchmarkSample(
             state=initial_state,

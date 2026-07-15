@@ -8,9 +8,6 @@ __version__ = "0.2.0"
 
 __all__ = [
     "Puzzle",
-    "PuzzleState",
-    "FieldDescriptor",
-    "state_dataclass",
     "DotKnot",
     "TowerOfHanoi",
     "LightsOut",
@@ -43,9 +40,6 @@ __all__ = [
 
 _EXPORTS: dict[str, tuple[str, str]] = {
     "Puzzle": (".core.puzzle_base", "Puzzle"),
-    "PuzzleState": (".core.puzzle_state", "PuzzleState"),
-    "FieldDescriptor": (".core.puzzle_state", "FieldDescriptor"),
-    "state_dataclass": (".core.puzzle_state", "state_dataclass"),
     "DotKnot": (".puzzles.dotknot", "DotKnot"),
     "TowerOfHanoi": (".puzzles.hanoi", "TowerOfHanoi"),
     "LightsOut": (".puzzles.lightsout", "LightsOut"),

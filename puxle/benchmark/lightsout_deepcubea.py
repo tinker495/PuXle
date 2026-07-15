@@ -5,6 +5,7 @@ from typing import Any, Hashable, Sequence
 
 import jax.numpy as jnp
 import numpy as np
+from xtructure import Xtructurable
 
 from puxle.benchmark._deepcubea import (
     extract_tiles,
@@ -12,7 +13,6 @@ from puxle.benchmark._deepcubea import (
     load_deepcubea_dataset,
 )
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
-from puxle.core.puzzle_state import PuzzleState
 from puxle.puzzles.lightsout import LightsOut
 
 DEFAULT_DATASET_NAME = "size7-deepcubeA.pkl"
@@ -65,7 +65,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
     def verify_solution(
         self,
         sample: BenchmarkSample,
-        states: Sequence[PuzzleState] | None = None,
+        states: Sequence[Xtructurable] | None = None,
         action_sequence: Sequence[str] | None = None,
     ) -> bool | None:
         """
@@ -88,7 +88,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
 
         return result
 
-    def _convert_state(self, raw_state: Any) -> PuzzleState:
+    def _convert_state(self, raw_state: Any) -> Xtructurable:
         tiles = extract_tiles(raw_state)
         puzzle: LightsOut = self.puzzle
         board = np.asarray(tiles, dtype=np.bool_)

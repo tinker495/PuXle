@@ -233,7 +233,7 @@ def test_random_states_not_mostly_solved(domain, problem):
     solve_config = env.get_solve_config()
 
     # Goals should be non-empty; otherwise any state would be trivially solved
-    assert int(jnp.sum(solve_config.GoalMask)) > 0, (
+    assert int(jnp.sum(solve_config.GoalSpec.GoalMask)) > 0, (
         f"Preset {domain}/{problem} has empty goal mask; any state would be solved"
     )
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Hashable, Sequence
 
 import jax.numpy as jnp
+from xtructure import Xtructurable
 
 from puxle.benchmark._deepcubea import (
     extract_tiles,
@@ -12,7 +13,6 @@ from puxle.benchmark._deepcubea import (
     load_deepcubea_dataset,
 )
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
-from puxle.core.puzzle_state import PuzzleState
 from puxle.puzzles.slidepuzzle import SlidePuzzle
 
 HARD_17_STATES = [
@@ -129,7 +129,7 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
             lambda: infer_square_size(self.dataset.get("states"), "SlidePuzzle"),
         )
 
-    def _convert_state(self, raw_state: Any) -> PuzzleState:
+    def _convert_state(self, raw_state: Any) -> Xtructurable:
         tiles = jnp.asarray(extract_tiles(raw_state), dtype=jnp.uint8)
         puzzle: SlidePuzzle = self.puzzle
         return puzzle.State.from_unpacked(board=tiles)
@@ -177,7 +177,7 @@ class SlidePuzzleDeepCubeA15HardBenchmark(SlidePuzzleDeepCubeABenchmark):
     def verify_solution(
         self,
         sample: BenchmarkSample,
-        states: Sequence[PuzzleState] | None = None,
+        states: Sequence[Xtructurable] | None = None,
         action_sequence: Sequence[str] | None = None,
     ) -> bool | None:
         is_solved = super().verify_solution(sample, states, action_sequence)

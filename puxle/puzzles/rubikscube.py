@@ -8,9 +8,9 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import IMG_SIZE, coloring_str
 
 TYPE = jnp.uint8
@@ -232,12 +232,12 @@ class RubiksCube(Puzzle):
     def _token_width(self) -> int:
         return 1 if self.color_embedding else len(str(self._num_tiles - 1))
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         str_parser = self.get_string_parser()
         raw_shape = (6, self.size * self.size)
         active_bits = self._active_bits
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             faces: FieldDescriptor.packed_tensor(
                 shape=raw_shape, packed_bits=active_bits
@@ -384,7 +384,7 @@ class RubiksCube(Puzzle):
     ) -> "RubiksCube.State":
         return self._get_shuffled_state(
             solve_config,
-            solve_config.TargetState,
+            solve_config.GoalSpec,
             key,
             num_shuffle=self.initial_shuffle,
         )
@@ -394,7 +394,10 @@ class RubiksCube(Puzzle):
         return self.State.from_unpacked(faces=faces)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
-        return self.SolveConfig(TargetState=self.get_target_state(key))
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(),
+            GoalSpec=self.get_target_state(key),
+        )
 
     def _apply(
         self,
@@ -430,11 +433,6 @@ class RubiksCube(Puzzle):
         )(faces_perm, _SYM_K24)  # (24, 6, n, n)
         sym_flat = rotated.reshape((24, 6, self._tile_count))
         return self.State.from_unpacked(shape=(24,), faces=sym_flat)
-
-    def is_solved(
-        self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State"
-    ) -> bool:
-        return state == solve_config.TargetState
 
     @property
     def inverse_action_map(self) -> jnp.ndarray | None:
@@ -916,7 +914,8 @@ class RubiksCubeRandom(RubiksCube):
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         solve_config = super().get_solve_config(key, data)
-        solve_config.TargetState = self._get_shuffled_state(
-            solve_config, solve_config.TargetState, key, num_shuffle=26
+        return solve_config.replace(
+            GoalSpec=self._get_shuffled_state(
+                solve_config, solve_config.GoalSpec, key, num_shuffle=26
+            )
         )
-        return solve_config

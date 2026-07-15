@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from xtructure.core.layout import get_type_layout
 
 from puxle.core.puzzle_base import Puzzle
 
@@ -67,6 +68,10 @@ class TestPuzzleValidation:
                 )
                 assert hasattr(puzzle, "SolveConfig"), (
                     f"{puzzle_class.__name__} should define SolveConfig class"
+                )
+                assert get_type_layout(puzzle.SolveConfig).field_names == (
+                    "InstanceContext",
+                    "GoalSpec",
                 )
                 assert puzzle.action_size is not None, (
                     f"{puzzle_class.__name__} should have action_size defined"
@@ -311,9 +316,9 @@ class TestPuzzleValidation:
                 ), "is_solved should return boolean"
 
                 # For puzzles with fixed targets, test that target state is actually solved
-                if puzzle.fixed_target and hasattr(solve_config, "TargetState"):
+                if puzzle.fixed_target and puzzle.has_target:
                     target_solved = puzzle.is_solved(
-                        solve_config, solve_config.TargetState
+                        solve_config, solve_config.GoalSpec
                     )
                     assert target_solved, (
                         f"Target state should be marked as solved for {puzzle_class.__name__}"
@@ -364,22 +369,11 @@ class TestPuzzleValidation:
                 )
                 assert len(state_str) > 0, "State string should be non-empty"
 
-                # Test solve config string representation
-                try:
-                    solve_config_str = str(solve_config)
-                    assert isinstance(solve_config_str, str), (
-                        "SolveConfig string representation should be string"
-                    )
-                    # Empty SolveConfigs (like DotKnot) might return empty strings, which is acceptable
-                    # assert len(solve_config_str) > 0, f"SolveConfig string should be non-empty"
-                except IndexError as e:
-                    # Handle the case where SolveConfig has no fields (like DotKnot)
-                    if "list index out of range" in str(e):
-                        print(
-                            f"⚠ {puzzle_class.__name__} has empty SolveConfig - skipping string representation test"
-                        )
-                    else:
-                        raise
+                # Empty GoalSpecs may legitimately render an empty string.
+                solve_config_str = str(solve_config)
+                assert isinstance(solve_config_str, str), (
+                    "SolveConfig string representation should be string"
+                )
 
                 print(f"✓ {puzzle_class.__name__} string parsing works")
 
@@ -467,19 +461,12 @@ class TestPuzzleValidation:
                 assert isinstance(puzzle.has_target, bool), (
                     "has_target should be boolean"
                 )
-                assert isinstance(puzzle.only_target, bool), (
-                    "only_target should be boolean"
-                )
                 assert isinstance(puzzle.fixed_target, bool), (
                     "fixed_target should be boolean"
                 )
                 assert isinstance(puzzle.is_reversible, bool), (
                     "is_reversible should be boolean"
                 )
-
-                # Logical consistency checks
-                if puzzle.only_target:
-                    assert puzzle.has_target, "only_target implies has_target"
 
                 print(f"✓ {puzzle_class.__name__} properties are consistent")
 
@@ -669,7 +656,7 @@ class TestCayleyPuzzle:
 
     def test_is_solved_target_state(self, cayley_puzzle, cayley_solve_config):
         assert cayley_puzzle.is_solved(
-            cayley_solve_config, cayley_solve_config.TargetState
+            cayley_solve_config, cayley_solve_config.GoalSpec
         )
 
     def test_is_solved_initial_state_false(

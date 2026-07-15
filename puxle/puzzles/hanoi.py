@@ -6,9 +6,9 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint8
@@ -40,14 +40,14 @@ class TowerOfHanoi(Puzzle):
     num_pegs: int = 3  # Classic Tower of Hanoi has 3 pegs
     max_disk_value: int
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for Tower of Hanoi using xtructure."""
         str_parser = self.get_string_parser()
         # Default pegs value for FieldDescriptor, initialized when class is defined
         # self.num_pegs and self.num_disks are available from TowerOfHanoi.__init__
         default_pegs_val = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             pegs: FieldDescriptor.tensor(dtype=TYPE, shape=default_pegs_val.shape)
 
@@ -270,7 +270,10 @@ class TowerOfHanoi(Puzzle):
 
     def get_solve_config(self, key=None, data=None) -> "TowerOfHanoi.SolveConfig":
         """Create the solving configuration (target) with all disks on the third peg."""
-        return self.SolveConfig(TargetState=self.State(pegs=self._stacked_pegs(2)))
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(),
+            GoalSpec=self.State(pegs=self._stacked_pegs(2)),
+        )
 
     def _apply(
         self,
@@ -352,12 +355,6 @@ class TowerOfHanoi(Puzzle):
         cost = jax.lax.cond(valid, lambda: jnp.array(1.0), lambda: jnp.array(jnp.inf))
 
         return self.State(pegs=new_pegs), cost
-
-    def is_solved(
-        self, solve_config: "TowerOfHanoi.SolveConfig", state: "TowerOfHanoi.State"
-    ) -> bool:
-        """Check if the current state matches the target state"""
-        return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
         """Return a string representation of the action"""

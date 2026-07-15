@@ -15,13 +15,14 @@ from typing import (
     TypeVar,
 )
 
+from xtructure import Xtructurable
+
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import PuzzleState
 
 __all__ = ["BenchmarkSample", "Benchmark"]
 
-StateT = TypeVar("StateT", bound=PuzzleState)
-SolveConfigT = TypeVar("SolveConfigT", bound=PuzzleState)
+StateT = TypeVar("StateT", bound=Xtructurable)
+SolveConfigT = TypeVar("SolveConfigT", bound=Xtructurable)
 
 
 @dataclass(frozen=True)
@@ -30,7 +31,7 @@ class BenchmarkSample(Generic[StateT, SolveConfigT]):
 
     Attributes:
         state: Initial puzzle state for this sample.
-        solve_config: Target/goal configuration for verification.
+        solve_config: Instance context and goal specification for this sample.
         optimal_action_sequence: Known-optimal action string list, or
             ``None`` if unavailable.
         optimal_path: Sequence of states along the optimal path, or

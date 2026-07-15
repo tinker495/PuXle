@@ -5,9 +5,9 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import IMG_SIZE
 
 TYPE = jnp.uint8
@@ -28,13 +28,13 @@ class SlidePuzzle(Puzzle):
 
     size: int
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         str_parser = self.get_string_parser()
         size = self.size
         max_value = self.size**2 - 1
         packed_bits = max_value.bit_length()
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             board: FieldDescriptor.packed_tensor(
                 shape=(size**2,), packed_bits=packed_bits
@@ -73,7 +73,9 @@ class SlidePuzzle(Puzzle):
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         target = jnp.array([*range(1, self.size**2), 0], dtype=TYPE)
         target_state = self.State.from_unpacked(board=target)
-        return self.SolveConfig(TargetState=target_state)
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(), GoalSpec=target_state
+        )
 
     def _apply(
         self,
@@ -112,11 +114,6 @@ class SlidePuzzle(Puzzle):
             lambda: (board, jnp.inf),
         )
         return state.set_unpacked(board=next_board), cost
-
-    def is_solved(
-        self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State"
-    ) -> bool:
-        return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
         return self._directional_action_to_string(action)
@@ -298,8 +295,7 @@ class SlidePuzzleRandom(SlidePuzzle):
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         solve_config = super().get_solve_config(key, data)
-        solve_config.TargetState = self._get_random_state(key)
-        return solve_config
+        return solve_config.replace(GoalSpec=self._get_random_state(key))
 
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None

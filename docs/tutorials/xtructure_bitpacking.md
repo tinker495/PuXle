@@ -22,10 +22,10 @@ packed bytes in-memory.
 
 ```python
 import jax.numpy as jnp
-from puxle.core.puzzle_state import FieldDescriptor, state_dataclass
+from xtructure import FieldDescriptor, xtructure_dataclass
 
 
-@state_dataclass
+@xtructure_dataclass
 class State:
     board: FieldDescriptor.packed_tensor(shape=(49,), packed_bits=1)
 
@@ -45,10 +45,10 @@ state2 = state.set_unpacked(board=jnp.logical_not(board_view))
 
 ```python
 import jax.numpy as jnp
-from puxle.core.puzzle_state import FieldDescriptor, state_dataclass
+from xtructure import FieldDescriptor, xtructure_dataclass
 
 
-@state_dataclass
+@xtructure_dataclass
 class CubeState:
     # 6 faces x (size*size) stickers, each in [0..5] => 3 bits
     faces: FieldDescriptor.packed_tensor(shape=(6, 54), packed_bits=3)
@@ -72,15 +72,7 @@ Use this when:
 - you have many small fields and want a single compact stream,
 - you want partial decode via `unpack_field(...)` (when supported).
 
-## 3) PuXle convention: `@state_dataclass` defaults to `bitpack="auto"`
-
-PuXle's `puxle.core.puzzle_state.state_dataclass` is a thin wrapper around xtructure's `@xtructure_dataclass`.
-
-Behavior:
-- Defaults to `bitpack="auto"` (enables packed_tensor helpers, and auto-enables aggregate packing when possible).
-- For classes without bitpacking, PuXle provides identity `.packed` / `.unpacked` properties for compatibility.
-
-## 4) Migration from legacy `to_uint8/from_uint8`
+## 3) Migration from legacy `to_uint8/from_uint8`
 
 Older puzzle implementations sometimes:
 - stored packed bytes in a `FieldDescriptor.tensor(...)`, and

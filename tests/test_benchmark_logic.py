@@ -1,27 +1,19 @@
 import jax.numpy as jnp
 import pytest
+from xtructure import FieldDescriptor, xtructure_dataclass
 
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, state_dataclass
 
 
-@state_dataclass(bitpack="off")
+@xtructure_dataclass(bitpack="off")
 class MockState:
     val: FieldDescriptor.scalar(dtype=jnp.int32)
-
-
-@state_dataclass(bitpack="off")
-class MockSolveConfig:
-    TargetState: FieldDescriptor.scalar(dtype=MockState)
 
 
 class MockPuzzle(Puzzle):
     def define_state_class(self):
         return MockState
-
-    def define_solve_config_class(self):
-        return MockSolveConfig
 
     def __init__(self, **kwargs):
         self.action_size = 2
@@ -31,15 +23,14 @@ class MockPuzzle(Puzzle):
         return MockState(val=0)
 
     def get_solve_config(self, key=None, data=None):
-        return MockSolveConfig(TargetState=MockState(val=10))
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(), GoalSpec=MockState(val=10)
+        )
 
     def get_actions(self, solve_config, state, action, filled=True):
         # Action 0 adds 1, action 1 adds 2
         add_val = jnp.where(action == 0, 1, 2)
         return MockState(val=state.val + add_val), jnp.where(filled, 1.0, jnp.inf)
-
-    def is_solved(self, solve_config, state):
-        return state.val == solve_config.TargetState.val
 
     def get_string_parser(self):
         return lambda s, **kwargs: str(s.val)
@@ -56,10 +47,11 @@ class MockBenchmark(Benchmark):
         return MockPuzzle()
 
     def load_dataset(self):
+        solve_config = self.puzzle.get_solve_config()
         return {
             "test1": BenchmarkSample(
                 state=MockState(val=0),
-                solve_config=MockSolveConfig(TargetState=MockState(val=10)),
+                solve_config=solve_config,
                 optimal_action_sequence=["add2"] * 5,
                 optimal_path=None,
                 optimal_path_costs=5.0,

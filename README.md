@@ -65,7 +65,7 @@ from puxle import RubiksCube, SlidePuzzle, Sokoban
 puzzle = RubiksCube()
 key = jax.random.PRNGKey(42)
 
-# Get initial state and solve configuration
+# Get solve configuration and initial state
 solve_config, initial_state = puzzle.get_inits(key)
 
 # Get available actions
@@ -92,7 +92,7 @@ from puxle import PDDL
 # Initialize PDDL planning domain
 pddl_env = PDDL(domain="path/to/domain.pddl", problem="path/to/problem.pddl")
 
-# Get initial state and goal configuration
+# Get solve configuration and initial state
 solve_config, initial_state = pddl_env.get_inits(jax.random.PRNGKey(0))
 
 # Get all applicable actions and their effects
@@ -197,25 +197,53 @@ true_atoms = pddl_env.state_to_atom_set(initial_state)
 print(f"True atoms in state: {true_atoms}")
 ```
 
+### SolveConfig Structure
+
+`get_inits(key)` continues to return `(solve_config, initial_state)`. Every
+`SolveConfig` has exactly two outer fields:
+
+- `InstanceContext`: data that can change action validity, transitions, or edge costs.
+- `GoalSpec`: data that defines the solved predicate, reward, or utility.
+
+When a goal is one complete state, `GoalSpec` is exactly the puzzle's `State`
+class and `solve_config.GoalSpec` is the target state. Accordingly,
+`has_target` means `GoalSpec is State`; `has_goal_data` means that the goal
+specification stores data leaves.
+
+| Environment | `InstanceContext` | `GoalSpec` |
+|---|---|---|
+| Default target puzzle | Empty | Target `State` |
+| Maze | Packed maze layout | Target `State` |
+| TSP | Points, distance matrix, start index | Empty |
+| PDDL | Grounded precondition/effect masks | Goal mask |
+| DotKnot or another goal-free environment | Empty | Empty |
+
+Environment-specific data is available only through these two children; the
+outer `SolveConfig` does not expose compatibility aliases.
+
 ### Custom Environment Creation
 ```python
+import jax
 import jax.numpy as jnp
-from puxle import Puzzle, state_dataclass, FieldDescriptor
+from puxle import Puzzle
+from xtructure import FieldDescriptor, xtructure_dataclass
 
 
 class CustomPuzzle(Puzzle):
     action_size = 4  # Number of possible actions
 
     def define_state_class(self):
-        @state_dataclass
+        @xtructure_dataclass
         class State:
-            position: FieldDescriptor.scalar(dtype=jnp.int32, shape=(2,))  # Current position
+            position: FieldDescriptor.tensor(dtype=jnp.int32, shape=(2,))  # Current position
 
         return State
 
     def get_solve_config(self, key=None, data=None):
-        # Define target configuration
-        return self.SolveConfig(TargetState=self.State(position=jnp.array([0, 0])))
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(),
+            GoalSpec=self.State(position=jnp.array([0, 0])),
+        )
 
     def get_initial_state(self, solve_config, key=None, data=None):
         # Define initial state
@@ -234,10 +262,6 @@ class CustomPuzzle(Puzzle):
         costs = jnp.ones(4)
 
         return next_states, costs
-
-    def is_solved(self, solve_config, state):
-        # Check if current state matches target
-        return jnp.array_equal(state.position, solve_config.TargetState.position)
 
     def get_string_parser(self):
         # Required: Return function to convert state to string
@@ -267,12 +291,11 @@ class CustomPuzzle(Puzzle):
 
 - **`Puzzle`**: Base class for all puzzles and planning environments
 - **`PDDL`**: PDDL planning domain wrapper with STRIPS subset support
-- **`PuzzleState`**: Base class for puzzle states
-- **`SolveConfig`**: Configuration class for puzzle objectives
+- **`SolveConfig`**: Fixed `InstanceContext` and `GoalSpec` composition
 
 ### Key Methods
 
-- **`get_inits(key)`**: Get initial state and solve configuration
+- **`get_inits(key)`**: Get `(solve_config, initial_state)`
 - **`get_neighbours(solve_config, state)`**: Get valid next states and costs
 - **`is_solved(solve_config, state)`**: Check if puzzle/planning goal is satisfied
 - **`batched_*`**: Batch versions of core methods for parallel processing

@@ -12,9 +12,9 @@ import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 
 if TYPE_CHECKING:
     # Type-only import — never executed at runtime.
@@ -293,13 +293,13 @@ class CayleyPuzzle(Puzzle):
             "PermutationGroups, MatrixGroups, or Puzzles."
         )
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         str_parser = self.get_string_parser()
         state_length = int(self._state_length)
 
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
 
-            @state_dataclass
+            @xtructure_dataclass
             class State:
                 permutation: FieldDescriptor.tensor(
                     dtype=jnp.int32, shape=(state_length,)
@@ -310,7 +310,7 @@ class CayleyPuzzle(Puzzle):
 
             return State
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             vector: FieldDescriptor.tensor(dtype=jnp.int32, shape=(state_length,))
 
@@ -324,7 +324,7 @@ class CayleyPuzzle(Puzzle):
             target = self.State(permutation=self._central_state_jax)
         else:
             target = self.State(vector=self._central_state_jax)
-        return self.SolveConfig(TargetState=target)
+        return self.SolveConfig(InstanceContext=self.InstanceContext(), GoalSpec=target)
 
     def get_initial_state(
         self,
@@ -333,7 +333,7 @@ class CayleyPuzzle(Puzzle):
         data=None,
     ) -> "CayleyPuzzle.State":
         return self._get_shuffled_state(
-            solve_config, solve_config.TargetState, key, self._num_shuffle
+            solve_config, solve_config.GoalSpec, key, self._num_shuffle
         )
 
     def _apply(
@@ -344,11 +344,6 @@ class CayleyPuzzle(Puzzle):
     ) -> tuple["CayleyPuzzle.State", chex.Array]:
         """Pure transition: every generator is valid and costs ``1.0``."""
         return self._step_kernel(state, action)
-
-    def is_solved(
-        self, solve_config: Puzzle.SolveConfig, state: "CayleyPuzzle.State"
-    ) -> bool:
-        return state == solve_config.TargetState
 
     @property
     def inverse_action_map(self) -> Optional[jnp.ndarray]:

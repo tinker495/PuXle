@@ -71,15 +71,13 @@ def test_hindsight_transform_immutability(puzzle_instance, puzzle_init):
     """
     Verifies that hindsight_transform does not mutate the input solve_config in-place.
     """
-    if not (puzzle_instance.has_target and puzzle_instance.only_target):
-        pytest.skip(
-            "Puzzle does not support hindsight_transform (requires has_target and only_target)"
-        )
+    if not puzzle_instance.has_target:
+        pytest.skip("Puzzle does not support hindsight_transform")
 
     solve_config, state = puzzle_init
 
     # Snapshot original target state leaves
-    original_target_leaves = jax.tree_util.tree_leaves(solve_config.TargetState)
+    original_target_leaves = jax.tree_util.tree_leaves(solve_config.GoalSpec)
     # Deep copy needed for array comparison later
     original_target_leaves_copy = [
         jnp.array(x) if hasattr(x, "copy") else x for x in original_target_leaves
@@ -103,16 +101,16 @@ def test_hindsight_transform_immutability(puzzle_instance, puzzle_init):
     )
 
     # Check 2: Content mutation of original
-    current_target_leaves = jax.tree_util.tree_leaves(solve_config.TargetState)
+    current_target_leaves = jax.tree_util.tree_leaves(solve_config.GoalSpec)
 
     for old, new in zip(original_target_leaves_copy, current_target_leaves):
         # Using exact equality for arrays
         if hasattr(old, "shape") and hasattr(new, "shape"):
             assert jnp.array_equal(old, new), (
-                "Original solve_config.TargetState was mutated in place!"
+                "Original solve_config.GoalSpec was mutated in place!"
             )
         else:
-            assert old == new, "Original solve_config.TargetState was mutated in place!"
+            assert old == new, "Original solve_config.GoalSpec was mutated in place!"
 
 
 def test_get_actions_immutability(puzzle_instance, puzzle_init):

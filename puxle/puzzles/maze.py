@@ -5,9 +5,9 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint16
@@ -22,8 +22,8 @@ class Maze(Puzzle):
     available; illegal moves (into walls or out of bounds) incur infinite
     cost.
 
-    The maze layout is stored inside the ``SolveConfig`` so that both
-    the target position and wall configuration travel together.
+    The maze layout is stored in ``SolveConfig.InstanceContext`` and the
+    target position in ``SolveConfig.GoalSpec``.
 
     This puzzle is **reversible**: each direction has a clear inverse
     (left ↔ right, up ↔ down).
@@ -35,23 +35,19 @@ class Maze(Puzzle):
 
     size: int
 
-    def define_solve_config_class(self) -> PuzzleState:
+    def define_instance_context_class(self) -> type[Xtructurable]:
         size = self.size
 
-        @state_dataclass
-        class SolveConfig:
-            TargetState: FieldDescriptor.scalar(dtype=self.State)
+        @xtructure_dataclass
+        class InstanceContext:
             Maze: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1)
 
-            def __str__(self, **kwargs):
-                return self.TargetState.str(solve_config=self, **kwargs)
+        return InstanceContext
 
-        return SolveConfig
-
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         str_parser = self.get_string_parser()
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             pos: FieldDescriptor.tensor(dtype=TYPE, shape=(2,))
 
@@ -67,7 +63,7 @@ class Maze(Puzzle):
 
     def get_solve_config_string_parser(self) -> Callable:
         def parser(solve_config: "Maze.SolveConfig", **kwargs):
-            return solve_config.TargetState.str(solve_config=solve_config)
+            return solve_config.GoalSpec.str(solve_config=solve_config)
 
         return parser
 
@@ -97,14 +93,14 @@ class Maze(Puzzle):
                 return f"Maze State: Player at position {state.pos}"
 
             # 1. Unpack the maze to boolean (True=wall, False=path)
-            bool_maze_flat = solve_config.Maze_unpacked
+            bool_maze_flat = solve_config.InstanceContext.Maze_unpacked
 
             # 2. Create an integer representation (0=path, 1=wall)
             # Ensure correct shape for intermediate calculations
             int_maze_flat = jnp.where(bool_maze_flat, 1, 0).astype(jnp.int8)
 
             # 3. Get target and player positions and calculate flat indices
-            target_pos = solve_config.TargetState.pos
+            target_pos = solve_config.GoalSpec.pos
             player_pos = state.pos
 
             if self.size > 30:
@@ -142,7 +138,9 @@ class Maze(Puzzle):
         self, solve_config: "Maze.SolveConfig", key=jax.random.PRNGKey(0), data=None
     ) -> "Maze.State":
         # Start state should also be chosen from valid path locations
-        bool_maze = solve_config.Maze_unpacked.reshape((self.size, self.size))
+        bool_maze = solve_config.InstanceContext.Maze_unpacked.reshape(
+            (self.size, self.size)
+        )
         return self._get_random_state(bool_maze, key)
 
     def get_solve_config(
@@ -158,7 +156,10 @@ class Maze(Puzzle):
         # Get target state on a valid path cell
         target_state = self._get_random_state(bool_maze, target_key)
 
-        return self.SolveConfig.from_unpacked(TargetState=target_state, Maze=bool_maze)
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext.from_unpacked(Maze=bool_maze),
+            GoalSpec=target_state,
+        )
 
     def _generate_maze_dfs(self, key, size):
         """Generates a maze using Randomized Depth-First Search."""
@@ -286,7 +287,9 @@ class Maze(Puzzle):
         """Pure transition: stepping out of bounds or into a wall costs infinity."""
         # Define possible moves: up, down, left, right
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
-        bool_maze = solve_config.Maze_unpacked.reshape((self.size, self.size))
+        bool_maze = solve_config.InstanceContext.Maze_unpacked.reshape(
+            (self.size, self.size)
+        )
 
         move_vec = moves[action]
         new_pos = (state.pos + move_vec).astype(TYPE)
@@ -306,8 +309,9 @@ class Maze(Puzzle):
 
         return new_state, cost
 
-    def is_solved(self, solve_config: "Maze.SolveConfig", state: "Maze.State") -> bool:
-        return state == solve_config.TargetState
+    @property
+    def fixed_target(self) -> bool:
+        return False
 
     def action_to_string(self, action: int) -> str:
         return self._directional_action_to_string(action)
@@ -373,7 +377,9 @@ class Maze(Puzzle):
             assert solve_config is not None, "This puzzle requires a solve_config"
             imgsize = IMG_SIZE[0]
 
-            maze_bool_np = np.array(solve_config.Maze_unpacked.reshape((size, size)))
+            maze_bool_np = np.array(
+                solve_config.InstanceContext.Maze_unpacked.reshape((size, size))
+            )
             walls_mono = (~maze_bool_np).astype(np.uint8) * 255
             img = cv2.cvtColor(
                 cv2.resize(walls_mono, IMG_SIZE, interpolation=cv2.INTER_NEAREST),
@@ -400,14 +406,14 @@ class Maze(Puzzle):
                 )
 
             pos_player = state.pos
-            pos_target = solve_config.TargetState.pos
+            pos_target = solve_config.GoalSpec.pos
             player_center = (
                 int((pos_player[1] + 0.5) * cell_size),
                 int((pos_player[0] + 0.5) * cell_size),
             )
             player_radius = max(1, int(cell_size / 3))
 
-            if (state.pos == solve_config.TargetState.pos).all():
+            if (state.pos == solve_config.GoalSpec.pos).all():
                 img = cv2.circle(img, player_center, player_radius, on_target_color, -1)
             else:
                 img = cv2.circle(img, player_center, player_radius, target_color, -1)
@@ -427,6 +433,6 @@ class Maze(Puzzle):
 
     def get_solve_config_img_parser(self) -> Callable:
         def parser(solve_config: "Maze.SolveConfig"):
-            return self.get_img_parser()(solve_config.TargetState, solve_config)
+            return self.get_img_parser()(solve_config.GoalSpec, solve_config)
 
         return parser

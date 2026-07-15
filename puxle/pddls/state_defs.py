@@ -1,21 +1,19 @@
-"""Dynamic state and solve-config class builders for PDDL environments.
+"""Dynamic state, context, and goal class builders for PDDL environments.
 
 Constructs xtructure-backed ``State`` (packed boolean atom vector) and
-``SolveConfig`` (goal mask) dataclasses tailored to a specific grounded
-PDDL problem.
+``InstanceContext`` / ``GoalSpec`` dataclasses tailored to a grounded problem.
 """
 
 from typing import Callable
 
 import jax.numpy as jnp
-
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 
 def build_state_class(
     env, num_atoms: int, init_state: jnp.ndarray, string_parser: Callable
-) -> PuzzleState:
-    @state_dataclass
+) -> type[Xtructurable]:
+    @xtructure_dataclass
     class State:
         atoms: FieldDescriptor.packed_tensor(shape=(num_atoms,), packed_bits=1)
 
@@ -29,14 +27,28 @@ def build_state_class(
     return State
 
 
-def build_solve_config_class(
-    env, goal_mask: jnp.ndarray, string_parser: Callable
-) -> PuzzleState:
-    @state_dataclass
-    class SolveConfig:
+def build_instance_context_class(env) -> type[Xtructurable]:
+    @xtructure_dataclass
+    class InstanceContext:
+        pre_mask: FieldDescriptor.tensor(
+            dtype=jnp.bool_, shape=(env.num_actions, env.num_atoms)
+        )
+        pre_neg_mask: FieldDescriptor.tensor(
+            dtype=jnp.bool_, shape=(env.num_actions, env.num_atoms)
+        )
+        add_mask: FieldDescriptor.tensor(
+            dtype=jnp.bool_, shape=(env.num_actions, env.num_atoms)
+        )
+        del_mask: FieldDescriptor.tensor(
+            dtype=jnp.bool_, shape=(env.num_actions, env.num_atoms)
+        )
+
+    return InstanceContext
+
+
+def build_goal_spec_class(env) -> type[Xtructurable]:
+    @xtructure_dataclass
+    class GoalSpec:
         GoalMask: FieldDescriptor.tensor(dtype=jnp.bool_, shape=(env.num_atoms,))
 
-        def __str__(self, **kwargs):
-            return string_parser(self, **kwargs)
-
-    return SolveConfig
+    return GoalSpec

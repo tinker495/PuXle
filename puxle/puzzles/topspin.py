@@ -5,9 +5,9 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import IMG_SIZE
 
 TYPE = jnp.uint8
@@ -38,11 +38,11 @@ class TopSpin(Puzzle):
     n_discs: int
     turnstile_size: int
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for TopSpin using xtructure."""
         str_parser = self.get_string_parser()
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             permutation: FieldDescriptor.tensor(dtype=TYPE, shape=(self.n_discs,))
 
@@ -79,13 +79,15 @@ class TopSpin(Puzzle):
         target_state = self.State(
             permutation=jnp.arange(1, self.n_discs + 1, dtype=TYPE)
         )
-        return self.SolveConfig(TargetState=target_state)
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(), GoalSpec=target_state
+        )
 
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "TopSpin.State":
         # Start from solved state and apply random moves
-        return self._get_shuffled_state(solve_config, solve_config.TargetState, key, 18)
+        return self._get_shuffled_state(solve_config, solve_config.GoalSpec, key, 18)
 
     def _apply(
         self,
@@ -111,11 +113,6 @@ class TopSpin(Puzzle):
             )
 
         return get_next_state(action), 1.0
-
-    def is_solved(
-        self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State"
-    ) -> bool:
-        return state == solve_config.TargetState
 
     def action_to_string(self, action: int) -> str:
         match action:

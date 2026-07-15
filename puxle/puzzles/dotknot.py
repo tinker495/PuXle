@@ -5,9 +5,9 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
+from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
-from puxle.core.puzzle_state import FieldDescriptor, PuzzleState, state_dataclass
 from puxle.utils.util import IMG_SIZE, coloring_str
 
 TYPE = jnp.uint8
@@ -45,18 +45,18 @@ class DotKnot(Puzzle):
 
     size: int
 
-    def define_solve_config_class(self) -> PuzzleState:
-        @state_dataclass
-        class SolveConfig:
+    def define_goal_spec_class(self) -> type[Xtructurable]:
+        @xtructure_dataclass
+        class GoalSpec:
             pass
 
-        return SolveConfig
+        return GoalSpec
 
-    def define_state_class(self) -> PuzzleState:
+    def define_state_class(self) -> type[Xtructurable]:
         str_parser = self.get_string_parser()
         size = self.size
 
-        @state_dataclass
+        @xtructure_dataclass
         class State:
             board: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=4)
 
@@ -110,7 +110,9 @@ class DotKnot(Puzzle):
     def get_solve_config(
         self, key=jax.random.PRNGKey(128), data=None
     ) -> "DotKnot.SolveConfig":
-        return self.SolveConfig()
+        return self.SolveConfig(
+            InstanceContext=self.InstanceContext(), GoalSpec=self.GoalSpec()
+        )
 
     def _apply(
         self,
