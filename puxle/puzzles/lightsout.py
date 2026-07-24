@@ -2,6 +2,7 @@ from collections.abc import Callable
 
 import chex
 import cv2
+import jax
 import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
@@ -72,7 +73,8 @@ class LightsOut(Puzzle):
             return "□" if x == 0 else "■"
 
         def parser(state: "LightsOut.State", **kwargs):
-            return form.format(*map(to_char, state.board_unpacked))
+            # Host copy first; per-cell reads off a device array sync per character.
+            return form.format(*map(to_char, jax.device_get(state).board_unpacked))
 
         return parser
 

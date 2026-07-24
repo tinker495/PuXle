@@ -85,7 +85,8 @@ class TowerOfHanoi(Puzzle):
             result = []
 
             # Get the pegs array - has shape (num_pegs, num_disks + 1)
-            pegs = state.pegs
+            # Host copy first; reading a device array per disk syncs each time.
+            pegs = jax.device_get(state).pegs
 
             # Find the maximum height
             max_height = self.num_disks

@@ -61,7 +61,8 @@ class SlidePuzzle(Puzzle):
             return str(x)
 
         def parser(state: "SlidePuzzle.State", **kwargs):
-            return form.format(*map(to_char, state.board_unpacked))
+            # Host copy first; per-cell reads off a device array sync per character.
+            return form.format(*map(to_char, jax.device_get(state).board_unpacked))
 
         return parser
 

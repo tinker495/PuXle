@@ -330,8 +330,9 @@ class RubiksCube(Puzzle):
 
     def get_string_parser(self) -> Callable:
         def parser(state: "RubiksCube.State", *, use_color_overlay: bool = False, **_):
-            # Unpack the state faces before printing
-            unpacked_faces = state.faces_unpacked
+            # Unpack the state faces before printing. Host copy first: the tile
+            # loop below reads one element at a time, which syncs per tile.
+            unpacked_faces = jax.device_get(state).faces_unpacked
             as_color = self.color_embedding or use_color_overlay
 
             # Helper function to get face string

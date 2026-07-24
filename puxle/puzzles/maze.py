@@ -92,12 +92,16 @@ class Maze(Puzzle):
                 # Fallback representation when no solve_config is provided
                 return f"Maze State: Player at position {state.pos}"
 
+            # Render on the host: `device_get` once, then plain numpy. Reading a
+            # device array cell-by-cell costs a synchronisation per character.
+            state = jax.device_get(state)
+            solve_config = jax.device_get(solve_config)
+
             # 1. Unpack the maze to boolean (True=wall, False=path)
             bool_maze_flat = solve_config.InstanceContext.Maze_unpacked
 
             # 2. Create an integer representation (0=path, 1=wall)
-            # Ensure correct shape for intermediate calculations
-            int_maze_flat = jnp.where(bool_maze_flat, 1, 0).astype(jnp.int8)
+            int_maze_flat = np.where(bool_maze_flat, 1, 0).astype(np.int8)
 
             # 3. Get target and player positions and calculate flat indices
             target_pos = solve_config.GoalSpec.pos
@@ -106,30 +110,17 @@ class Maze(Puzzle):
             if self.size > 30:
                 return f"Is too big to visualize - player at {player_pos} and target at {target_pos}"
 
-            target_idx = target_pos[0] * self.size + target_pos[1]
-            player_idx = player_pos[0] * self.size + player_pos[1]
+            target_idx = int(target_pos[0]) * self.size + int(target_pos[1])
+            player_idx = int(player_pos[0]) * self.size + int(player_pos[1])
 
-            # 4. Place target marker (3) onto the integer maze
-            # Important: only place target if it's not a wall (should always be true with DFS gen)
-            int_maze_flat = jnp.where(
-                bool_maze_flat[target_idx],
-                int_maze_flat,
-                int_maze_flat.at[target_idx].set(3),
-            )
+            # 4. Place target (3) and player (4 if on target, else 2) markers.
+            # Walls keep their marker; DFS generation never places either on a wall.
+            if not bool_maze_flat[target_idx]:
+                int_maze_flat[target_idx] = 3
+            if not bool_maze_flat[player_idx]:
+                int_maze_flat[player_idx] = 4 if target_idx == player_idx else 2
 
-            # 5. Check if player is on target
-            is_on_target = target_idx == player_idx
-
-            # 6. Place player marker (4 if on target, 2 otherwise)
-            # Important: only place player if it's not a wall (should always be true)
-            player_marker = jnp.where(is_on_target, 4, 2)
-            int_maze_flat = jnp.where(
-                bool_maze_flat[player_idx],
-                int_maze_flat,
-                int_maze_flat.at[player_idx].set(player_marker),
-            )
-
-            # 7. Format the string using the final integer maze
+            # 5. Format the string using the final integer maze
             return form.format(*map(to_char, int_maze_flat))
 
         return parser

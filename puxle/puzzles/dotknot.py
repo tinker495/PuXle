@@ -94,7 +94,8 @@ class DotKnot(Puzzle):
                 return "?"  # for debug and target
 
         def parser(state, **kwargs):
-            unpacked = state.board_unpacked
+            # Host copy first; per-cell reads off a device array sync per character.
+            unpacked = jax.device_get(state).board_unpacked
             return form.format(*map(to_char, unpacked))
 
         return parser

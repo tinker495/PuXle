@@ -6,6 +6,7 @@ from importlib.resources import files
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 
 from puxle.core.puzzle_base import Puzzle
@@ -199,42 +200,25 @@ class Sokoban(Puzzle):
         def parser(
             state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs
         ):
-            # Unpack the board before visualization.
-            board = state.board_unpacked
+            # Unpack the board before visualization. The overlay below walks every
+            # cell in Python, so it has to run on a host copy — indexing a device
+            # array per cell costs a synchronisation each time.
+            board = np.array(jax.device_get(state).board_unpacked)
             if solve_config is not None:
-                goal = solve_config.GoalSpec.board_unpacked
-                for i in range(self.size):
-                    for j in range(self.size):
-                        if goal[i * self.size + j] == Sokoban.Object.BOX.value:
-                            match board[i * self.size + j]:
-                                case Sokoban.Object.PLAYER.value:
-                                    board = board.at[i * self.size + j].set(
-                                        Sokoban.Object.PLAYER_ON_TARGET.value
-                                    )
-                                case Sokoban.Object.BOX.value:
-                                    board = board.at[i * self.size + j].set(
-                                        Sokoban.Object.BOX_ON_TARGET.value
-                                    )
-                                case Sokoban.Object.EMPTY.value:
-                                    board = board.at[i * self.size + j].set(
-                                        Sokoban.Object.TARGET.value
-                                    )
-                        if goal[i * self.size + j] == Sokoban.Object.PLAYER.value:
-                            match board[i * self.size + j]:
-                                case Sokoban.Object.PLAYER.value:
-                                    board = board.at[i * self.size + j].set(
-                                        Sokoban.Object.PLAYER.value
-                                    )
-                                case Sokoban.Object.BOX.value:
-                                    board = board.at[i * self.size + j].set(
-                                        Sokoban.Object.BOX.value
-                                    )
-                                case Sokoban.Object.EMPTY.value:
-                                    board = board.at[i * self.size + j].set(
-                                        Sokoban.Object.TARGET_PLAYER.value
-                                    )
-                                case _:
-                                    pass
+                goal = jax.device_get(solve_config).GoalSpec.board_unpacked
+                for idx in range(self.size * self.size):
+                    if goal[idx] == Sokoban.Object.BOX.value:
+                        match board[idx]:
+                            case Sokoban.Object.PLAYER.value:
+                                board[idx] = Sokoban.Object.PLAYER_ON_TARGET.value
+                            case Sokoban.Object.BOX.value:
+                                board[idx] = Sokoban.Object.BOX_ON_TARGET.value
+                            case Sokoban.Object.EMPTY.value:
+                                board[idx] = Sokoban.Object.TARGET.value
+                    if goal[idx] == Sokoban.Object.PLAYER.value:
+                        match board[idx]:
+                            case Sokoban.Object.EMPTY.value:
+                                board[idx] = Sokoban.Object.TARGET_PLAYER.value
 
             return form.format(*map(to_char, board))
 

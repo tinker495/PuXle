@@ -88,8 +88,11 @@ class TSP(Puzzle):
             return true_char if x else false_char
 
         def parser(state: "TSP.State", **kwargs):
+            # Host copy first; per-cell reads off a device array sync per character.
+            state = jax.device_get(state)
             mask = state.mask_unpacked
-            point_mask = jnp.zeros_like(mask).at[state.point].set(True)
+            point_mask = np.zeros_like(mask)
+            point_mask[state.point] = True
             maps = [to_char(x, true_char="↓", false_char=" ") for x in point_mask]
             maps += [to_char(x, true_char="■", false_char="☐") for x in mask]
             return form.format(*maps)

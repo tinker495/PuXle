@@ -63,12 +63,14 @@ class TopSpin(Puzzle):
 
     def get_string_parser(self) -> Callable:
         def parser(state: "TopSpin.State", **kwargs):
+            # Host copy first; formatting a device array element-wise syncs per item.
+            permutation = jax.device_get(state).permutation
             # Highlight the turnstile
             turnstile_str = " ".join(
-                map(lambda x: f"{x:2d}", state.permutation[: self.turnstile_size])
+                map(lambda x: f"{x:2d}", permutation[: self.turnstile_size])
             )
             rest_str = " ".join(
-                map(lambda x: f"{x:2d}", state.permutation[self.turnstile_size :])
+                map(lambda x: f"{x:2d}", permutation[self.turnstile_size :])
             )
             return f"[{turnstile_str}] {rest_str}"
 

@@ -67,7 +67,8 @@ class PancakeSorting(Puzzle):
 
         def parser(state: "PancakeSorting.State", **kwargs):
             result = []
-            for i, pancake in enumerate(state.stack):
+            # Host copy first; formatting a device array element-wise syncs per item.
+            for i, pancake in enumerate(jax.device_get(state).stack):
                 size_str = "=" * (2 * (int(pancake) - 1) + 1)
                 result.append(
                     f"{i + 1:02d}:{pancake:02d} - "
