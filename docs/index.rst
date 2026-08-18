@@ -17,6 +17,7 @@ A high-performance library for parallelized planning and puzzle environments bui
 
    tutorials/xtructure_bitpacking
    tutorials/cayley_bridge
+   cli
 
 
 Indices and tables

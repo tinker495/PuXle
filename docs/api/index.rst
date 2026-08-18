@@ -11,3 +11,4 @@ Complete reference for all PuXle modules and classes.
    pddls
    benchmark
    utils
+   world_model

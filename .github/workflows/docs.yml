@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ".[docs]"
+          python -m pip install ".[docs,world-model]"
 
       - name: Build Sphinx documentation
         run: |

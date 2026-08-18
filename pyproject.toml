@@ -38,8 +38,15 @@ Documentation = "https://tinker495.github.io/PuXle/"
 Repository = "https://github.com/tinker495/PuXle"
 Issues = "https://github.com/tinker495/PuXle/issues"
 
+[project.scripts]
+puxle = "puxle.cli:main"
+
 [project.optional-dependencies]
 dev = [
+    "aqtp>=0.9.0",
+    "flax>=0.10.0",
+    "huggingface-hub>=0.20.0",
+    "optax>=0.2.0",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pre-commit>=3.0.0",
@@ -59,6 +66,12 @@ cuda = [
 ]
 cayley = [
     "cayleypy==0.1.0",
+]
+world-model = [
+    "aqtp>=0.9.0",
+    "flax>=0.10.0",
+    "huggingface-hub>=0.20.0",
+    "optax>=0.2.0",
 ]
 
 [tool.setuptools]

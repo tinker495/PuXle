@@ -36,6 +36,11 @@ __all__ = [
     "LightsOutDeepCubeABenchmark",
     "RubiksCubeDeepCubeABenchmark",
     "SlidePuzzleDeepCubeABenchmark",
+    "RubiksCubeWorldModel",
+    "RubiksCubeWorldModelOptimized",
+    "SokobanWorldModel",
+    "SokobanWorldModelOptimized",
+    "WorldModelPuzzleBase",
 ]
 
 _EXPORTS: dict[str, tuple[str, str]] = {
@@ -77,6 +82,11 @@ _EXPORTS: dict[str, tuple[str, str]] = {
         ".benchmark.slidepuzzle_deepcubea",
         "SlidePuzzleDeepCubeABenchmark",
     ),
+    "RubiksCubeWorldModel": (".world_model", "RubiksCubeWorldModel"),
+    "RubiksCubeWorldModelOptimized": (".world_model", "RubiksCubeWorldModelOptimized"),
+    "SokobanWorldModel": (".world_model", "SokobanWorldModel"),
+    "SokobanWorldModelOptimized": (".world_model", "SokobanWorldModelOptimized"),
+    "WorldModelPuzzleBase": (".world_model", "WorldModelPuzzleBase"),
 }
 
 

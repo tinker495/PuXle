@@ -42,15 +42,26 @@ Optional extras (pyproject-managed):
 
 ```bash
 pip install "puxle[dev]"
-pip install "puxle[docs]"
+pip install "puxle[docs,world-model]"
 pip install "puxle[visualization]"
 pip install "puxle[cuda]"
 pip install "puxle[cayley]"   # adds cayleypy as a dependency for the Cayley/Schreier bridge
+pip install "puxle[world-model]"
 
 # Combine extras
-pip install "puxle[dev,docs,visualization,cuda,cayley]"
+pip install "puxle[dev,docs,visualization,cuda,cayley,world-model]"
 # GitHub + extras
-pip install "puxle[dev,docs,visualization,cuda,cayley] @ git+https://github.com/tinker495/PuXle.git"
+pip install "puxle[dev,docs,visualization,cuda,cayley,world-model] @ git+https://github.com/tinker495/PuXle.git"
+```
+
+Puzzle utilities are available through the package CLI:
+
+```bash
+puxle human-play --puzzle SlidePuzzle --puzzle-args '{"size": 4}'
+puxle world-model-train --help
+
+# From a source checkout
+python main.py --help
 ```
 
 ## 🎯 Quick Start
