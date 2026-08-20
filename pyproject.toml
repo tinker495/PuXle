@@ -27,7 +27,7 @@ dependencies = [
     "jax>=0.4.0",
     "chex>=0.1.0",
     "numpy>=2.2.0",
-    "opencv-python>=4.10.0",
+    "opencv-python-headless>=4.10.0",
     "pddl>=0.4.3",
     "xtructure @ git+https://github.com/tinker495/xtructure.git",
 ]
