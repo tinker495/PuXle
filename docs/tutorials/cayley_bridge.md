@@ -71,7 +71,7 @@ Use `CayleyPuzzle.from_cayleypy_factory(...)` directly for any other cayleypy gr
 The bridge's primary motivation is enabling JAxtar to search cayleypy graphs. JAxtar ships pre-registered entries for five graphs (`cayley-pancake-7`, `cayley-pancake-8`, `cayley-lrx-8`, `cayley-top-spin-8-k4`, `cayley-coxeter-8`) — invoke them via the JAxtar CLI:
 
 ```bash
-python main.py astar -p cayley-pancake-7
+uv run --project ../JAxtar astar -p cayley-pancake-7
 ```
 
 Empirically (autoresearch sweep, py312 CPU, `EmptyHeuristic`):
