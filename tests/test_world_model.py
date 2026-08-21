@@ -23,6 +23,12 @@ def test_world_model_public_api_exposes_existing_model_classes():
     assert TopLevelRubiksCubeWorldModel is RubiksCubeWorldModel
 
 
+def test_world_model_target_is_not_fixed():
+    from puxle.world_model import WorldModelPuzzleBase
+
+    assert object.__new__(WorldModelPuzzleBase).fixed_target is False
+
+
 def test_trained_world_model_registry_owns_model_checkpoint_pairs():
     from puxle.world_model import (
         SokobanWorldModel,

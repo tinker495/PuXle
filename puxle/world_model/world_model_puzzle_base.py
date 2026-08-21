@@ -146,6 +146,10 @@ class WorldModelPuzzleBase(Puzzle):
     str_parse_img_size: int = 16
     str_parse_img: bool = True
 
+    @property
+    def fixed_target(self) -> bool:
+        return False
+
     def define_state_class(self) -> type[Xtructurable]:
         str_parser = self.get_string_parser()
         latent_shape = self.latent_shape
