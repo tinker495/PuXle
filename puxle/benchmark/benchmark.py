@@ -15,6 +15,8 @@ from typing import (
     TypeVar,
 )
 
+import jax
+import jax.numpy as jnp
 from xtructure import Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
@@ -66,6 +68,7 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         self._puzzle: Puzzle | None = None
         self._dataset: Any = None
         self._notation_to_action: dict[str, int] | None = None
+        self._jitted_step = None
         self._solve_config_cache: SolveConfigT | None = None
 
     @property
@@ -212,7 +215,7 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
             return tuple() if action_sequence is not None else None
 
         action_lookup = self._build_action_lookup()
-        puzzle = self.puzzle
+        step_fn = self._ensure_cached("_jitted_step", self._build_jitted_step)
         current_state = initial_state
         path: list[StateT] = []
 
@@ -224,11 +227,18 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
                     f"Unknown action notation '{notation}' at step {step}"
                 ) from exc
 
-            neighbours, _ = puzzle.get_neighbours(
-                solve_config, current_state, filled=True
-            )
-            next_state = neighbours[action_idx]
+            next_state, _ = step_fn(solve_config, current_state, jnp.int32(action_idx))
             path.append(next_state)
             current_state = next_state
 
         return tuple(path)
+
+    def _build_jitted_step(self):
+        """One jitted `get_actions` step: eager `get_neighbours` per move dispatched
+        every transition op separately (~1 ms per move on GPU)."""
+        puzzle = self.puzzle
+
+        def step(solve_config, state, action):
+            return puzzle.get_actions(solve_config, state, action, True)
+
+        return jax.jit(step)
