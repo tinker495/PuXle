@@ -270,7 +270,8 @@ class CayleyPuzzle(Puzzle):
         except ImportError as exc:
             raise ImportError(
                 "cayleypy is required for CayleyPuzzle. Install the "
-                "[cayley] extra: pip install puxle[cayley]"
+                '[cayley] extra: uv add "puxle[cayley] @ '
+                'git+https://github.com/tinker495/PuXle.git"'
             ) from exc
 
         from cayleypy import MatrixGroups, PermutationGroups, Puzzles
@@ -409,7 +410,8 @@ class CayleyPuzzle(Puzzle):
             except ImportError as ie:
                 raise ImportError(
                     "cayleypy is required for CayleyPuzzle. Install the "
-                    "[cayley] extra: pip install puxle[cayley]"
+                    '[cayley] extra: uv add "puxle[cayley] @ '
+                    'git+https://github.com/tinker495/PuXle.git"'
                 ) from ie
             raise TypeError(
                 "graph_def must be a cayleypy.CayleyGraphDef; got "

@@ -10,7 +10,7 @@ The bridge has two layers:
 ## Installation
 
 ```bash
-pip install "puxle[cayley]"
+uv add "puxle[cayley] @ git+https://github.com/tinker495/PuXle.git"
 ```
 
 The PuXle codebase imports cleanly without cayleypy installed; construction raises `ImportError` naming the extra.

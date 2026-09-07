@@ -10,15 +10,17 @@ states, and optionally saves image renders in ``images/visualizations/``.
 
 from __future__ import annotations
 
-import argparse
 import ast
 import inspect
+import sys
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Type
+from typing import Annotated, Dict, Type
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import tyro
 from jax import tree_util
 from PIL import Image
 
@@ -141,41 +143,23 @@ def visualize_puzzle(
             print(f"Saved neighbour {action_label} image -> {neighbour_path}")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Visualize PuXle puzzle states.")
-    parser.add_argument(
-        "--puzzle", required=True, help="Puzzle class name to visualize."
-    )
-    parser.add_argument(
-        "--seed", type=int, default=42, help="PRNG seed for reproducible sampling."
-    )
-    parser.add_argument(
-        "--img",
-        dest="img",
-        action="store_true",
-        default=False,
-        help="Generate images using puzzle image parsers.",
-    )
-    parser.add_argument(
-        "--no-img",
-        dest="img",
-        action="store_false",
-        help="Disable image generation.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("images/visualizations"),
-        help="Directory where generated images are stored when --img is used.",
-    )
-    parser.add_argument(
-        "--kwarg",
-        dest="puzzle_kwargs",
-        action="append",
-        default=[],
-        help="Additional puzzle constructor keyword argument as key=value.",
-    )
-    args = parser.parse_args()
+@dataclass
+class VisualizeOptions:
+    """Visualize PuXle puzzle states."""
+
+    puzzle: str
+    seed: int = 42
+    img: bool = False
+    output_dir: Path = Path("images/visualizations")
+    puzzle_kwargs: Annotated[
+        list[str],
+        tyro.conf.arg(name="kwarg"),
+        tyro.conf.UseAppendAction,
+    ] = field(default_factory=list)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = tyro.cli(VisualizeOptions, args=argv)
 
     try:
         visualize_puzzle(
@@ -186,7 +170,8 @@ def main() -> None:
             puzzle_kwargs=args.puzzle_kwargs,
         )
     except ValueError as exc:
-        parser.error(str(exc))
+        print(f"visualize_puzzle: error: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
 
 
 if __name__ == "__main__":

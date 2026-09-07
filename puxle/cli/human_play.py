@@ -1,22 +1,9 @@
 from __future__ import annotations
 
-import argparse
-
 import jax
 import numpy as np
 
-from ._puzzles import create_puzzle
-
-
-def configure_parser(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--puzzle", required=True, help="Puzzle class or normalized name."
-    )
-    parser.add_argument(
-        "--puzzle-args", default="{}", help="Puzzle constructor JSON object."
-    )
-    parser.add_argument("--seed", type=int, default=0)
-    parser.set_defaults(handler=run)
+from ._puzzles import PuzzleName, create_puzzle
 
 
 def _action_aliases(labels: list[str]) -> dict[str, int]:
@@ -29,9 +16,16 @@ def _action_aliases(labels: list[str]) -> dict[str, int]:
     return aliases
 
 
-def run(args: argparse.Namespace) -> int:
-    puzzle = create_puzzle(args.puzzle, args.puzzle_args)
-    solve_config, state = puzzle.get_inits(jax.random.PRNGKey(args.seed))
+def run(puzzle: PuzzleName, puzzle_args: str = "{}", seed: int = 0) -> int:
+    """Play a puzzle interactively.
+
+    Args:
+        puzzle: Puzzle class or normalized name.
+        puzzle_args: Puzzle constructor JSON object.
+        seed: PRNG seed.
+    """
+    puzzle = create_puzzle(puzzle, puzzle_args)
+    solve_config, state = puzzle.get_inits(jax.random.PRNGKey(seed))
     labels = [puzzle.action_to_string(index) for index in range(puzzle.action_size)]
     aliases = _action_aliases(labels)
     total_cost = 0.0

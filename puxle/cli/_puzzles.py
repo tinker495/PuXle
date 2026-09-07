@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import inspect
 import json
-from typing import Any
+from typing import Annotated, Any
+
+import tyro
 
 from puxle.core.puzzle_base import Puzzle
 
@@ -26,6 +28,16 @@ def puzzle_classes() -> dict[str, type[Puzzle]]:
     if "SlidePuzzle" in classes:
         aliases["npuzzle"] = classes["SlidePuzzle"]
     return classes | aliases
+
+
+PuzzleName = Annotated[
+    str,
+    tyro.conf.arg(
+        constructor_factory=lambda: tyro.extras.literal_type_from_choices(
+            puzzle_classes()
+        )
+    ),
+]
 
 
 def create_puzzle(name: str, puzzle_args: str) -> Puzzle:

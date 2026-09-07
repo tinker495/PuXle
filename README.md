@@ -31,37 +31,40 @@ Full API documentation is automatically built and deployed to **[GitHub Pages](h
 
 ## 📦 Installation
 
-Install from PyPI (stable release) or GitHub (latest `main`):
+Add the latest GitHub revision to a uv project:
 
 ```bash
-pip install puxle
-pip install "puxle @ git+https://github.com/tinker495/PuXle.git"
+uv add "puxle @ git+https://github.com/tinker495/PuXle.git"
 ```
 
 Optional extras (pyproject-managed):
 
 ```bash
-pip install "puxle[dev]"
-pip install "puxle[docs,world-model]"
-pip install "puxle[visualization]"
-pip install "puxle[cuda]"
-pip install "puxle[cayley]"   # adds cayleypy as a dependency for the Cayley/Schreier bridge
-pip install "puxle[world-model]"
+uv add "puxle[docs,world-model] @ git+https://github.com/tinker495/PuXle.git"
+uv add "puxle[visualization] @ git+https://github.com/tinker495/PuXle.git"
+uv add "puxle[cuda] @ git+https://github.com/tinker495/PuXle.git"
+uv add "puxle[cayley] @ git+https://github.com/tinker495/PuXle.git"
 
 # Combine extras
-pip install "puxle[dev,docs,visualization,cuda,cayley,world-model]"
-# GitHub + extras
-pip install "puxle[dev,docs,visualization,cuda,cayley,world-model] @ git+https://github.com/tinker495/PuXle.git"
+uv add "puxle[docs,visualization,cuda,cayley,world-model] @ git+https://github.com/tinker495/PuXle.git"
+```
+
+For development from a checkout:
+
+```bash
+git clone https://github.com/tinker495/PuXle.git
+cd PuXle
+uv sync --all-extras
 ```
 
 Puzzle utilities are available through the package CLI:
 
 ```bash
-puxle human-play --puzzle SlidePuzzle --puzzle-args '{"size": 4}'
-puxle world-model-train --help
+uv run puxle human-play --puzzle SlidePuzzle --puzzle-args '{"size": 4}'
+uv run puxle world-model-train --help
 
 # From a source checkout
-python main.py --help
+uv run python main.py --help
 ```
 
 ## 🎯 Quick Start
@@ -381,7 +384,7 @@ graph.
 Install the cayleypy extra to enable the bridge:
 
 ```bash
-pip install "puxle[cayley]"
+uv add "puxle[cayley] @ git+https://github.com/tinker495/PuXle.git"
 ```
 
 The adapter module itself imports cleanly without cayleypy installed; construction raises `ImportError` naming `[cayley]`. See [`docs/tutorials/cayley_bridge.md`](docs/tutorials/cayley_bridge.md) for a longer walk-through of the adapter API, registry subclasses, and empirical JAxtar A\* benchmarks across the cayleypy catalog.

@@ -29,6 +29,7 @@ dependencies = [
     "numpy>=2.2.0",
     "opencv-python-headless>=4.10.0",
     "pddl>=0.4.3",
+    "tyro>=1.0.16,<2",
     "xtructure @ git+https://github.com/tinker495/xtructure.git",
 ]
 

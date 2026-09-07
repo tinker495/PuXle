@@ -1,37 +1,45 @@
 from __future__ import annotations
 
-import argparse
 import json
+import sys
 from collections.abc import Sequence
+
+import tyro
 
 from . import human_play, world_model
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="puxle", description="PuXle puzzle utilities."
-    )
-    commands = parser.add_subparsers(dest="command", required=True)
+def build_app() -> tyro.extras.SubcommandApp:
+    app = tyro.extras.SubcommandApp()
+    app.command(human_play.run, name="human-play")
 
-    human_play.configure_parser(
-        commands.add_parser("human-play", help="Play a puzzle interactively.")
+    world_model_app = tyro.extras.SubcommandApp()
+    world_model_app.command(
+        world_model.make_transition_dataset, name="make-transition-dataset"
     )
-    world_model.configure_parser(
-        commands.add_parser(
-            "world-model-train", help="Generate datasets and train world models."
-        )
+    world_model_app.command(world_model.make_sample_data, name="make-sample-data")
+    world_model_app.command(
+        world_model.make_eval_trajectory, name="make-eval-trajectory"
     )
-    return parser
+    world_model_app.command(world_model.train, name="train")
+    app.command(
+        world_model_app,
+        name="world-model-train",
+        help="Generate datasets and train world models.",
+    )
+    return app
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
     try:
-        return args.handler(args)
+        return build_app().cli(
+            prog="puxle",
+            description="PuXle puzzle utilities.",
+            args=argv,
+        )
     except (json.JSONDecodeError, OSError, ValueError) as exc:
-        parser.error(str(exc))
-    return 2
+        print(f"puxle: error: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
 
 
-__all__ = ["build_parser", "main"]
+__all__ = ["build_app", "main"]
