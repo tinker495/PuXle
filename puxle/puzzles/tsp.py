@@ -1,6 +1,5 @@
 from collections.abc import Callable
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
@@ -42,7 +41,7 @@ class TSP(Puzzle):
         @xtructure_dataclass
         class State:
             mask: FieldDescriptor.packed_tensor(shape=(size,), packed_bits=1)
-            point: FieldDescriptor.scalar(dtype=TYPE)
+            point: FieldDescriptor.scalar(dtype=self._point_dtype)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -56,7 +55,7 @@ class TSP(Puzzle):
             distance_matrix: FieldDescriptor.tensor(
                 dtype=jnp.float32, shape=(self.size, self.size)
             )
-            start: FieldDescriptor.scalar(dtype=TYPE)
+            start: FieldDescriptor.scalar(dtype=self._point_dtype)
 
         return InstanceContext
 
@@ -69,6 +68,7 @@ class TSP(Puzzle):
 
     def __init__(self, size: int = 16, **kwargs):
         self.size = size
+        self._point_dtype = jnp.uint8 if size <= 256 else jnp.uint16
         self.action_size = self.size
         super().__init__(**kwargs)
 
@@ -119,7 +119,7 @@ class TSP(Puzzle):
         ).astype(jnp.float32)
         start = jax.random.randint(
             key_start, shape=(), minval=0, maxval=self.size, dtype=TYPE
-        )
+        ).astype(self._point_dtype)
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(
                 points=points, distance_matrix=distance_matrix, start=start
@@ -131,34 +131,60 @@ class TSP(Puzzle):
         self,
         solve_config: Puzzle.SolveConfig,
         state: Puzzle.State,
-        action: chex.Array,
-    ) -> tuple[Puzzle.State, chex.Array]:
+        action: jax.Array,
+    ) -> tuple[Puzzle.State, jax.Array]:
         """Pure transition: revisiting an already-visited point costs infinity.
 
         The closing leg back to the start is added once every point is visited.
         """
-        mask = state.mask_unpacked
-        point = state.point
-        idx = action
         context = solve_config.InstanceContext
-
-        visited = mask[idx]
-        new_mask = mask.at[idx].set(True)
-        all_visited = jnp.all(new_mask)
-        cost = context.distance_matrix[point, idx]
-        cost = jnp.where(visited, jnp.inf, cost) + jnp.where(
+        bit = jnp.uint8(1) << jnp.uint8(action % 8)
+        visited = (state.mask[action // 8] & bit) != 0
+        new_mask = state.mask | jnp.where(
+            jnp.arange(state.mask.size) == action // 8, bit, jnp.uint8(0)
+        )
+        all_visited = jnp.all(new_mask[:-1] == 255) & (
+            new_mask[-1] == (1 << (self.size % 8 or 8)) - 1
+        )
+        cost = jnp.where(
+            visited, jnp.inf, context.distance_matrix[state.point, action]
+        ) + jnp.where(
             all_visited,
             jnp.linalg.norm(context.points[context.start] - context.points[action]),
             0,
         )
-        new_state = self.State.from_unpacked(mask=new_mask, point=idx.astype(TYPE))
-        return new_state, cost
+        return self.State(mask=new_mask, point=action.astype(state.point.dtype)), cost
 
-    def is_solved(self, solve_config: Puzzle.SolveConfig, state: Puzzle.State) -> bool:
+    def _get_neighbours(
+        self, solve_config: Puzzle.SolveConfig, state: "TSP.State"
+    ) -> tuple["TSP.State", jax.Array]:
+        actions = jnp.arange(self.size)
+        bits = jnp.uint8(1) << (actions % 8).astype(jnp.uint8)
+        visited = (state.mask[actions // 8] & bits) != 0
+        masks = state.mask[None, :] | jnp.where(
+            actions[:, None] // 8 == jnp.arange(state.mask.size)[None, :],
+            bits[:, None],
+            jnp.uint8(0),
+        )
+        context = solve_config.InstanceContext
+        costs = context.distance_matrix[state.point] + jnp.where(
+            jnp.sum(visited) == self.size - 1,
+            jnp.linalg.norm(context.points[context.start] - context.points, axis=1),
+            0.0,
+        )
+        return self.State(
+            mask=masks, point=actions.astype(state.point.dtype)
+        ), jnp.where(visited, jnp.inf, costs)
+
+    def is_solved(
+        self, solve_config: Puzzle.SolveConfig, state: Puzzle.State
+    ) -> jax.Array:
         """
         TSP is solved when all points have been visited.
         """
-        return jnp.all(state.mask_unpacked)
+        return jnp.all(state.mask[:-1] == 255) & (
+            state.mask[-1] == (1 << (self.size % 8 or 8)) - 1
+        )
 
     def action_to_string(self, action: int) -> str:
         """

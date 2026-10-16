@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from math import gcd
 
 import chex
 import cv2
@@ -82,39 +83,106 @@ class SlidePuzzle(Puzzle):
         self,
         solve_config: Puzzle.SolveConfig,
         state: "SlidePuzzle.State",
-        action: chex.Array,
-    ) -> tuple["SlidePuzzle.State", chex.Array]:
-        """Pure transition: sliding the blank off the board costs infinity."""
+        action: jax.Array,
+    ) -> tuple["SlidePuzzle.State", jax.Array]:
+        if self.size == 2:
+            # A one-byte board needs no unpacked array or blank reduction.
+            byte = state.board[0]
+            blank = jnp.where((byte & 192) == 0, 3, 0)
+            blank = jnp.where((byte & 48) == 0, 2, blank)
+            blank = jnp.where((byte & 12) == 0, 1, blank)
+            blank = jnp.where((byte & 3) == 0, 0, blank)
+            target = blank + jnp.array([1, -1, 2, -2])[action]
+            valid = ((blank >> (action // 2)) & 1) == (action & 1)
+            start_shift = (2 * blank).astype(jnp.uint8)
+            target_shift = (2 * target).astype(jnp.uint8)
+            difference = ((byte >> start_shift) ^ (byte >> target_shift)) & jnp.uint8(3)
+            moved = byte ^ (difference << start_shift) ^ (difference << target_shift)
+            return self.State(board=moved[None]), jnp.where(valid, 1.0, jnp.inf)
         board = state.board_unpacked
-        x, y = self._get_blank_position(board)
-        pos = jnp.asarray((x, y))
-
-        # Action mapping: 0: Left, 1: Right, 2: Up, 3: Down
-        moves = jnp.array([[0, 1], [0, -1], [1, 0], [-1, 0]])
-        move_delta = moves[action]
-
-        next_pos = pos + move_delta
-
-        def is_valid(x, y):
-            return jnp.logical_and(
-                x >= 0,
-                jnp.logical_and(x < self.size, jnp.logical_and(y >= 0, y < self.size)),
+        blank = jnp.argmax(board == 0)
+        position = jnp.array([blank // self.size, blank % self.size])
+        position += jnp.array([[0, 1], [0, -1], [1, 0], [-1, 0]])[action]
+        target = position[0] * self.size + position[1]
+        valid = (position >= 0).all() & (position < self.size).all()
+        cost = jnp.where(valid, 1.0, jnp.inf)
+        packed_bits = (self.size * self.size - 1).bit_length()
+        if packed_bits == 8:
+            indices = jnp.arange(self.size * self.size)
+            source = jnp.where(
+                indices == blank, target, jnp.where(indices == target, blank, indices)
             )
+            return state.set_unpacked(board=board[source]), cost
+        # Six-bit blocks favor select/pack over byte-fragment masks.
+        if packed_bits == 6:
+            indices = jnp.arange(self.size * self.size)
+            board = jnp.where(
+                indices == blank,
+                board[target],
+                jnp.where(indices == target, board[blank], board),
+            )
+            return state.set_unpacked(board=board), cost
+        delta = board[blank] ^ board[target]
+        bytes_ = jnp.arange(state.board.size)
+        toggle = jnp.zeros_like(state.board)
+        # A field can start at offsets up to 8 - gcd(packed_bits, 8).
+        for cell in (blank, target):
+            bit = cell * packed_bits
+            shift = (bit % 8).astype(delta.dtype)
+            toggle ^= jnp.where(
+                bytes_ == bit // 8, (delta << shift).astype(jnp.uint8), jnp.uint8(0)
+            )
+            for fragment in range(1, (packed_bits + 15 - gcd(packed_bits, 8)) // 8):
+                toggle ^= jnp.where(
+                    bytes_ == bit // 8 + fragment,
+                    (
+                        delta >> (jnp.asarray(fragment * 8, dtype=delta.dtype) - shift)
+                    ).astype(jnp.uint8),
+                    jnp.uint8(0),
+                )
+        return self.State(board=state.board ^ toggle), cost
 
-        def swap(board, x, y, next_x, next_y):
-            flat_index = x * self.size + y
-            next_flat_index = next_x * self.size + next_y
-            old_board = board
-            board = board.at[next_flat_index].set(board[flat_index])
-            return board.at[flat_index].set(old_board[next_flat_index])
-
-        next_x, next_y = next_pos
-        next_board, cost = jax.lax.cond(
-            is_valid(next_x, next_y),
-            lambda: (swap(board, x, y, next_x, next_y), 1.0),
-            lambda: (board, jnp.inf),
+    def _get_neighbours(
+        self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State"
+    ) -> tuple["SlidePuzzle.State", jax.Array]:
+        board = state.board_unpacked
+        blank = jnp.argmax(board == 0)
+        positions = jnp.array([blank // self.size, blank % self.size]) + jnp.array(
+            [[0, 1], [0, -1], [1, 0], [-1, 0]]
         )
-        return state.set_unpacked(board=next_board), cost
+        targets = positions[:, 0] * self.size + positions[:, 1]
+        valid = (positions >= 0).all(axis=1) & (positions < self.size).all(axis=1)
+        packed_bits = (self.size * self.size - 1).bit_length()
+        if packed_bits == 8:
+            indices = jnp.arange(self.size * self.size)[None, :]
+            boards = jnp.where(
+                indices == blank,
+                board[targets, None],
+                jnp.where(indices == targets[:, None], board[blank], board[None, :]),
+            )
+            states = jax.vmap(lambda values: state.set_unpacked(board=values))(boards)
+            return states, jnp.where(valid, 1.0, jnp.inf)
+        deltas = (board[blank] ^ board[targets])[:, None]
+        bytes_ = jnp.arange(state.board.size)[None, :]
+        toggles = jnp.zeros((self.action_size, state.board.size), dtype=jnp.uint8)
+        for cells in (blank, targets[:, None]):
+            bits = cells * packed_bits
+            shifts = (bits % 8).astype(deltas.dtype)
+            toggles ^= jnp.where(
+                bytes_ == bits // 8, (deltas << shifts).astype(jnp.uint8), jnp.uint8(0)
+            )
+            for fragment in range(1, (packed_bits + 15 - gcd(packed_bits, 8)) // 8):
+                toggles ^= jnp.where(
+                    bytes_ == bits // 8 + fragment,
+                    (
+                        deltas
+                        >> (jnp.asarray(fragment * 8, dtype=deltas.dtype) - shifts)
+                    ).astype(jnp.uint8),
+                    jnp.uint8(0),
+                )
+        return self.State(board=state.board[None, :] ^ toggles), jnp.where(
+            valid, 1.0, jnp.inf
+        )
 
     def action_to_string(self, action: int) -> str:
         return self._directional_action_to_string(action)

@@ -8,7 +8,6 @@ import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Optional
 
-import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -20,8 +19,6 @@ if TYPE_CHECKING:
     # Type-only import — never executed at runtime.
     from cayleypy.cayley_graph_def import CayleyGraphDef
 
-
-_ELT_DTYPE = jnp.int32
 
 _GENERATORS_TYPE_PERMUTATION = "PERMUTATION"
 _GENERATORS_TYPE_MATRIX = "MATRIX"
@@ -232,6 +229,19 @@ class CayleyPuzzle(Puzzle):
         else:  # pragma: no cover - validated in _read_graph_def
             raise ValueError(f"Unsupported generators_type: {self._generators_type!r}")
 
+        lower = int(self._central_state_np.min(initial=0))
+        upper = int(self._central_state_np.max(initial=0))
+        if self._generators_type == _GENERATORS_TYPE_MATRIX:
+            upper = max(upper, self._modulo - 1)
+        self._state_dtype = jnp.int32
+        if lower >= 0:
+            if upper <= 255:
+                self._state_dtype = jnp.uint8
+            elif (
+                upper <= 65535 and self._generators_type == _GENERATORS_TYPE_PERMUTATION
+            ):
+                self._state_dtype = jnp.uint16
+
         # 3. Bind the per-action kernel once at construction (no
         #    traced-time switching on generator type).
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
@@ -244,7 +254,9 @@ class CayleyPuzzle(Puzzle):
         self._ensure_inverse_closed = bool(ensure_inverse_closed)
 
         # 5. Pre-resolve the central state for fast SolveConfig builds.
-        self._central_state_jax = jnp.asarray(self._central_state_np, dtype=jnp.int32)
+        self._central_state_jax = jnp.asarray(
+            self._central_state_np, dtype=self._state_dtype
+        )
 
         # 6. Let the base class build State/SolveConfig and JIT methods.
         super().__init__(**kwargs)
@@ -303,7 +315,7 @@ class CayleyPuzzle(Puzzle):
             @xtructure_dataclass
             class State:
                 permutation: FieldDescriptor.tensor(
-                    dtype=jnp.int32, shape=(state_length,)
+                    dtype=self._state_dtype, shape=(state_length,)
                 )
 
                 def __str__(self, **kwargs):
@@ -313,7 +325,9 @@ class CayleyPuzzle(Puzzle):
 
         @xtructure_dataclass
         class State:
-            vector: FieldDescriptor.tensor(dtype=jnp.int32, shape=(state_length,))
+            vector: FieldDescriptor.tensor(
+                dtype=self._state_dtype, shape=(state_length,)
+            )
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -341,10 +355,24 @@ class CayleyPuzzle(Puzzle):
         self,
         solve_config: Puzzle.SolveConfig,
         state: "CayleyPuzzle.State",
-        action: chex.Array,
-    ) -> tuple["CayleyPuzzle.State", chex.Array]:
+        action: jax.Array,
+    ) -> tuple["CayleyPuzzle.State", float]:
         """Pure transition: every generator is valid and costs ``1.0``."""
         return self._step_kernel(state, action)
+
+    def _get_neighbours(
+        self, solve_config: Puzzle.SolveConfig, state: "CayleyPuzzle.State"
+    ) -> tuple["CayleyPuzzle.State", jax.Array]:
+        if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
+            states = self.State(permutation=state.permutation[self._perms_jax])
+        else:
+            values = state.vector.reshape(self._n, self._m).astype(self._matmul_dtype)
+            products = self._mats_jax.astype(self._matmul_dtype) @ values
+            vectors = (products % self._matmul_dtype(self._modulo)).reshape(
+                self.action_size, self._state_length
+            )
+            states = self.State(vector=vectors.astype(state.vector.dtype))
+        return states, jnp.ones(self.action_size)
 
     @property
     def inverse_action_map(self) -> Optional[jnp.ndarray]:
@@ -356,13 +384,15 @@ class CayleyPuzzle(Puzzle):
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
 
             def parser(state: "CayleyPuzzle.State", **kwargs) -> str:
-                values = " ".join(str(int(x)) for x in state.permutation)
+                values = " ".join(
+                    str(int(x)) for x in jax.device_get(state.permutation)
+                )
                 return f"{graph_name}: {values}"
 
             return parser
 
         def parser(state: "CayleyPuzzle.State", **kwargs) -> str:
-            values = " ".join(str(int(x)) for x in state.vector)
+            values = " ".join(str(int(x)) for x in jax.device_get(state.vector))
             return f"{graph_name}: {values}"
 
         return parser
@@ -578,7 +608,7 @@ class CayleyPuzzle(Puzzle):
             vec2d = state.vector.reshape(n_rows, m).astype(matmul_dtype)
             M = mats_jax[action].astype(matmul_dtype)
             new2d = (M @ vec2d) % modulo
-            new_vec = new2d.reshape(state_length).astype(_ELT_DTYPE)
+            new_vec = new2d.reshape(state_length).astype(state.vector.dtype)
             return self.State(vector=new_vec), 1.0
 
         return kernel

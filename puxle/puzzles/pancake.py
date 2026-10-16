@@ -228,44 +228,23 @@ class PancakeSorting(Puzzle):
         solve_config: "PancakeSorting.SolveConfig",
         state: "PancakeSorting.State",
         action: chex.Array,
-    ) -> tuple["PancakeSorting.State", chex.Array]:
+    ) -> tuple["PancakeSorting.State", float]:
         """Pure transition: every flip is valid with unit cost.
 
         flip_pos = action + 1
         """
-        stack = state.stack
         flip_pos = action + 1
+        indices = jnp.arange(self.size)
+        source = jnp.where(indices <= flip_pos, flip_pos - indices, indices)
+        return self.State(stack=state.stack[source]), 1.0
 
-        def flip_stack(stack, flip_pos):
-            """Flip the pancakes from index 0 to flip_pos (inclusive)"""
-            # For each valid flip position, we need to create a new stack with the top portion flipped
-            indices = jnp.arange(stack.shape[0])
-
-            # Create masks for the section to flip vs keep unchanged
-            flip_section_mask = indices <= flip_pos
-
-            # Create a new array with same shape as stack
-            new_stack = jnp.zeros_like(stack)
-
-            # For the flip section (0 to flip_pos), we need to copy elements in reverse order
-            # For each position i in the flip section, we want stack[flip_pos - i]
-            def body_fun(i, new_stack):
-                new_pos = jnp.where(
-                    flip_section_mask[i],
-                    flip_pos - i,  # Reverse the order within the flip section
-                    i,  # Keep the same position for the rest
-                )
-                return new_stack.at[i].set(stack[new_pos])
-
-            new_stack = jax.lax.scan(
-                lambda new_s, i: (body_fun(i, new_s), None),
-                new_stack,
-                jnp.arange(stack.shape[0]),
-            )[0]
-
-            return new_stack
-
-        return self.State(stack=flip_stack(stack, flip_pos)), 1.0
+    def _get_neighbours(
+        self, solve_config: Puzzle.SolveConfig, state: "PancakeSorting.State"
+    ) -> tuple["PancakeSorting.State", jax.Array]:
+        indices = jnp.arange(self.size)[None, :]
+        ends = jnp.arange(1, self.size)[:, None]
+        source = jnp.where(indices <= ends, ends - indices, indices)
+        return self.State(stack=state.stack[source]), jnp.ones(self.action_size)
 
     def action_to_string(self, action: int) -> str:
         """Return a string representation of the action"""

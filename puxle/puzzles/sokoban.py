@@ -228,81 +228,68 @@ class Sokoban(Puzzle):
         self,
         solve_config: Puzzle.SolveConfig,
         state: "Sokoban.State",
-        action: chex.Array,
-    ) -> tuple["Sokoban.State", chex.Array]:
-        """Pure transition: out-of-bounds moves and blocked pushes cost infinity."""
-        # Unpack the board so that we work on a flat representation.
+        action: jax.Array,
+    ) -> tuple["Sokoban.State", jax.Array]:
         board = state.board_unpacked
-        x, y = self._get_player_position(state)
-        current_pos = jnp.array([x, y])
-        moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
+        player = jnp.argmax(board == Sokoban.Object.PLAYER.value)
+        direction = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])[action]
+        position = jnp.array([player // self.size, player % self.size]) + direction
+        target = position[0] * self.size + position[1]
+        push_position = position + direction
+        pushed = push_position[0] * self.size + push_position[1]
+        box = board[target] == Sokoban.Object.BOX.value
+        push_valid = (push_position >= 0).all() & (push_position < self.size).all()
+        push_valid &= board[pushed] == Sokoban.Object.EMPTY.value
+        valid = (position >= 0).all() & (position < self.size).all()
+        valid &= (board[target] == Sokoban.Object.EMPTY.value) | (box & push_valid)
+        bytes_ = jnp.arange(state.board.size)
+        clear = jnp.zeros_like(state.board)
+        values = jnp.zeros_like(state.board)
+        for cell, value, enabled in (
+            (player, Sokoban.Object.EMPTY.value, True),
+            (target, Sokoban.Object.PLAYER.value, True),
+            (pushed, Sokoban.Object.BOX.value, box),
+        ):
+            shift = (2 * (cell % 4)).astype(jnp.uint8)
+            affected = enabled & (bytes_ == cell // 4)
+            clear |= jnp.where(affected, jnp.uint8(3) << shift, jnp.uint8(0))
+            values |= jnp.where(affected, jnp.uint8(value) << shift, jnp.uint8(0))
+        return self.State(board=(state.board & ~clear) | values), jnp.where(
+            valid, 1.0, jnp.inf
+        )
 
-        direction = moves[action]
-
-        # Helper: convert (row, col) to flat index
-        def flat_idx(i, j):
-            return i * self.size + j
-
-        def is_empty(i, j):
-            return board[flat_idx(i, j)] == Sokoban.Object.EMPTY.value
-
-        def is_valid_pos(i, j):
-            return jnp.logical_and(
-                jnp.logical_and(i >= 0, i < self.size),
-                jnp.logical_and(j >= 0, j < self.size),
-            )
-
-        new_pos = (current_pos + direction).astype(current_pos.dtype)
-        new_x, new_y = new_pos[0], new_pos[1]
-        valid_move = is_valid_pos(new_x, new_y)
-
-        def invalid_case():
-            return state, jnp.inf
-
-        def process_move():
-            target = board[flat_idx(new_x, new_y)]
-            # Case when target cell is empty: simply move the player.
-
-            def move_empty():
-                new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
-                    Sokoban.Object.EMPTY.value
-                )
-                new_board = new_board.at[flat_idx(new_x, new_y)].set(
-                    Sokoban.Object.PLAYER.value
-                )
-                return state.set_unpacked(board=new_board), 1.0
-
-            # Case when target cell contains a box: attempt to push it.
-            def push_box():
-                push_pos = (new_pos + direction).astype(current_pos.dtype)
-                push_x, push_y = push_pos[0], push_pos[1]
-                valid_push = jnp.logical_and(
-                    is_valid_pos(push_x, push_y), is_empty(push_x, push_y)
-                )
-
-                def do_push():
-                    new_board = board.at[flat_idx(current_pos[0], current_pos[1])].set(
-                        Sokoban.Object.EMPTY.value
-                    )
-                    new_board = new_board.at[flat_idx(new_x, new_y)].set(
-                        Sokoban.Object.PLAYER.value
-                    )
-                    new_board = new_board.at[flat_idx(push_x, push_y)].set(
-                        Sokoban.Object.BOX.value
-                    )
-                    return state.set_unpacked(board=new_board), 1.0
-
-                return jax.lax.cond(valid_push, do_push, invalid_case)
-
-            return jax.lax.cond(
-                jnp.equal(target, Sokoban.Object.EMPTY.value),
-                move_empty,
-                lambda: jax.lax.cond(
-                    jnp.equal(target, Sokoban.Object.BOX.value), push_box, invalid_case
-                ),
-            )
-
-        return jax.lax.cond(valid_move, process_move, invalid_case)
+    def _get_neighbours(
+        self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State"
+    ) -> tuple["Sokoban.State", jax.Array]:
+        board = state.board_unpacked
+        player = jnp.argmax(board == Sokoban.Object.PLAYER.value)
+        directions = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
+        positions = jnp.array([player // self.size, player % self.size]) + directions
+        targets = positions[:, 0] * self.size + positions[:, 1]
+        push_positions = positions + directions
+        pushed = push_positions[:, 0] * self.size + push_positions[:, 1]
+        boxes = board[targets] == Sokoban.Object.BOX.value
+        push_valid = (push_positions >= 0).all(axis=1) & (
+            push_positions < self.size
+        ).all(axis=1)
+        push_valid &= board[pushed] == Sokoban.Object.EMPTY.value
+        valid = (positions >= 0).all(axis=1) & (positions < self.size).all(axis=1)
+        valid &= (board[targets] == Sokoban.Object.EMPTY.value) | (boxes & push_valid)
+        bytes_ = jnp.arange(state.board.size)[None, :]
+        clear = jnp.zeros((self.action_size, state.board.size), dtype=jnp.uint8)
+        values = jnp.zeros_like(clear)
+        for cells, value, enabled in (
+            (player, Sokoban.Object.EMPTY.value, True),
+            (targets[:, None], Sokoban.Object.PLAYER.value, True),
+            (pushed[:, None], Sokoban.Object.BOX.value, boxes[:, None]),
+        ):
+            shifts = (2 * (cells % 4)).astype(jnp.uint8)
+            affected = enabled & (bytes_ == cells // 4)
+            clear |= jnp.where(affected, jnp.uint8(3) << shifts, jnp.uint8(0))
+            values |= jnp.where(affected, jnp.uint8(value) << shifts, jnp.uint8(0))
+        return self.State(board=(state.board[None, :] & ~clear) | values), jnp.where(
+            valid, 1.0, jnp.inf
+        )
 
     def _get_visualize_format(self):
         size = self.size
@@ -512,93 +499,48 @@ class Sokoban(Puzzle):
         solve_config: "Sokoban.SolveConfig",
         state: "Sokoban.State",
         filled: bool = True,
-    ) -> tuple["Sokoban.State", chex.Array]:
-        """
-        Returns possible previous states and their associated costs.
-        In Sokoban, inverse moves correspond to 'pulling' a box or simply moving back
-        to the previous position if no box is involved.
-        If an inverse move is not possible, it returns the original state with an infinite cost.
-        """
+    ) -> tuple["Sokoban.State", jax.Array]:
+        """Generate pull moves; blocked directions remain unit-cost self-loops.
 
+        This scrambling API preserves its cost-only ``filled`` mask.
+        """
         board = state.board_unpacked
-        x, y = self._get_player_position(state)
-        current_pos = jnp.array([x, y])
-        moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
-
-        def flat_idx(i, j):
-            return i * self.size + j
-
-        def is_empty(i, j):
-            return board[flat_idx(i, j)] == Sokoban.Object.EMPTY.value
-
-        def is_valid_pos(i, j):
-            return jnp.logical_and(
-                jnp.logical_and(i >= 0, i < self.size),
-                jnp.logical_and(j >= 0, j < self.size),
+        player = jnp.argmax(board == Sokoban.Object.PLAYER.value)
+        position = jnp.array([player // self.size, player % self.size])
+        directions = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
+        previous = position - directions
+        fronts = position + directions
+        previous_cells = previous[:, 0] * self.size + previous[:, 1]
+        front_cells = fronts[:, 0] * self.size + fronts[:, 1]
+        valid = (previous >= 0).all(axis=1) & (previous < self.size).all(axis=1)
+        valid &= board[previous_cells] == Sokoban.Object.EMPTY.value
+        pull = (fronts >= 0).all(axis=1) & (fronts < self.size).all(axis=1)
+        pull &= board[front_cells] == Sokoban.Object.BOX.value
+        bytes_ = jnp.arange(state.board.size)[None, :]
+        clear = jnp.zeros((self.action_size, state.board.size), dtype=jnp.uint8)
+        values = jnp.zeros_like(clear)
+        for cells, value, enabled in (
+            (
+                player,
+                jnp.where(pull, Sokoban.Object.BOX.value, Sokoban.Object.EMPTY.value)[
+                    :, None
+                ],
+                True,
+            ),
+            (previous_cells[:, None], Sokoban.Object.PLAYER.value, True),
+            (front_cells[:, None], Sokoban.Object.EMPTY.value, pull[:, None]),
+        ):
+            shifts = (2 * (cells % 4)).astype(jnp.uint8)
+            affected = enabled & (bytes_ == cells // 4)
+            clear |= jnp.where(affected, jnp.uint8(3) << shifts, jnp.uint8(0))
+            values |= jnp.where(
+                affected, jnp.asarray(value, dtype=jnp.uint8) << shifts, jnp.uint8(0)
             )
-
-        def inv_move(direction):
-            direction = direction.astype(current_pos.dtype)
-            # Candidate previous player's position (i.e. where the player came from)
-            prev_pos = current_pos - direction
-            valid_prev = is_valid_pos(prev_pos[0], prev_pos[1])
-            # For a pull move, consider the cell in front of the current player.
-            front_pos = current_pos + direction
-            valid_front = is_valid_pos(front_pos[0], front_pos[1])
-            box_at_front = jnp.logical_and(
-                valid_front,
-                board[flat_idx(front_pos[0], front_pos[1])] == Sokoban.Object.BOX.value,
-            )
-            empty_prev = jnp.logical_and(valid_prev, is_empty(prev_pos[0], prev_pos[1]))
-
-            def invalid():
-                return state, 1.0
-
-            # Inverse pull: the forward push is inverted by pulling the box from ahead.
-            # In a forward push, the player moved from prev_pos
-            # to current_pos and pushed the box from current_pos to front_pos.
-            # Here, we "pull" the box from front_pos back into current_pos while moving the player to prev_pos.
-            def do_pull():
-                new_board = board
-                new_board = new_board.at[flat_idx(front_pos[0], front_pos[1])].set(
-                    Sokoban.Object.EMPTY.value
-                )
-                new_board = new_board.at[flat_idx(current_pos[0], current_pos[1])].set(
-                    Sokoban.Object.BOX.value
-                )
-                new_board = new_board.at[flat_idx(prev_pos[0], prev_pos[1])].set(
-                    Sokoban.Object.PLAYER.value
-                )
-                return state.set_unpacked(board=new_board), 1.0
-
-            # Inverse simple move: simply move the player back if no box is involved.
-            def do_simple():
-                new_board = board
-                new_board = new_board.at[flat_idx(current_pos[0], current_pos[1])].set(
-                    Sokoban.Object.EMPTY.value
-                )
-                new_board = new_board.at[flat_idx(prev_pos[0], prev_pos[1])].set(
-                    Sokoban.Object.PLAYER.value
-                )
-                return state.set_unpacked(board=new_board), 1.0
-
-            def branch_fn():
-                # Only allow a move if the previous cell is empty.
-                return jax.lax.cond(
-                    empty_prev,
-                    lambda: jax.lax.cond(
-                        box_at_front,
-                        do_pull,
-                        do_simple,
-                    ),
-                    invalid,
-                )
-
-            return jax.lax.cond(valid_prev, branch_fn, invalid)
-
-        new_states, costs = jax.vmap(inv_move)(moves)
-        costs = jnp.where(filled, costs, jnp.inf)
-        return new_states, costs
+        boards = (state.board[None, :] & ~clear) | values
+        states = self.State(
+            board=jnp.where(valid[:, None], boards, state.board[None, :])
+        )
+        return states, jnp.full((self.action_size,), jnp.where(filled, 1.0, jnp.inf))
 
 
 class SokobanHard(Sokoban):

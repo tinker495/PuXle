@@ -1,6 +1,5 @@
 from collections.abc import Callable
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
@@ -119,69 +118,97 @@ class DotKnot(Puzzle):
         self,
         solve_config: "DotKnot.SolveConfig",
         state: "DotKnot.State",
-        action: chex.Array,
-    ) -> tuple["DotKnot.State", chex.Array]:
-        """Pure transition: an out-of-bounds or blocked move costs infinity."""
-        # Unpack the board for processing.
-        unpacked_board = state.board_unpacked
-
-        # Determine the smallest available color among {1, 2, ..., self.color_num}.
-        colors = jnp.arange(1, self.color_num + 1, dtype=TYPE)
-        # For each candidate color, check if that point is present in the board.
-        available_mask = jnp.any(unpacked_board[None, :] == colors[:, None], axis=1)
-        # If a color is not available, we replace it with a value greater than any valid color;
-        # then, taking the minimum gives us the smallest valid color.
-        selected_color = jnp.min(jnp.where(available_mask, colors, self.color_num + 1))
-        # Define the 4 directional moves: up, down, left, right.
-        moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
-
-        move_vector = moves[action]
-
-        def is_valid(new_pos, color_idx):
-            index = new_pos[0] * self.size + new_pos[1]
-            not_blocked = unpacked_board[index] == 0
-            new_pos_color_idx = (unpacked_board[index] - 1) % self.color_num
-            new_pos_is_point = unpacked_board[index] <= 2 * self.color_num
-            is_merge = (
-                (new_pos_color_idx == color_idx) & new_pos_is_point & ~not_blocked
+        action: jax.Array,
+    ) -> tuple["DotKnot.State", jax.Array]:
+        board = state.board_unpacked
+        selected = jnp.min(
+            jnp.where(
+                (board > 0) & (board <= self.color_num), board, self.color_num + 1
             )
-            valid = (
-                (new_pos >= 0).all()
-                & (new_pos < self.size).all()
-                & (not_blocked | is_merge)
-            )
-            return is_merge, valid
-
-        def point_move(board, pos, new_pos, point_idx, color_idx, is_merge):
-            flat_index = pos[0] * self.size + pos[1]
-            next_flat_index = new_pos[0] * self.size + new_pos[1]
-            board = jnp.where(
-                is_merge,
-                board.at[next_flat_index].set(color_idx + 2 * self.color_num + 1),
-                board.at[next_flat_index].set(point_idx),
-            )
-            return board.at[flat_index].set(color_idx + 2 * self.color_num + 1)
-
-        point_idx = selected_color
-        color_idx = (point_idx - 1) % self.color_num
-        available, pos = self._get_blank_position(state, point_idx)
-        new_pos = (pos + move_vector).astype(TYPE)
-        is_merge, valid_move = is_valid(new_pos, color_idx)
-        valid_move = valid_move & available
-        new_board = jax.lax.cond(
-            valid_move,
-            lambda: point_move(
-                unpacked_board, pos, new_pos, point_idx, color_idx, is_merge
-            ),
-            lambda: unpacked_board,
         )
-        new_state = state.set_unpacked(board=new_board)
-        cost = jnp.where(valid_move, 1.0, jnp.inf)
-        return new_state, cost
+        endpoint = board == selected
+        start = jnp.argmax(endpoint)
+        position = jnp.array([start // self.size, start % self.size])
+        position += jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])[action]
+        target = position[0] * self.size + position[1]
+        color = (selected - 1) % self.color_num
+        merge = (
+            (board[target] > 0)
+            & (board[target] <= 2 * self.color_num)
+            & ((board[target] - 1) % self.color_num == color)
+        )
+        valid = endpoint.any() & (position >= 0).all() & (position < self.size).all()
+        valid &= (board[target] == 0) | merge
+        path = (color + 2 * self.color_num + 1).astype(jnp.uint8)
+        next_value = jnp.where(merge, path, selected).astype(jnp.uint8)
+        bytes_ = jnp.arange(state.board.size)
+        start_shift = (4 * (start % 2)).astype(jnp.uint8)
+        target_shift = (4 * (target % 2)).astype(jnp.uint8)
+        clear = jnp.where(
+            bytes_ == start // 2, jnp.uint8(15) << start_shift, jnp.uint8(0)
+        )
+        clear |= jnp.where(
+            bytes_ == target // 2, jnp.uint8(15) << target_shift, jnp.uint8(0)
+        )
+        values = jnp.where(bytes_ == start // 2, path << start_shift, jnp.uint8(0))
+        values |= jnp.where(
+            bytes_ == target // 2, next_value << target_shift, jnp.uint8(0)
+        )
+        return self.State(board=(state.board & ~clear) | values), jnp.where(
+            valid, 1.0, jnp.inf
+        )
+
+    def _get_neighbours(
+        self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State"
+    ) -> tuple["DotKnot.State", jax.Array]:
+        board = state.board_unpacked
+        selected = jnp.min(
+            jnp.where(
+                (board > 0) & (board <= self.color_num), board, self.color_num + 1
+            )
+        )
+        endpoint = board == selected
+        start = jnp.argmax(endpoint)
+        positions = jnp.array([start // self.size, start % self.size]) + jnp.array(
+            [[0, -1], [0, 1], [-1, 0], [1, 0]]
+        )
+        targets = positions[:, 0] * self.size + positions[:, 1]
+        color = (selected - 1) % self.color_num
+        merge = (
+            (board[targets] > 0)
+            & (board[targets] <= 2 * self.color_num)
+            & ((board[targets] - 1) % self.color_num == color)
+        )
+        valid = (
+            endpoint.any()
+            & (positions >= 0).all(axis=1)
+            & (positions < self.size).all(axis=1)
+        )
+        valid &= (board[targets] == 0) | merge
+        path = (color + 2 * self.color_num + 1).astype(jnp.uint8)
+        values = jnp.where(merge, path, selected).astype(jnp.uint8)[:, None]
+        bytes_ = jnp.arange(state.board.size)[None, :]
+        start_shift = (4 * (start % 2)).astype(jnp.uint8)
+        target_shifts = (4 * (targets[:, None] % 2)).astype(jnp.uint8)
+        clear = jnp.where(
+            bytes_ == start // 2, jnp.uint8(15) << start_shift, jnp.uint8(0)
+        )
+        clear = clear | jnp.where(
+            bytes_ == targets[:, None] // 2,
+            jnp.uint8(15) << target_shifts,
+            jnp.uint8(0),
+        )
+        packed = jnp.where(bytes_ == start // 2, path << start_shift, jnp.uint8(0))
+        packed = packed | jnp.where(
+            bytes_ == targets[:, None] // 2, values << target_shifts, jnp.uint8(0)
+        )
+        return self.State(board=(state.board[None, :] & ~clear) | packed), jnp.where(
+            valid, 1.0, jnp.inf
+        )
 
     def is_solved(
         self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State"
-    ) -> bool:
+    ) -> jax.Array:
         unpacked = state.board_unpacked
         empty = jnp.all(unpacked == 0)  # ALL empty is not solved condition
         gr = jnp.greater_equal(unpacked, 1)  # ALL point a is solved condition
@@ -197,14 +224,6 @@ class DotKnot(Puzzle):
 
     def _get_visualize_format(self):
         return self._grid_visualize_format(self.size)
-
-    def _get_blank_position(self, state: "DotKnot.State", idx: int):
-        unpacked_board = state.board_unpacked
-        one_hot = unpacked_board == idx
-        available = jnp.any(one_hot)
-        flat_index = jnp.argmax(one_hot)
-        pos = jnp.stack(jnp.unravel_index(flat_index, (self.size, self.size)))
-        return available, pos
 
     def _get_random_state(self, key, num_shuffle=30):
         """

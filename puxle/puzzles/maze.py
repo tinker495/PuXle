@@ -18,9 +18,9 @@ class Maze(Puzzle):
 
     A ``size × size`` boolean grid is generated via randomised depth-first
     search (``True`` = wall, ``False`` = path).  The player position is a
-    2-element ``uint16`` coordinate.  Four actions (←, →, ↑, ↓) are
-    available; illegal moves (into walls or out of bounds) incur infinite
-    cost.
+    2-element unsigned coordinate (8 bits up to size 256, otherwise 16).
+    Four actions (←, →, ↑, ↓) are available; illegal moves (into walls or
+    out of bounds) incur infinite cost.
 
     The maze layout is stored in ``SolveConfig.InstanceContext`` and the
     target position in ``SolveConfig.GoalSpec``.
@@ -49,7 +49,7 @@ class Maze(Puzzle):
 
         @xtructure_dataclass
         class State:
-            pos: FieldDescriptor.tensor(dtype=TYPE, shape=(2,))
+            pos: FieldDescriptor.tensor(dtype=self._position_dtype, shape=(2,))
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -58,6 +58,7 @@ class Maze(Puzzle):
 
     def __init__(self, size: int = 23, **kwargs):
         self.size = size
+        self._position_dtype = jnp.uint8 if size <= 256 else jnp.uint16
         self.action_size = 4
         super().__init__(**kwargs)
 
@@ -273,32 +274,40 @@ class Maze(Puzzle):
         self,
         solve_config: "Maze.SolveConfig",
         state: "Maze.State",
-        action: chex.Array,
-    ) -> tuple["Maze.State", chex.Array]:
+        action: jax.Array,
+    ) -> tuple["Maze.State", jax.Array]:
         """Pure transition: stepping out of bounds or into a wall costs infinity."""
-        # Define possible moves: up, down, left, right
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
-        bool_maze = solve_config.InstanceContext.Maze_unpacked.reshape(
-            (self.size, self.size)
+        # Bounds must be checked before narrowing to the stored coordinate dtype.
+        new_pos = state.pos.astype(jnp.int32) + moves[action]
+        row, col = new_pos
+        # Large uint16 grids can exceed the signed 32-bit flat-index range.
+        index_dtype = jnp.uint32 if self.size**2 > 2**31 else jnp.int32
+        cell = row.astype(index_dtype) * self.size + col.astype(index_dtype)
+        wall = (
+            solve_config.InstanceContext.Maze[cell // 8] >> (cell % 8).astype(jnp.uint8)
+        ) & jnp.uint8(1)
+        valid_move = (row >= 0) & (row < self.size) & (col >= 0) & (col < self.size)
+        return self.State(pos=new_pos.astype(state.pos.dtype)), jnp.where(
+            valid_move & (wall == 0), 1.0, jnp.inf
         )
 
-        move_vec = moves[action]
-        new_pos = (state.pos + move_vec).astype(TYPE)
-
-        # Check if the new position is within the maze bounds and not a wall (True)
-        valid_move = (
-            (new_pos >= 0).all()
-            & (new_pos < self.size).all()
-            & (~bool_maze[new_pos[0], new_pos[1]])  # Check against False (path)
+    def _get_neighbours(
+        self, solve_config: "Maze.SolveConfig", state: "Maze.State"
+    ) -> tuple["Maze.State", jax.Array]:
+        rows = state.pos[0].astype(jnp.int32) + jnp.array([0, 0, -1, 1])
+        cols = state.pos[1].astype(jnp.int32) + jnp.array([-1, 1, 0, 0])
+        index_dtype = jnp.uint32 if self.size**2 > 2**31 else jnp.int32
+        cells = rows.astype(index_dtype) * self.size + cols.astype(index_dtype)
+        walls = (
+            solve_config.InstanceContext.Maze[cells // 8]
+            >> (cells % 8).astype(jnp.uint8)
+        ) & jnp.uint8(1)
+        valid = (rows >= 0) & (rows < self.size) & (cols >= 0) & (cols < self.size)
+        positions = jnp.stack((rows, cols), axis=1)
+        return self.State(pos=positions.astype(state.pos.dtype)), jnp.where(
+            valid & (walls == 0), 1.0, jnp.inf
         )
-
-        # If the move is valid, update the position. Otherwise, keep the old position.
-        new_state = self.State(pos=jnp.where(valid_move, new_pos, state.pos))
-
-        # Cost is 1 for valid moves, inf for invalid moves
-        cost = jnp.where(valid_move, 1.0, jnp.inf)
-
-        return new_state, cost
 
     @property
     def fixed_target(self) -> bool:
@@ -350,7 +359,7 @@ class Maze(Puzzle):
         # Loop until we find a position that is not a wall
         final_pos, _ = jax.lax.while_loop(is_wall, while_body, initial_carry)
 
-        return self.State(pos=final_pos)
+        return self.State(pos=final_pos.astype(self._position_dtype))
 
     def get_img_parser(self) -> Callable:
         """

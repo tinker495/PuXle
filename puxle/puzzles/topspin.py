@@ -1,6 +1,5 @@
 from collections.abc import Callable
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
@@ -95,26 +94,58 @@ class TopSpin(Puzzle):
         self,
         solve_config: Puzzle.SolveConfig,
         state: "TopSpin.State",
-        action: chex.Array,
-    ) -> tuple["TopSpin.State", chex.Array]:
+        action: jax.Array,
+    ) -> tuple["TopSpin.State", float]:
         """Pure transition: every TopSpin action is valid with unit cost."""
-        p = state.permutation
+        # Match the prefix selected by the bulk kernel's Python slice.
+        prefix_size = len(range(self.n_discs)[: self.turnstile_size])
+        # Identity flips favor direct rotation branches over index gathers.
+        if prefix_size <= 1:
+            return self.State(
+                permutation=jax.lax.switch(
+                    action,
+                    (
+                        lambda: jnp.roll(state.permutation, -1),
+                        lambda: jnp.roll(state.permutation, 1),
+                        lambda: state.permutation,
+                    ),
+                )
+            ), 1.0
+        indices = jnp.arange(self.n_discs)
+        source = jnp.where(
+            action == 0,
+            (indices + 1) % self.n_discs,
+            jnp.where(
+                action == 1,
+                (indices - 1) % self.n_discs,
+                jnp.where(
+                    indices < prefix_size,
+                    prefix_size - 1 - indices,
+                    indices,
+                ),
+            ),
+        )
+        return self.State(permutation=state.permutation[source]), 1.0
 
-        def get_next_state(action):
+    def _get_neighbours(
+        self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State"
+    ) -> tuple["TopSpin.State", jax.Array]:
+        permutation = state.permutation
+
+        def rotate(action):
             return jax.lax.switch(
                 action,
-                [
-                    lambda: self.State(permutation=jnp.roll(p, -1)),
-                    lambda: self.State(permutation=jnp.roll(p, 1)),
-                    lambda: self.State(
-                        permutation=p.at[: self.turnstile_size].set(
-                            jnp.flip(p[: self.turnstile_size])
-                        )
+                (
+                    lambda: jnp.roll(permutation, -1),
+                    lambda: jnp.roll(permutation, 1),
+                    lambda: permutation.at[: self.turnstile_size].set(
+                        permutation[: self.turnstile_size][::-1]
                     ),
-                ],
+                ),
             )
 
-        return get_next_state(action), 1.0
+        permutations = jax.vmap(rotate)(jnp.arange(self.action_size))
+        return self.State(permutation=permutations), jnp.ones(self.action_size)
 
     def action_to_string(self, action: int) -> str:
         match action:
