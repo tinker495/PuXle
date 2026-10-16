@@ -1,7 +1,6 @@
 import colorsys
 from collections.abc import Callable
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
@@ -15,17 +14,17 @@ TYPE = jnp.uint8
 
 
 class TowerOfHanoi(Puzzle):
-    """Tower of Hanoi puzzle with variable pegs.
+    """Tower of Hanoi puzzle with packed disk-to-peg positions.
 
-    Move all disks from the first peg to the last peg, obeying three rules:
+    Move all disks from the first peg to the third peg, obeying three rules:
 
     1. Only one disk may be moved at a time.
     2. A move takes the topmost disk from one peg and places it on another.
     3. No disk may be placed on top of a smaller disk.
 
-    Each peg is stored as a fixed-length array of shape
-    ``(num_disks + 1,)`` whose first element is the current disk count
-    and subsequent elements hold disk sizes (smallest at index 1 = top).
+    Each disk stores its peg index, using two bits for the default three pegs.
+    ``state.pegs`` is a derived ``(num_pegs, num_disks + 1)`` view: each row
+    starts with its disk count, followed by disk sizes from smallest to largest.
 
     Actions encode ordered ``(from_peg, to_peg)`` pairs, giving
     ``num_pegs × (num_pegs − 1)`` possible moves (invalid moves yield
@@ -33,7 +32,6 @@ class TowerOfHanoi(Puzzle):
 
     Args:
         size: Number of disks (default ``5``).
-        num_pegs: Number of pegs (default ``3``).
     """
 
     num_disks: int
@@ -43,13 +41,30 @@ class TowerOfHanoi(Puzzle):
     def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for Tower of Hanoi using xtructure."""
         str_parser = self.get_string_parser()
-        # Default pegs value for FieldDescriptor, initialized when class is defined
-        # self.num_pegs and self.num_disks are available from TowerOfHanoi.__init__
-        default_pegs_val = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
+        count, peg_count = self.num_disks, self.num_pegs
 
         @xtructure_dataclass
         class State:
-            pegs: FieldDescriptor.tensor(dtype=TYPE, shape=default_pegs_val.shape)
+            disk_pegs: FieldDescriptor.packed_tensor(
+                shape=(count,), packed_bits=(peg_count - 1).bit_length()
+            )
+
+            @property
+            def pegs(self: "TowerOfHanoi.State") -> jax.Array | np.ndarray:
+                """Materialize ordered peg rows, retaining host arrays on the host."""
+                positions = self.disk_pegs_unpacked
+                xp = np if isinstance(positions, np.ndarray) else jnp
+                present = positions[..., None, :] == xp.arange(peg_count)[:, None]
+                ordered = xp.sort(
+                    xp.where(present, xp.arange(1, count + 1), count + 1), axis=-1
+                )
+                return xp.concatenate(
+                    (
+                        xp.sum(present, axis=-1)[..., None],
+                        xp.where(ordered <= count, ordered, 0),
+                    ),
+                    axis=-1,
+                ).astype(TYPE)
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -195,7 +210,7 @@ class TowerOfHanoi(Puzzle):
             disk_height = 20
 
             # Get the pegs array
-            pegs = state.pegs
+            pegs = jax.device_get(state).pegs
 
             # For each peg
             for peg_idx, peg_x in enumerate(peg_xs):
@@ -250,112 +265,68 @@ class TowerOfHanoi(Puzzle):
 
         return img_func
 
-    def _stacked_pegs(self, peg_idx: int) -> chex.Array:
-        """Build a pegs array with every disk stacked on ``peg_idx``.
-
-        Disks are placed smallest-on-top: index 1 holds the smallest disk and
-        index ``num_disks`` the largest (e.g. with 3 disks the peg column is
-        ``[3, 1, 2, 3]``).
-        """
-        pegs = jnp.zeros((self.num_pegs, self.num_disks + 1), dtype=TYPE)
-        pegs = pegs.at[peg_idx, 0].set(self.num_disks)
-        for i in range(self.num_disks):
-            pegs = pegs.at[peg_idx, i + 1].set(i + 1)
-        return pegs
-
     def get_initial_state(
         self, solve_config: "TowerOfHanoi.SolveConfig", key=None, data=None
     ) -> "TowerOfHanoi.State":
         """Generate the initial state with all disks on the first peg."""
-        return self.State(pegs=self._stacked_pegs(0))
+        return self.State.from_unpacked(disk_pegs=jnp.zeros(self.num_disks, dtype=TYPE))
 
     def get_solve_config(self, key=None, data=None) -> "TowerOfHanoi.SolveConfig":
         """Create the solving configuration (target) with all disks on the third peg."""
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(),
-            GoalSpec=self.State(pegs=self._stacked_pegs(2)),
+            GoalSpec=self.State.from_unpacked(
+                disk_pegs=jnp.full(self.num_disks, 2, dtype=TYPE)
+            ),
         )
 
     def _apply(
         self,
         solve_config: "TowerOfHanoi.SolveConfig",
         state: "TowerOfHanoi.State",
-        action: chex.Array,
-    ) -> tuple["TowerOfHanoi.State", chex.Array]:
-        """Pure transition: an illegal disk move costs infinity."""
-        pegs = state.pegs
-
-        move = self._possible_moves[action]
-        from_peg, to_peg = move[0], move[1]
-
-        def is_valid_move(pegs, from_peg, to_peg):
-            # Check if the from_peg has disks
-            disks_on_from = pegs[from_peg, 0]
-            valid_from = disks_on_from > 0
-
-            # Get the top disk size from from_peg (if there are disks)
-            # Top disk is at index 1 (smallest disk)
-            from_top_disk = jax.lax.cond(
-                disks_on_from > 0,
-                lambda: pegs[from_peg, 1],
-                lambda: jnp.array(0, dtype=TYPE),
-            )
-
-            # Check if the to_peg has space and the top disk on to_peg is larger
-            disks_on_to = pegs[to_peg, 0]
-
-            # If to_peg is empty, it's valid. Otherwise, compare disk sizes:
-            # Only allow placing a smaller disk on top of a larger disk
-            valid_to = jax.lax.cond(
-                disks_on_to == 0,
-                lambda: jnp.array(True, dtype=bool),
-                lambda: from_top_disk < pegs[to_peg, 1],
-            )
-
-            return jnp.logical_and(valid_from, valid_to)
-
-        def make_move(pegs, from_peg, to_peg):
-            # Get the number of disks on the from_peg
-            disks_on_from = pegs[from_peg, 0]
-
-            # Get the top disk size from from_peg (smallest disk at top = index 1)
-            from_top_disk = pegs[from_peg, 1]
-
-            # Create a copy of the pegs array
-            new_pegs = pegs  # JAX arrays are immutable, ops return new array
-
-            # Remove the top disk from from_peg
-            # Shift all disks up (disk at position n moves to position n-1)
-            new_pegs = new_pegs.at[from_peg, 1:-1].set(new_pegs[from_peg, 2:])
-            new_pegs = new_pegs.at[from_peg, -1].set(0)  # Clear the last position
-
-            # Decrement the disk count on from_peg
-            new_pegs = new_pegs.at[from_peg, 0].set(disks_on_from - 1)
-
-            # Get the number of disks on the to_peg
-            disks_on_to = new_pegs[to_peg, 0]
-
-            # Add the disk to to_peg (at the top position = index 1)
-            # Shift all disks down to make room at index 1
-            new_pegs = new_pegs.at[to_peg, 2:].set(new_pegs[to_peg, 1:-1])
-            new_pegs = new_pegs.at[to_peg, 1].set(from_top_disk)
-
-            # Increment the disk count on to_peg
-            new_pegs = new_pegs.at[to_peg, 0].set(disks_on_to + 1)
-
-            return new_pegs
-
-        valid = is_valid_move(pegs, from_peg, to_peg)
-
-        # If valid, make the move; otherwise, keep the original pegs
-        new_pegs = jax.lax.cond(
-            valid, lambda: make_move(pegs, from_peg, to_peg), lambda: pegs
+        action: jax.Array,
+    ) -> tuple["TowerOfHanoi.State", jax.Array]:
+        source, target = self._possible_moves[action]
+        positions = state.disk_pegs_unpacked
+        disks = jnp.arange(self.num_disks)
+        moving = jnp.min(
+            jnp.where(positions == source, disks, self.num_disks),
+            initial=self.num_disks,
+        )
+        destination = jnp.min(
+            jnp.where(positions == target, disks, self.num_disks),
+            initial=self.num_disks,
+        )
+        positions = jnp.where(
+            disks == moving, target.astype(positions.dtype), positions
+        )
+        return state.set_unpacked(disk_pegs=positions), jnp.where(
+            moving < destination, 1.0, jnp.inf
         )
 
-        # Cost is 1 if valid, infinity if invalid
-        cost = jax.lax.cond(valid, lambda: jnp.array(1.0), lambda: jnp.array(jnp.inf))
-
-        return self.State(pegs=new_pegs), cost
+    def _get_neighbours(
+        self, solve_config: "TowerOfHanoi.SolveConfig", state: "TowerOfHanoi.State"
+    ) -> tuple["TowerOfHanoi.State", jax.Array]:
+        positions = state.disk_pegs_unpacked
+        disks = jnp.arange(self.num_disks)
+        top = jnp.min(
+            jnp.where(
+                positions[None, :] == jnp.arange(self.num_pegs)[:, None],
+                disks,
+                self.num_disks,
+            ),
+            axis=1,
+            initial=self.num_disks,
+        )
+        moving = top[self._possible_moves[:, 0]]
+        targets = self._possible_moves[:, 1]
+        moved = jnp.where(
+            disks[None, :] == moving[:, None],
+            targets[:, None].astype(positions.dtype),
+            positions[None, :],
+        )
+        states = jax.vmap(lambda values: state.set_unpacked(disk_pegs=values))(moved)
+        return states, jnp.where(moving < top[targets], 1.0, jnp.inf)
 
     def action_to_string(self, action: int) -> str:
         """Return a string representation of the action"""

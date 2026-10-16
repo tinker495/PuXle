@@ -1,6 +1,5 @@
 from collections.abc import Callable
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
@@ -102,38 +101,23 @@ class LightsOut(Puzzle):
         self,
         solve_config: Puzzle.SolveConfig,
         state: "LightsOut.State",
-        action: chex.Array,
-    ) -> tuple["LightsOut.State", chex.Array]:
+        action: jax.Array,
+    ) -> tuple["LightsOut.State", float]:
         """Pure transition: every toggle is valid with unit cost."""
-        board = state.board_unpacked
+        masks = jnp.asarray(
+            np.packbits(self._move_matrix(self.size), axis=1, bitorder="little")
+        )
+        return state.replace(board=state.board ^ masks[action]), 1.0
 
-        # Decode action to (x, y)
-        # action is in range [0, size*size - 1]
-        # x = action // size
-        # y = action % size
-        # Or better: use unravel_index but that works on shapes.
-        # Since size is scalar, we can compute directly.
-
-        x = action // self.size
-        y = action % self.size
-
-        def flip(board, x, y):
-            # Create coordinate grids
-            i, j = jnp.meshgrid(
-                jnp.arange(self.size), jnp.arange(self.size), indexing="ij"
-            )
-
-            # Manhattan distance from center (x,y)
-            dist = jnp.abs(i - x) + jnp.abs(j - y)
-
-            # Mask includes center (dist=0) and immediate neighbors (dist=1)
-            mask = (dist <= 1).reshape(-1)
-
-            # XOR flip where mask is true
-            return jnp.where(mask, jnp.logical_not(board), board)
-
-        next_state = state.set_unpacked(board=flip(board, x, y))
-        return next_state, 1.0
+    def _get_neighbours(
+        self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State"
+    ) -> tuple["LightsOut.State", jax.Array]:
+        masks = jnp.asarray(
+            np.packbits(self._move_matrix(self.size), axis=1, bitorder="little")
+        )
+        return self.State(board=state.board[None, :] ^ masks), jnp.ones(
+            self.action_size
+        )
 
     def action_to_string(self, action: int) -> str:
         """

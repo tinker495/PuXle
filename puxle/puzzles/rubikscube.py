@@ -404,8 +404,8 @@ class RubiksCube(Puzzle):
         self,
         solve_config: Puzzle.SolveConfig,
         state: "RubiksCube.State",
-        action: chex.Array,
-    ) -> tuple["RubiksCube.State", chex.Array]:
+        action: jax.Array,
+    ) -> tuple["RubiksCube.State", float]:
         """Pure transition: every face rotation is valid with unit cost.
 
         Each action is a fixed permutation of the cube's stickers, so the hot
@@ -414,6 +414,18 @@ class RubiksCube(Puzzle):
         faces = state.faces_unpacked.reshape(-1)
         faces = faces[self._action_permutations[action]].reshape((6, self._tile_count))
         return state.set_unpacked(faces=faces), 1.0
+
+    def _get_neighbours(
+        self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State"
+    ) -> tuple["RubiksCube.State", jax.Array]:
+        faces = state.faces_unpacked.reshape(-1)
+
+        def rotate(permutation):
+            return state.set_unpacked(
+                faces=faces[permutation].reshape((6, self._tile_count))
+            )
+
+        return jax.vmap(rotate)(self._action_permutations), jnp.ones(self.action_size)
 
     def state_symmetries(self, state: "RubiksCube.State") -> "RubiksCube.State":
         """

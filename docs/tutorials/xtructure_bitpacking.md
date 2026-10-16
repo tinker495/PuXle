@@ -51,11 +51,11 @@ from xtructure import FieldDescriptor, xtructure_dataclass
 @xtructure_dataclass
 class CubeState:
     # 6 faces x (size*size) stickers, each in [0..5] => 3 bits
-    faces: FieldDescriptor.packed_tensor(shape=(6, 54), packed_bits=3)
+    faces: FieldDescriptor.packed_tensor(shape=(6, 9), packed_bits=3)
 
 
 cube = CubeState.from_unpacked(faces=faces)
-faces_view = cube.faces_unpacked  # uint8[6,54]
+faces_view = cube.faces_unpacked  # uint8[6,9]
 cube2 = cube.set_unpacked(faces=(faces_view + 1) % jnp.uint8(6))
 ```
 
@@ -84,5 +84,16 @@ Recommended migration:
   - `state.unpacked.<field>` → `state.<field>_unpacked`
   - `State(<field>=logical).packed` → `State.from_unpacked(<field>=logical)`
 
-The legacy helpers (`puxle.utils.util.to_uint8` / `from_uint8`) are still available for generic packing tasks,
-but they should no longer be needed for in-memory puzzle-state representation.
+The legacy helpers (`puxle.utils.util.to_uint8` / `from_uint8`) have been removed.
+Use the xtructure field or aggregate codec rather than introducing a puzzle-local replacement.
+
+## 4) Measure physical layout and transition cost
+
+For `N` logical elements of width `b`, the field codec uses blocks of `lcm(b, 8)` bits.
+Its storage is `ceil(N / (lcm(b, 8) / b)) * (lcm(b, 8) / 8)` bytes, which can exceed
+`ceil(N * b / 8)`. Aggregate packing has different word/tail padding and is not always smaller.
+Compare actual stored PyTree leaf bytes and GPU transitions; a narrower field can introduce
+additional gather/decode work. Packed XOR and single-bit updates can avoid whole-field decoding.
+
+The [native puzzle packing guide](../../puxle/puzzles/AGENTS.md) records per-puzzle value ranges,
+padding, shared context, transition invariants, and alternatives that need measurement.

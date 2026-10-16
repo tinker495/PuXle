@@ -18,12 +18,14 @@ class Puzzle(ABC):
 
     1. Set ``action_size`` (number of possible actions).
     2. Implement :meth:`define_state_class` to return a ``@xtructure_dataclass``-decorated class.
-    3. Implement :meth:`get_actions`, :meth:`get_solve_config`,
+    3. Implement :meth:`_apply`, :meth:`get_solve_config`,
        :meth:`get_initial_state`, :meth:`get_string_parser`, and :meth:`get_img_parser`.
        Override :meth:`is_solved` when the goal is not one complete state.
 
     The base class handles JIT compilation of core methods and provides
-    default batch and inverse-neighbour logic.
+    default batch and inverse-neighbour logic. Native puzzles also implement
+    :meth:`_get_neighbours` to optimize all-action expansion independently of
+    the single-action kernel.
 
     Attributes:
         action_size: Number of discrete actions available in this puzzle.
@@ -313,8 +315,8 @@ class Puzzle(ABC):
         self,
         solve_configs: SolveConfig,
         states: State,
-        actions: chex.Array,
-        filleds: bool = True,
+        actions: jax.Array,
+        filleds: bool | jax.Array = True,
         multi_solve_config: bool = False,
     ) -> tuple[State, chex.Array]:
         """Vectorised version of :meth:`get_actions`.
@@ -344,9 +346,9 @@ class Puzzle(ABC):
         self,
         solve_config: SolveConfig,
         state: State,
-        action: chex.Array,
-        filled: bool = True,
-    ) -> tuple[State, chex.Array]:
+        action: int | jax.Array,
+        filled: bool | jax.Array = True,
+    ) -> tuple[State, jax.Array]:
         """Apply a single action, enforcing the filled/inf-cost contract.
 
         Puzzles implement the pure transition in :meth:`_apply`; this method
@@ -364,7 +366,7 @@ class Puzzle(ABC):
             ``(next_state, cost)`` where ``cost`` is ``jnp.inf`` for blocked or
             invalid moves and ``next_state`` is then the unchanged ``state``.
         """
-        next_state, cost = self._apply(solve_config, state, action)
+        next_state, cost = self._apply(solve_config, state, jnp.asarray(action))
         cost = jnp.asarray(cost, dtype=jnp.float32)
         valid = jnp.logical_and(filled, jnp.isfinite(cost))
         return jax.lax.cond(
@@ -377,8 +379,8 @@ class Puzzle(ABC):
         self,
         solve_config: SolveConfig,
         state: State,
-        action: chex.Array,
-    ) -> tuple[State, chex.Array]:
+        action: jax.Array,
+    ) -> tuple[State, jax.Array | float]:
         """Pure state transition for one action — the puzzle-specific seam.
 
         Return ``(next_state, cost)`` for taking ``action`` in ``state``. Set
@@ -421,37 +423,61 @@ class Puzzle(ABC):
             )
 
     def get_neighbours(
-        self, solve_config: SolveConfig, state: State, filled: bool = True
-    ) -> tuple[State, chex.Array]:
+        self, solve_config: SolveConfig, state: State, filled: bool | jax.Array = True
+    ) -> tuple[State, jax.Array]:
         """Compute all successor states for every action.
 
-        Equivalent to calling :meth:`get_actions` for each action index and
-        stacking the results.  Invalid actions produce ``cost = jnp.inf``
-        and the original state.
+        The result is equivalent to stacking :meth:`get_actions`. Native puzzles
+        implement the all-action kernel independently in :meth:`_get_neighbours`;
+        invalid or unfilled actions return the original state and infinite cost.
+        Environments without that hook retain their public action method's contract.
 
         Args:
             solve_config: Current solve configuration.
             state: Current puzzle state.
-            filled: If ``True``, invalid actions are filled with
-                ``(state, jnp.inf)``.
+            filled: If ``False``, every action is blocked.
 
         Returns:
             ``(neighbour_states, costs)`` where ``neighbour_states`` has
             shape ``(action_size, ...)`` and ``costs`` has shape
             ``(action_size,)``.
         """
-        actions = jnp.arange(self.action_size)
-        states, costs = jax.vmap(
-            self.get_actions, in_axes=(None, None, 0, None), out_axes=(0, 0)
-        )(solve_config, state, actions, filled)
-        return states, costs
+        if type(self)._get_neighbours is Puzzle._get_neighbours:
+            return jax.vmap(self.get_actions, in_axes=(None, None, 0, None))(
+                solve_config, state, jnp.arange(self.action_size), filled
+            )
+        states, costs = self._get_neighbours(solve_config, state)
+        costs = jnp.asarray(costs, dtype=jnp.float32)
+
+        def restore_invalid(candidate, cost):
+            return jax.lax.cond(
+                jnp.logical_and(filled, jnp.isfinite(cost)),
+                lambda: (candidate, cost),
+                lambda: (state, jnp.asarray(jnp.inf, dtype=jnp.float32)),
+            )
+
+        return jax.vmap(restore_invalid)(states, costs)
+
+    def _get_neighbours(
+        self, solve_config: SolveConfig, state: State
+    ) -> tuple[State, jax.Array]:
+        """Return candidates and costs in action order, without filled handling.
+
+        Native puzzles implement this bulk kernel separately from :meth:`_apply`.
+        Environments without this hook retain their :meth:`get_actions` mapping.
+        Invalid candidates need not restore the input state; the public method
+        owns that invariant for both independently optimized transition paths.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} has no bulk transition kernel"
+        )
 
     def batched_is_solved(
         self,
         solve_configs: SolveConfig,
         states: State,
         multi_solve_config: bool = False,
-    ) -> bool:
+    ) -> jax.Array | bool:
         """Vectorised version of :meth:`is_solved`.
 
         Args:
@@ -468,7 +494,7 @@ class Puzzle(ABC):
         else:
             return jax.vmap(self.is_solved, in_axes=(None, 0))(solve_configs, states)
 
-    def is_solved(self, solve_config: SolveConfig, state: State) -> bool:
+    def is_solved(self, solve_config: SolveConfig, state: State) -> jax.Array | bool:
         """Return whether ``state`` equals the single-state goal.
 
         Override when :attr:`GoalSpec` describes a predicate rather than one
