@@ -77,7 +77,7 @@ world-model = [
 include-package-data = true
 
 [dependency-groups]
-dev = ["puxle[dev]", "pyrefly==1.4.0"]
+dev = ["puxle[dev,visualization]", "pyrefly==1.4.0"]
 
 [tool.setuptools.packages.find]
 where = ["."]
