@@ -11,20 +11,18 @@ license = { file = "LICENSE" }
 authors = [
     { name = "tinker495", email = "wjdrbtjr495@gmail.com" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "jax>=0.4.0",
+    "jax>=0.11.2",
     "chex>=0.1.0",
     "numpy>=2.2.0",
     "opencv-python-headless>=4.10.0",
@@ -63,7 +61,7 @@ visualization = [
     "Pillow>=9.0.0",
 ]
 cuda = [
-    "jax[cuda]>=0.4.0",
+    "jax[cuda]>=0.11.2",
 ]
 cayley = [
     "cayleypy==0.1.0",
