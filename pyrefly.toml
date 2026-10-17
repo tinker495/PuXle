@@ -1,0 +1,4 @@
+project-includes = ["puxle/**/*.py", "scripts/**/*.py", "main.py"]
+python-version = "3.12"
+search-path = ["."]
+disable-search-path-heuristics = true
