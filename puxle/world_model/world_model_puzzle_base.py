@@ -304,7 +304,7 @@ class WorldModelPuzzleBase(Puzzle):
         ) as exc:
             raise ValueError(f"Error loading WorldModelPuzzle model: {exc}") from exc
 
-    def save_model(self, metadata: dict = None):
+    def save_model(self, metadata: dict | None = None):
         metadata = {} if metadata is None else metadata
         metadata.update(
             data_path=self.data_path,
