@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import chex
 import flax.linen as nn
 import jax.numpy as jnp
@@ -17,7 +19,7 @@ from ..world_model_puzzle_base import WorldModelPuzzleBase
 
 class Encoder(nn.Module):
     latent_shape: tuple[int, ...]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -55,7 +57,7 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     data_shape: tuple[int, ...]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -84,7 +86,7 @@ class Decoder(nn.Module):
 class AutoEncoder(nn.Module):
     data_shape: tuple[int, ...]
     latent_shape: tuple[int, ...]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -110,7 +112,7 @@ class AutoEncoder(nn.Module):
 class WorldModel(nn.Module):
     latent_shape: tuple[int, ...]
     action_size: int
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -177,7 +179,7 @@ class SokobanWorldModel(_SokobanMixin, WorldModelPuzzleBase):
 
 class EncoderOptimized(nn.Module):
     latent_shape: tuple[int, int, int]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -216,7 +218,7 @@ class EncoderOptimized(nn.Module):
 
 class DecoderOptimized(nn.Module):
     data_shape: tuple[int, int, int]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -264,7 +266,7 @@ class DecoderOptimized(nn.Module):
 class AutoEncoderOptimized(nn.Module):
     data_shape: tuple[int, int, int]
     latent_shape: tuple[int, int, int]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 

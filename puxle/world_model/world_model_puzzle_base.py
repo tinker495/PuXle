@@ -1,4 +1,6 @@
 import pickle
+from collections.abc import Callable
+from math import prod
 
 import jax
 import jax.numpy as jnp
@@ -32,7 +34,7 @@ from .util import download_world_model_dataset, is_world_model_dataset_downloade
 
 class Encoder(nn.Module):
     latent_shape: tuple[int, ...]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -42,7 +44,7 @@ class Encoder(nn.Module):
         shape = data.shape
         data = ((data / 255.0) * 2.0 - 1.0).astype(DTYPE)
         flatten = jnp.reshape(data, shape=(shape[0], -1))
-        latent_size = np.prod(self.latent_shape)
+        latent_size = prod(self.latent_shape)
         x = nn.Dense(
             1000,
             dtype=DTYPE,
@@ -61,7 +63,7 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     data_shape: tuple[int, ...]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -77,7 +79,7 @@ class Decoder(nn.Module):
         )(x)
         x = nn.relu(apply_norm(self.norm_fn, x, training))
         x = nn.Dense(
-            np.prod(self.data_shape),
+            prod(self.data_shape),
             dtype=DTYPE,
             param_dtype=PARAM_DTYPE,
             dot_general_cls=aqt_dg,
@@ -88,7 +90,7 @@ class Decoder(nn.Module):
 class AutoEncoder(nn.Module):
     data_shape: tuple[int, ...]
     latent_shape: tuple[int, ...]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -114,7 +116,7 @@ class AutoEncoder(nn.Module):
 class WorldModel(nn.Module):
     latent_shape: tuple[int, ...]
     action_size: int
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -131,7 +133,7 @@ class WorldModel(nn.Module):
             )(x)
             x = nn.relu(apply_norm(self.norm_fn, x, training))
         x = nn.Dense(
-            np.prod(self.latent_shape) * self.action_size,
+            prod(self.latent_shape) * self.action_size,
             dtype=DTYPE,
             param_dtype=PARAM_DTYPE,
             dot_general_cls=aqt_dg,
@@ -339,7 +341,7 @@ class WorldModelPuzzleBase(Puzzle):
 
         return parser
 
-    def get_img_parser(self) -> callable:
+    def get_img_parser(self) -> Callable[..., np.ndarray]:
         import cv2
 
         def decode(latent):

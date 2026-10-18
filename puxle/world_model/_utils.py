@@ -115,7 +115,7 @@ class ConvResBlock(nn.Module):
     kernel_size: tuple[int, int]
     strides: tuple[int, int]
     hidden_N: int = 1
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     activation: Callable = nn.relu
     param_dtype: Any = PARAM_DTYPE
     aqt_cfg: Any = None
