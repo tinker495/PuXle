@@ -553,7 +553,7 @@ class RubiksCube(Puzzle):
 
     @staticmethod
     def _rotate_face(
-        shaped_faces: chex.Array, clockwise: bool | int | jax.Array, mul: int
+        shaped_faces: jax.Array, clockwise: bool | int | jax.Array, mul: int
     ):
         return rot90_traceable(shaped_faces, jnp.where(clockwise, mul, -mul))
 
@@ -573,7 +573,7 @@ class RubiksCube(Puzzle):
         )
         actions = jnp.arange(self.action_size, dtype=jnp.int32)
 
-        def rotate(action: jax.Array) -> chex.Array:
+        def rotate(action: jax.Array) -> jax.Array:
             axis = (action // 2) % 3
             index = self.index_grid[action // 6]
             clockwise = action % 2
@@ -583,11 +583,11 @@ class RubiksCube(Puzzle):
 
     def _rotate_faces(
         self,
-        faces: chex.Array,
+        faces: jax.Array,
         axis: int | jax.Array,
         index: int | jax.Array,
         clockwise: bool | int | jax.Array = True,
-    ) -> chex.Array:
+    ) -> jax.Array:
         shaped_faces = jnp.asarray(faces).reshape((6, self.size, self.size))
 
         rotate_edge_map = jnp.array(
