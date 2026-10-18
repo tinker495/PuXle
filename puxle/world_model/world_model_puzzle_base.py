@@ -360,7 +360,10 @@ class WorldModelPuzzleBase(Puzzle):
                 jnp.expand_dims(latent, axis=0),
                 training=False,
                 method=self.model.decode,
-            ).squeeze(0)
+            )
+            if not isinstance(data, (jax.Array, np.ndarray)):
+                raise TypeError("The world model decoder must return an array.")
+            data = data.squeeze(0)
             return np.clip(np.array(data * 255.0) / 2.0 + 127.5, 0, 255).astype(
                 np.uint8
             )
@@ -405,7 +408,10 @@ class WorldModelPuzzleBase(Puzzle):
             )
         latent = self.model.apply(
             self.params, data[0], training=False, method=self.model.encode
-        ).squeeze(0)
+        )
+        if not isinstance(latent, (jax.Array, np.ndarray)):
+            raise TypeError("The world model encoder must return an array.")
+        latent = latent.squeeze(0)
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(),
             GoalSpec=self.State.from_unpacked(
@@ -418,7 +424,10 @@ class WorldModelPuzzleBase(Puzzle):
             raise ValueError("World model data is required to build an initial state.")
         latent = self.model.apply(
             self.params, data[1], training=False, method=self.model.encode
-        ).squeeze(0)
+        )
+        if not isinstance(latent, (jax.Array, np.ndarray)):
+            raise TypeError("The world model encoder must return an array.")
+        latent = latent.squeeze(0)
         return self.State.from_unpacked(latent=jnp.round(latent).astype(jnp.bool_))
 
     def batched_get_actions(
@@ -446,6 +455,8 @@ class WorldModelPuzzleBase(Puzzle):
             training=False,
             method=self.model.transition,
         )
+        if not isinstance(next_latent, (jax.Array, np.ndarray)):
+            raise TypeError("The world model transition must return an array.")
         next_latent = jnp.swapaxes(jnp.round(next_latent).astype(jnp.bool_), 0, 1)
         next_states = jax.vmap(jax.vmap(self.State.from_unpacked))(latent=next_latent)
         costs = jnp.where(
