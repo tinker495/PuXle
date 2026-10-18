@@ -101,8 +101,10 @@ class Sokoban(Puzzle):
         try:
             # Try to load as package resources first (for installed packages)
             data_pkg = files("puxle.data.sokoban")
-            self.init_puzzles = jnp.load(data_pkg / init_name)
-            self.target_puzzles = jnp.load(data_pkg / target_name)
+            with (data_pkg / init_name).open("rb") as init_file:
+                self.init_puzzles = jnp.load(init_file)
+            with (data_pkg / target_name).open("rb") as target_file:
+                self.target_puzzles = jnp.load(target_file)
         except (FileNotFoundError, ModuleNotFoundError):
             # Fallback to relative paths (for development/source directory)
             current_dir = os.path.dirname(os.path.abspath(__file__))

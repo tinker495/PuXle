@@ -4,7 +4,7 @@ Constructs xtructure-backed ``State`` (packed boolean atom vector) and
 ``InstanceContext`` / ``GoalSpec`` dataclasses tailored to a grounded problem.
 """
 
-from typing import Annotated, Callable
+from typing import TYPE_CHECKING, Annotated, Callable
 
 import chex
 import jax.numpy as jnp
@@ -19,6 +19,11 @@ def build_state_class(
         atoms: Annotated[
             chex.Array, FieldDescriptor.packed_tensor(shape=(num_atoms,), packed_bits=1)
         ]
+
+        if TYPE_CHECKING:
+
+            @property
+            def atoms_unpacked(self) -> chex.Array: ...
 
         def __str__(self, **kwargs):
             return string_parser(self, **kwargs)
