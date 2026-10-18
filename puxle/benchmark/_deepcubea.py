@@ -21,10 +21,7 @@ class DeepCubeAUnpickler(pickle.Unpickler):
 
 def load_deepcubea(handle: IO[bytes]) -> Any:
     """Helper that loads a DeepCubeA pickle with the compatible unpickler."""
-    try:
-        from numpy.exceptions import VisibleDeprecationWarning
-    except ImportError:
-        from numpy import VisibleDeprecationWarning
+    from numpy.exceptions import VisibleDeprecationWarning
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=VisibleDeprecationWarning)

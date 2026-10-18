@@ -123,12 +123,11 @@ class PDDL(Puzzle):
 
         domain_path = os.path.abspath(os.path.join(data_dir, "domain.pddl"))
 
-        if problem is None and problem_basename is None:
-            raise ValueError(
-                "Provide `problem` or `problem_basename` to locate a problem file."
-            )
-
-        if problem is None and problem_basename is not None:
+        if problem is None:
+            if problem_basename is None:
+                raise ValueError(
+                    "Provide `problem` or `problem_basename` to locate a problem file."
+                )
             problem = f"{problem_basename}.pddl"
 
         if not problem.endswith(".pddl"):
@@ -200,9 +199,9 @@ class PDDL(Puzzle):
         self,
         solve_config: Puzzle.SolveConfig,
         state: "PDDL.State",
-        action: chex.Array,
-        filled: bool = True,
-    ) -> tuple["PDDL.State", chex.Array]:
+        action: int | chex.Array,
+        filled: bool | chex.Array = True,
+    ) -> tuple["PDDL.State", jax.Array]:
         """
         Get the next state and cost for a given action using JAX.
         """

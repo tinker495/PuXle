@@ -74,10 +74,7 @@ def build_aqt_conv_general_dilated(aqt_cfg, quant_mode):
         rhs_bits=8,
         initialize_calibration=False,
     )
-    if conv_cfg.lhs:
-        conv_cfg.dg_quantizer.lhs.init_calibration()
-    if conv_cfg.rhs:
-        conv_cfg.dg_quantizer.rhs.init_calibration()
+    conv_cfg.dg_quantizer.init_calibration()
     cfg = aqt_config.default_unquantized_config()
     cfg.fwd = conv_cfg
     return partial(

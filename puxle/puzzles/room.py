@@ -5,7 +5,7 @@ from .maze import Maze  # Inherit from Maze
 
 
 # JAX-compatible Disjoint Set Union (DSU) find operation
-def dsu_find_jax(parent_array: jnp.ndarray, i: int) -> int:
+def dsu_find_jax(parent_array: jnp.ndarray, i: int | jax.Array) -> int | jax.Array:
     """
     Finds the representative (root) of the set containing element i.
     Uses a JAX-compatible iterative approach (lax.while_loop).
@@ -75,14 +75,12 @@ class Room(Maze):
 
     # --- Map Generation --- #
 
-    def _generate_maze_dfs(
-        self, key: jax.random.PRNGKey, size_param: int
-    ) -> jnp.ndarray:
+    def _generate_maze_dfs(self, key: jax.Array, size: int) -> jnp.ndarray:
         """
         Generates the 3x3 room structure map with randomly opened/closed doors.
         Ensures all rooms are connected using a Kruskal-like algorithm on the room graph.
         Overrides the DFS generation from the parent Maze class.
-        `size_param` is `self.size`, passed from superclass call.
+        `size` is `self.size`, passed from superclass call.
         """
         grid_size = self.size  # Actual grid dimensions
         room_dim = self.room_dim
