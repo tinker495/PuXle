@@ -37,9 +37,10 @@ def _mask_inverse_action(
     inverse_action_permutation: chex.Array,
     action_size: int,
 ) -> chex.Array:
+    previous_action = jnp.asarray(previous_action)
     valid_idx = previous_action >= 0
     safe_prev = jnp.where(valid_idx, previous_action, 0)
-    inverse_actions = inverse_action_permutation[safe_prev]
+    inverse_actions = jnp.asarray(inverse_action_permutation)[safe_prev]
     return jnp.where(
         valid_idx[jnp.newaxis, :]
         & (jnp.arange(action_size)[:, jnp.newaxis] == inverse_actions[jnp.newaxis, :]),
@@ -52,7 +53,7 @@ def _gather_by_action(neighbor_states, actions: chex.Array):
     batch_idx = jnp.arange(actions.shape[0], dtype=jnp.int32)
 
     def _gather(leaf: chex.Array) -> chex.Array:
-        return leaf[actions, batch_idx, ...]
+        return jnp.asarray(leaf)[actions, batch_idx, ...]
 
     return jax.tree_util.tree_map(_gather, neighbor_states)
 
@@ -60,7 +61,7 @@ def _gather_by_action(neighbor_states, actions: chex.Array):
 def _leafwise_equal(
     candidate_leaf: chex.Array, reference_leaf: chex.Array
 ) -> chex.Array:
-    expanded_ref = reference_leaf[jnp.newaxis, ...]
+    expanded_ref = jnp.asarray(reference_leaf)[jnp.newaxis, ...]
     eq = jnp.equal(candidate_leaf, expanded_ref)
     if eq.ndim <= 2:
         return eq
@@ -68,7 +69,7 @@ def _leafwise_equal(
     return jnp.all(eq, axis=axes)
 
 
-def _states_equal(candidate_states, reference_state) -> chex.Array:
+def _states_equal(candidate_states, reference_state) -> jax.Array:
     equality_tree = jax.tree_util.tree_map(
         _leafwise_equal, candidate_states, reference_state
     )
@@ -81,7 +82,7 @@ def _states_equal(candidate_states, reference_state) -> chex.Array:
     return result
 
 
-def _match_history(candidate_states, history_states) -> chex.Array:
+def _match_history(candidate_states, history_states) -> jax.Array:
     def _compare(prev_state):
         return _states_equal(candidate_states, prev_state)
 
