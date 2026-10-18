@@ -125,6 +125,10 @@ def _get_shuffled_state(
     if puzzle.is_reversible:
         action_size = puzzle.action_size
         inv_map = puzzle.inverse_action_permutation
+        if inv_map is None:
+            raise ValueError(
+                "A reversible puzzle must define its inverse action permutation."
+            )
 
         def cond_fun_reversible(loop_state):
             iteration_count, _, _, _ = loop_state
@@ -207,6 +211,10 @@ def _drive_scramble_trajectory(
     if puzzle.is_reversible and non_backtracking_steps == 1:
         action_size = puzzle.action_size
         inv_map = puzzle.inverse_action_permutation
+        if inv_map is None:
+            raise ValueError(
+                "A reversible puzzle must define its inverse action permutation."
+            )
 
         def _scan_fast(carry, step_key):
             state, move_cost, previous_action = carry

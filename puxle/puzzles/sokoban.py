@@ -1,7 +1,8 @@
 import os
 from collections.abc import Callable
 from enum import Enum
-from importlib.resources import files
+from importlib.resources import as_file, files
+from pathlib import Path
 from typing import Annotated
 
 import chex
@@ -39,7 +40,7 @@ class Sokoban(Puzzle):
     """
 
     size: int = 10
-    solve_condition: "Sokoban.SolveCondition" = None
+    solve_condition: "Sokoban.SolveCondition | None" = None
 
     class Object(Enum):
         EMPTY = 0
@@ -330,7 +331,7 @@ class Sokoban(Puzzle):
         except (FileNotFoundError, ModuleNotFoundError):
             # Fallback to relative paths (for development/source directory)
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            image_dir = os.path.join(current_dir, "..", "data", "sokoban", "imgs")
+            image_dir = Path(current_dir) / ".." / "data" / "sokoban" / "imgs"
 
         tile_filenames = {
             0: "floor.png",
@@ -341,28 +342,24 @@ class Sokoban(Puzzle):
             5: "agent_on_target.png",
             6: "box_on_target.png",
         }
-        assets = {
-            code: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, filename), cv2.IMREAD_COLOR),
-                    cv2.COLOR_BGR2RGB,
-                ),
+        assets = {}
+        for code, filename in tile_filenames.items():
+            with as_file(image_dir / filename) as image_path:
+                image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+            if image is None:
+                raise ValueError(f"Unable to decode Sokoban image asset: {filename}")
+            assets[code] = cv2.resize(
+                cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
                 (cell_w, cell_h),
                 interpolation=cv2.INTER_AREA,
             )
-            for code, filename in tile_filenames.items()
-        }
-        # Entry 7 is the "player pushing" sprite: same agent art with the green
-        # channel rolled into red instead of a BGR->RGB conversion.
-        assets[7] = cv2.resize(
-            np.roll(
-                cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
-                -1,
-                axis=2,  # color channel G -> R
-            ),
-            (cell_w, cell_h),
-            interpolation=cv2.INTER_AREA,
-        )
+            if code == Sokoban.Object.PLAYER.value:
+                # The player-pushing sprite rolls the green channel into red.
+                assets[7] = cv2.resize(
+                    np.roll(image, -1, axis=2),
+                    (cell_w, cell_h),
+                    interpolation=cv2.INTER_AREA,
+                )
 
         def img_func(
             state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs
