@@ -121,6 +121,8 @@ class TSP(Puzzle):
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         # Split PRNG key so that the start index is independent of point positions.
+        if key is None:
+            raise ValueError("A random key is required to generate a TSP instance.")
         key_points, key_start = jax.random.split(key)
 
         points = jax.random.uniform(

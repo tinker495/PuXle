@@ -179,7 +179,7 @@ class WorldModelPuzzleBase(Puzzle):
         AE=AutoEncoder,
         WM=WorldModel,
         init_params: bool = False,
-        path: str = None,
+        path: str | None = None,
         **kwargs,
     ):
         self.data_path = data_path
@@ -288,6 +288,8 @@ class WorldModelPuzzleBase(Puzzle):
         )
 
     def load_model(self):
+        if self.path is None:
+            raise ValueError("A model path is required to load parameters.")
         try:
             if not is_model_downloaded(self.path):
                 download_model(self.path)
@@ -300,6 +302,7 @@ class WorldModelPuzzleBase(Puzzle):
                 return self.get_new_params()
             self.metadata = metadata
             params = align_params_dtype(params)
+            assert params is not None
             self.model.apply(params, jnp.zeros((1, *self.data_shape)))
             return params
         except (
@@ -312,6 +315,8 @@ class WorldModelPuzzleBase(Puzzle):
             raise ValueError(f"Error loading WorldModelPuzzle model: {exc}") from exc
 
     def save_model(self, metadata: dict | None = None):
+        if self.path is None:
+            raise ValueError("A model path is required to save parameters.")
         metadata = {} if metadata is None else metadata
         metadata.update(
             data_path=self.data_path,
@@ -388,10 +393,16 @@ class WorldModelPuzzleBase(Puzzle):
         return img_parser
 
     def get_data(self, key=None):
+        if key is None:
+            raise ValueError("A random key is required to sample world model data.")
         idx = jax.random.randint(key, (), 0, self.init_state_size)
         return self.targets[idx][None, ...], self.inits[idx][None, ...]
 
     def get_solve_config(self, key=None, data=None):
+        if data is None:
+            raise ValueError(
+                "World model data is required to build a solve configuration."
+            )
         latent = self.model.apply(
             self.params, data[0], training=False, method=self.model.encode
         ).squeeze(0)
@@ -403,6 +414,8 @@ class WorldModelPuzzleBase(Puzzle):
         )
 
     def get_initial_state(self, solve_config, key=None, data=None):
+        if data is None:
+            raise ValueError("World model data is required to build an initial state.")
         latent = self.model.apply(
             self.params, data[1], training=False, method=self.model.encode
         ).squeeze(0)
