@@ -19,7 +19,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import xtructure.numpy as xnp
-from xtructure import Xtructurable
+from xtructure.core.protocol import Xtructurable
 
 if TYPE_CHECKING:
     from puxle.core.puzzle_base import Puzzle
