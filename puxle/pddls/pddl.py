@@ -2,7 +2,6 @@ import os
 from collections.abc import Callable
 from typing import Optional, Union
 
-import chex
 import jax
 import jax.numpy as jnp
 import pddl
@@ -199,8 +198,8 @@ class PDDL(Puzzle):
         self,
         solve_config: Puzzle.SolveConfig,
         state: "PDDL.State",
-        action: int | chex.Array,
-        filled: bool | chex.Array = True,
+        action: int | jax.Array,
+        filled: bool | jax.Array = True,
     ) -> tuple["PDDL.State", jax.Array]:
         """
         Get the next state and cost for a given action using JAX.
