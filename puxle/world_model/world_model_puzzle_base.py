@@ -1,7 +1,9 @@
 import pickle
 from collections.abc import Callable
 from math import prod
+from typing import Annotated
 
+import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -158,7 +160,10 @@ class WorldModelPuzzleBase(Puzzle):
 
         @xtructure_dataclass
         class State:
-            latent: FieldDescriptor.packed_tensor(shape=latent_shape, packed_bits=1)
+            latent: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(shape=latent_shape, packed_bits=1),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

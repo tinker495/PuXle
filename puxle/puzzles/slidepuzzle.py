@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from math import gcd
+from typing import Annotated
 
 import chex
 import cv2
@@ -37,9 +38,12 @@ class SlidePuzzle(Puzzle):
 
         @xtructure_dataclass
         class State:
-            board: FieldDescriptor.packed_tensor(
-                shape=(size**2,), packed_bits=packed_bits
-            )
+            board: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(
+                    shape=(size**2,), packed_bits=packed_bits
+                ),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

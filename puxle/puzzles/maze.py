@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Annotated
 
 import chex
 import cv2
@@ -40,7 +41,10 @@ class Maze(Puzzle):
 
         @xtructure_dataclass
         class InstanceContext:
-            Maze: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1)
+            Maze: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1),
+            ]
 
         return InstanceContext
 
@@ -49,7 +53,10 @@ class Maze(Puzzle):
 
         @xtructure_dataclass
         class State:
-            pos: FieldDescriptor.tensor(dtype=self._position_dtype, shape=(2,))
+            pos: Annotated[
+                chex.Array,
+                FieldDescriptor.tensor(dtype=self._position_dtype, shape=(2,)),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

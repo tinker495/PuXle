@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 import chex
 import jax
@@ -144,8 +144,12 @@ class Puzzle(ABC):
 
         @xtructure_dataclass
         class SolveConfig:
-            InstanceContext: FieldDescriptor.scalar(dtype=self.InstanceContext)
-            GoalSpec: FieldDescriptor.scalar(dtype=self.GoalSpec)
+            InstanceContext: Annotated[
+                Xtructurable, FieldDescriptor.scalar(dtype=self.InstanceContext)
+            ]
+            GoalSpec: Annotated[
+                Xtructurable, FieldDescriptor.scalar(dtype=self.GoalSpec)
+            ]
 
             def __str__(solve_config, **kwargs):
                 return string_parser(solve_config, **kwargs)

@@ -1,5 +1,7 @@
 from collections.abc import Callable
+from typing import Annotated
 
+import chex
 import cv2
 import jax
 import jax.numpy as jnp
@@ -57,7 +59,10 @@ class DotKnot(Puzzle):
 
         @xtructure_dataclass
         class State:
-            board: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=4)
+            board: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=4),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
