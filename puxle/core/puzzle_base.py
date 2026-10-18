@@ -311,6 +311,8 @@ class Puzzle(ABC):
         Returns:
             A ``(SolveConfig, State)`` tuple.
         """
+        if key is None:
+            raise ValueError("A random key is required to generate initial states.")
         datakey, solveconfigkey, initkey = jax.random.split(key, 3)
         data = self.get_data(datakey)
         solve_config = self.get_solve_config(solveconfigkey, data)

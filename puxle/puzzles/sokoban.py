@@ -115,7 +115,9 @@ class Sokoban(Puzzle):
 
         self.num_puzzles = self.init_puzzles.shape[0]
 
-    def get_data(self, key: jax.random.PRNGKey) -> tuple[chex.Array, chex.Array]:
+    def get_data(self, key: chex.Array | None = None) -> tuple[chex.Array, chex.Array]:
+        if key is None:
+            raise ValueError("A random key is required to sample Sokoban data.")
         idx = jax.random.randint(key, (), 0, self.num_puzzles)
         return self.target_puzzles[idx, ...], self.init_puzzles[idx, ...]
 
@@ -436,11 +438,13 @@ class Sokoban(Puzzle):
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
     def _place_agent_randomly(
-        self, board: jnp.ndarray, key: jax.random.PRNGKey
+        self, board: jnp.ndarray, key: chex.Array | None
     ) -> jnp.ndarray:
         """
         Place the agent randomly on the board.
         """
+        if key is None:
+            raise ValueError("A random key is required to place the Sokoban player.")
         box_xs, box_ys = self._get_box_positions(board)
         box_positions = jnp.expand_dims(
             jnp.stack([box_xs, box_ys], axis=1), 0
@@ -469,7 +473,7 @@ class Sokoban(Puzzle):
         return new_board
 
     def solve_config_to_state_transform(
-        self, solve_config: "Sokoban.SolveConfig", key: jax.random.PRNGKey = None
+        self, solve_config: "Sokoban.SolveConfig", key: chex.Array | None = None
     ) -> "Sokoban.State":
         """
         This function shoulde transformt the solve config to the state.

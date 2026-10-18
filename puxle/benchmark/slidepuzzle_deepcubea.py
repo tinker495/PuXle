@@ -131,8 +131,7 @@ class SlidePuzzleDeepCubeABenchmark(Benchmark):
 
     def _convert_state(self, raw_state: Any) -> Xtructurable:
         tiles = jnp.asarray(extract_tiles(raw_state), dtype=jnp.uint8)
-        puzzle: SlidePuzzle = self.puzzle
-        return puzzle.State.from_unpacked(board=tiles)
+        return self.puzzle.State.from_unpacked(board=tiles)
 
     def _convert_solution(self, moves: Sequence[str]) -> tuple[tuple[str, ...], float]:
         if not moves:
