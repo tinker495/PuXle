@@ -24,20 +24,23 @@ def run(puzzle: PuzzleName, puzzle_args: str = "{}", seed: int = 0) -> int:
         puzzle_args: Puzzle constructor JSON object.
         seed: PRNG seed.
     """
-    puzzle = create_puzzle(puzzle, puzzle_args)
-    solve_config, state = puzzle.get_inits(jax.random.PRNGKey(seed))
-    labels = [puzzle.action_to_string(index) for index in range(puzzle.action_size)]
+    puzzle_instance = create_puzzle(puzzle, puzzle_args)
+    solve_config, state = puzzle_instance.get_inits(jax.random.PRNGKey(seed))
+    labels = [
+        puzzle_instance.action_to_string(index)
+        for index in range(puzzle_instance.action_size)
+    ]
     aliases = _action_aliases(labels)
     total_cost = 0.0
 
     print("Start")
     print(state.str(solve_config=solve_config))
-    if puzzle.has_goal_data:
+    if puzzle_instance.has_goal_data:
         print("Goal")
         print(solve_config)
 
-    while not bool(np.asarray(puzzle.is_solved(solve_config, state))):
-        neighbours, costs = puzzle.get_neighbours(solve_config, state)
+    while not bool(np.asarray(puzzle_instance.is_solved(solve_config, state))):
+        neighbours, costs = puzzle_instance.get_neighbours(solve_config, state)
         cost_values = np.asarray(costs)
         print(f"\nCost: {total_cost:g}")
         print(state.str(solve_config=solve_config))

@@ -11,17 +11,17 @@ from . import human_play, world_model
 
 def build_app() -> tyro.extras.SubcommandApp:
     app = tyro.extras.SubcommandApp()
-    app.command(human_play.run, name="human-play")
+    app.command(name="human-play")(human_play.run)
 
     world_model_app = tyro.extras.SubcommandApp()
-    world_model_app.command(
-        world_model.make_transition_dataset, name="make-transition-dataset"
+    world_model_app.command(name="make-transition-dataset")(
+        world_model.make_transition_dataset
     )
-    world_model_app.command(world_model.make_sample_data, name="make-sample-data")
-    world_model_app.command(
-        world_model.make_eval_trajectory, name="make-eval-trajectory"
+    world_model_app.command(name="make-sample-data")(world_model.make_sample_data)
+    world_model_app.command(name="make-eval-trajectory")(
+        world_model.make_eval_trajectory
     )
-    world_model_app.command(world_model.train, name="train")
+    world_model_app.command(name="train")(world_model.train)
     app.command(
         world_model_app,
         name="world-model-train",
