@@ -40,7 +40,7 @@ class Sokoban(Puzzle):
     """
 
     size: int = 10
-    solve_condition: "Sokoban.SolveCondition" = None
+    solve_condition: "Sokoban.SolveCondition | None" = None
 
     class Object(Enum):
         EMPTY = 0
