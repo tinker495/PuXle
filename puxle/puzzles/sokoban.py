@@ -425,7 +425,7 @@ class Sokoban(Puzzle):
         return img_func
 
     def _get_box_positions(
-        self, board: jnp.ndarray, number_of_boxes: int = 4
+        self, board: jax.Array, number_of_boxes: int = 4
     ) -> tuple[jax.Array, ...]:
         """
         Get the positions of all boxes on the board.
