@@ -16,7 +16,7 @@ class _RubiksCubeWorldModelBase(WorldModelPuzzleBase):
         )
 
 
-class _ReversedDataMixin:
+class _ReversedDataMixin(_RubiksCubeWorldModelBase):
     def data_init(self):
         super().data_init()
         self.inits, self.targets = self.targets, self.inits

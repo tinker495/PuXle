@@ -563,7 +563,7 @@ class Puzzle(ABC):
         return jax.vmap(self.hindsight_transform)(solve_configs, states)
 
     def solve_config_to_state_transform(
-        self, solve_config: SolveConfig, key: jax.random.PRNGKey = None
+        self, solve_config: SolveConfig, key: chex.PRNGKey | None = None
     ) -> State:
         """Convert a ``SolveConfig`` into the corresponding target ``State``.
 

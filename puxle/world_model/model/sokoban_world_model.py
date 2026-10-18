@@ -1,6 +1,6 @@
 from collections.abc import Callable
+from typing import Never
 
-import chex
 import flax.linen as nn
 import jax.numpy as jnp
 
@@ -144,14 +144,14 @@ class WorldModel(nn.Module):
         return jnp.transpose(x, (0, 4, 1, 2, 3))
 
 
-class _SokobanMixin:
+class _SokobanMixin(WorldModelPuzzleBase):
     def batched_get_inverse_neighbours(
         self,
         solve_configs: WorldModelPuzzleBase.SolveConfig,
         states: WorldModelPuzzleBase.State,
         filleds: bool = True,
         multi_solve_config: bool = False,
-    ) -> tuple[WorldModelPuzzleBase.State, chex.Array]:
+    ) -> Never:
         raise NotImplementedError(
             "Sokoban is not reversible, so its inverse neighbours are not implemented.\n"
             "Please use '--using_hindsight_target' to train distance"
