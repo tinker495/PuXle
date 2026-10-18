@@ -271,7 +271,7 @@ class SlidePuzzle(Puzzle):
         # Count ordered pairs (i < j) where both tiles are non-blank and out of
         # order. Vectorized equivalent of the O(n^4) double loop.
         flat = self.size * self.size
-        a = board
+        a = jnp.asarray(board)
         out_of_order = a[:, None] > a[None, :]
         both_nonzero = (a[:, None] != 0) & (a[None, :] != 0)
         upper = jnp.triu(jnp.ones((flat, flat), dtype=bool), k=1)
