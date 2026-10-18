@@ -1,5 +1,7 @@
 from collections.abc import Callable
+from typing import Annotated
 
+import chex
 import cv2
 import jax
 import jax.numpy as jnp
@@ -52,7 +54,10 @@ class LightsOut(Puzzle):
 
         @xtructure_dataclass
         class State:
-            board: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1)
+            board: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

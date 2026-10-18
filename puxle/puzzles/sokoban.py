@@ -2,6 +2,7 @@ import os
 from collections.abc import Callable
 from enum import Enum
 from importlib.resources import files
+from typing import Annotated
 
 import chex
 import jax
@@ -61,7 +62,10 @@ class Sokoban(Puzzle):
 
         @xtructure_dataclass
         class State:
-            board: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=2)
+            board: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=2),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -148,7 +152,7 @@ class Sokoban(Puzzle):
 
     def is_solved(
         self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State"
-    ) -> bool:
+    ) -> jax.Array:
         # Unpack boards for comparison.
         board = state.board_unpacked
         t_board = solve_config.GoalSpec.board_unpacked
@@ -421,8 +425,8 @@ class Sokoban(Puzzle):
         return img_func
 
     def _get_box_positions(
-        self, board: jnp.ndarray, number_of_boxes: int = 4
-    ) -> jnp.ndarray:
+        self, board: jax.Array, number_of_boxes: int = 4
+    ) -> tuple[jax.Array, ...]:
         """
         Get the positions of all boxes on the board.
         """

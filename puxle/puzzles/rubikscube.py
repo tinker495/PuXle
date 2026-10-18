@@ -1,7 +1,7 @@
 import re
 from collections.abc import Callable
 from functools import partial
-from typing import Any
+from typing import Annotated, Any
 
 import chex
 import cv2
@@ -239,9 +239,10 @@ class RubiksCube(Puzzle):
 
         @xtructure_dataclass
         class State:
-            faces: FieldDescriptor.packed_tensor(
-                shape=raw_shape, packed_bits=active_bits
-            )
+            faces: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(shape=raw_shape, packed_bits=active_bits),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

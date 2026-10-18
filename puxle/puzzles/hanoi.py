@@ -1,6 +1,8 @@
 import colorsys
 from collections.abc import Callable
+from typing import Annotated
 
+import chex
 import cv2
 import jax
 import jax.numpy as jnp
@@ -45,9 +47,12 @@ class TowerOfHanoi(Puzzle):
 
         @xtructure_dataclass
         class State:
-            disk_pegs: FieldDescriptor.packed_tensor(
-                shape=(count,), packed_bits=(peg_count - 1).bit_length()
-            )
+            disk_pegs: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(
+                    shape=(count,), packed_bits=(peg_count - 1).bit_length()
+                ),
+            ]
 
             @property
             def pegs(self: "TowerOfHanoi.State") -> jax.Array | np.ndarray:
