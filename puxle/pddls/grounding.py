@@ -7,6 +7,7 @@ object combinations drawn from the problem's typed-object pool.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from itertools import product
 from typing import Dict, List, Set, Tuple
 
@@ -23,7 +24,7 @@ def _normalize_type_options(type_tags, type_hierarchy) -> List[str]:
 
 
 def _objects_for_type_spec(
-    type_spec, objects_by_type: Dict[str, List[str]]
+    type_spec: str | Iterable[str], objects_by_type: Dict[str, List[str]]
 ) -> List[str]:
     """Return candidate objects for one parameter type spec.
 
@@ -46,7 +47,7 @@ def _objects_for_type_spec(
 
 
 def _get_type_combinations(
-    param_types: List[object], objects_by_type: Dict[str, List[str]]
+    param_types: Iterable[str | Iterable[str]], objects_by_type: Dict[str, List[str]]
 ) -> List[List[str]]:
     """Get all valid object combinations for given parameter types."""
     object_options = [

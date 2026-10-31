@@ -4,7 +4,7 @@ from ..world_model_puzzle_base import WorldModelPuzzleBase
 
 class _RubiksCubeWorldModelBase(WorldModelPuzzleBase):
     data_name = "rubikscube"
-    latent_shape = (400,)
+    latent_shape: tuple[int, ...] = (400,)
 
     def __init__(self, **kwargs):
         super().__init__(
@@ -16,7 +16,7 @@ class _RubiksCubeWorldModelBase(WorldModelPuzzleBase):
         )
 
 
-class _ReversedDataMixin:
+class _ReversedDataMixin(_RubiksCubeWorldModelBase):
     def data_init(self):
         super().data_init()
         self.inits, self.targets = self.targets, self.inits

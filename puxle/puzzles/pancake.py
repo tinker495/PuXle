@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Annotated
 
 import chex
 import cv2
@@ -44,7 +45,9 @@ class PancakeSorting(Puzzle):
 
         @xtructure_dataclass
         class State:
-            stack: FieldDescriptor.tensor(dtype=TYPE, shape=(self.size,))
+            stack: Annotated[
+                chex.Array, FieldDescriptor.tensor(dtype=TYPE, shape=(self.size,))
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

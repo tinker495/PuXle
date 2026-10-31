@@ -74,10 +74,7 @@ def build_aqt_conv_general_dilated(aqt_cfg, quant_mode):
         rhs_bits=8,
         initialize_calibration=False,
     )
-    if conv_cfg.lhs:
-        conv_cfg.dg_quantizer.lhs.init_calibration()
-    if conv_cfg.rhs:
-        conv_cfg.dg_quantizer.rhs.init_calibration()
+    conv_cfg.dg_quantizer.init_calibration()
     cfg = aqt_config.default_unquantized_config()
     cfg.fwd = conv_cfg
     return partial(
@@ -115,7 +112,7 @@ class ConvResBlock(nn.Module):
     kernel_size: tuple[int, int]
     strides: tuple[int, int]
     hidden_N: int = 1
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     activation: Callable = nn.relu
     param_dtype: Any = PARAM_DTYPE
     aqt_cfg: Any = None

@@ -1,5 +1,7 @@
 from collections.abc import Callable
+from typing import Annotated
 
+import chex
 import cv2
 import jax
 import jax.numpy as jnp
@@ -43,7 +45,9 @@ class TopSpin(Puzzle):
 
         @xtructure_dataclass
         class State:
-            permutation: FieldDescriptor.tensor(dtype=TYPE, shape=(self.n_discs,))
+            permutation: Annotated[
+                chex.Array, FieldDescriptor.tensor(dtype=TYPE, shape=(self.n_discs,))
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

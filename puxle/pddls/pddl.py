@@ -2,7 +2,7 @@ import os
 from collections.abc import Callable
 from typing import Optional, Union
 
-import chex
+import jax
 import jax.numpy as jnp
 import pddl
 from pddl.core import Domain, Problem
@@ -122,12 +122,11 @@ class PDDL(Puzzle):
 
         domain_path = os.path.abspath(os.path.join(data_dir, "domain.pddl"))
 
-        if problem is None and problem_basename is None:
-            raise ValueError(
-                "Provide `problem` or `problem_basename` to locate a problem file."
-            )
-
-        if problem is None and problem_basename is not None:
+        if problem is None:
+            if problem_basename is None:
+                raise ValueError(
+                    "Provide `problem` or `problem_basename` to locate a problem file."
+                )
             problem = f"{problem_basename}.pddl"
 
         if not problem.endswith(".pddl"):
@@ -199,9 +198,9 @@ class PDDL(Puzzle):
         self,
         solve_config: Puzzle.SolveConfig,
         state: "PDDL.State",
-        action: chex.Array,
-        filled: bool = True,
-    ) -> tuple["PDDL.State", chex.Array]:
+        action: int | jax.Array,
+        filled: bool | jax.Array = True,
+    ) -> tuple["PDDL.State", jax.Array]:
         """
         Get the next state and cost for a given action using JAX.
         """
@@ -236,7 +235,9 @@ class PDDL(Puzzle):
 
         return next_state, cost
 
-    def is_solved(self, solve_config: Puzzle.SolveConfig, state: "PDDL.State") -> bool:
+    def is_solved(
+        self, solve_config: Puzzle.SolveConfig, state: "PDDL.State"
+    ) -> jax.Array:
         """Check if state satisfies goal conditions."""
         s = state.unpacked_atoms
         goal_mask = solve_config.GoalSpec.GoalMask

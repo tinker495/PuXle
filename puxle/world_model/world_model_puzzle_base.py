@@ -1,5 +1,9 @@
 import pickle
+from collections.abc import Callable
+from math import prod
+from typing import Annotated
 
+import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -32,7 +36,7 @@ from .util import download_world_model_dataset, is_world_model_dataset_downloade
 
 class Encoder(nn.Module):
     latent_shape: tuple[int, ...]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -42,7 +46,7 @@ class Encoder(nn.Module):
         shape = data.shape
         data = ((data / 255.0) * 2.0 - 1.0).astype(DTYPE)
         flatten = jnp.reshape(data, shape=(shape[0], -1))
-        latent_size = np.prod(self.latent_shape)
+        latent_size = prod(self.latent_shape)
         x = nn.Dense(
             1000,
             dtype=DTYPE,
@@ -61,7 +65,7 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     data_shape: tuple[int, ...]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -77,7 +81,7 @@ class Decoder(nn.Module):
         )(x)
         x = nn.relu(apply_norm(self.norm_fn, x, training))
         x = nn.Dense(
-            np.prod(self.data_shape),
+            prod(self.data_shape),
             dtype=DTYPE,
             param_dtype=PARAM_DTYPE,
             dot_general_cls=aqt_dg,
@@ -88,7 +92,7 @@ class Decoder(nn.Module):
 class AutoEncoder(nn.Module):
     data_shape: tuple[int, ...]
     latent_shape: tuple[int, ...]
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -114,7 +118,7 @@ class AutoEncoder(nn.Module):
 class WorldModel(nn.Module):
     latent_shape: tuple[int, ...]
     action_size: int
-    norm_fn: nn.Module = DEFAULT_NORM_FN
+    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
 
@@ -131,7 +135,7 @@ class WorldModel(nn.Module):
             )(x)
             x = nn.relu(apply_norm(self.norm_fn, x, training))
         x = nn.Dense(
-            np.prod(self.latent_shape) * self.action_size,
+            prod(self.latent_shape) * self.action_size,
             dtype=DTYPE,
             param_dtype=PARAM_DTYPE,
             dot_general_cls=aqt_dg,
@@ -156,7 +160,10 @@ class WorldModelPuzzleBase(Puzzle):
 
         @xtructure_dataclass
         class State:
-            latent: FieldDescriptor.packed_tensor(shape=latent_shape, packed_bits=1)
+            latent: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(shape=latent_shape, packed_bits=1),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -172,7 +179,7 @@ class WorldModelPuzzleBase(Puzzle):
         AE=AutoEncoder,
         WM=WorldModel,
         init_params: bool = False,
-        path: str = None,
+        path: str | None = None,
         **kwargs,
     ):
         self.data_path = data_path
@@ -281,6 +288,8 @@ class WorldModelPuzzleBase(Puzzle):
         )
 
     def load_model(self):
+        if self.path is None:
+            raise ValueError("A model path is required to load parameters.")
         try:
             if not is_model_downloaded(self.path):
                 download_model(self.path)
@@ -293,6 +302,7 @@ class WorldModelPuzzleBase(Puzzle):
                 return self.get_new_params()
             self.metadata = metadata
             params = align_params_dtype(params)
+            assert params is not None
             self.model.apply(params, jnp.zeros((1, *self.data_shape)))
             return params
         except (
@@ -305,6 +315,8 @@ class WorldModelPuzzleBase(Puzzle):
             raise ValueError(f"Error loading WorldModelPuzzle model: {exc}") from exc
 
     def save_model(self, metadata: dict | None = None):
+        if self.path is None:
+            raise ValueError("A model path is required to save parameters.")
         metadata = {} if metadata is None else metadata
         metadata.update(
             data_path=self.data_path,
@@ -339,7 +351,7 @@ class WorldModelPuzzleBase(Puzzle):
 
         return parser
 
-    def get_img_parser(self) -> callable:
+    def get_img_parser(self) -> Callable[..., np.ndarray]:
         import cv2
 
         def decode(latent):
@@ -348,7 +360,10 @@ class WorldModelPuzzleBase(Puzzle):
                 jnp.expand_dims(latent, axis=0),
                 training=False,
                 method=self.model.decode,
-            ).squeeze(0)
+            )
+            if not isinstance(data, (jax.Array, np.ndarray)):
+                raise TypeError("The world model decoder must return an array.")
+            data = data.squeeze(0)
             return np.clip(np.array(data * 255.0) / 2.0 + 127.5, 0, 255).astype(
                 np.uint8
             )
@@ -381,13 +396,22 @@ class WorldModelPuzzleBase(Puzzle):
         return img_parser
 
     def get_data(self, key=None):
+        if key is None:
+            raise ValueError("A random key is required to sample world model data.")
         idx = jax.random.randint(key, (), 0, self.init_state_size)
         return self.targets[idx][None, ...], self.inits[idx][None, ...]
 
     def get_solve_config(self, key=None, data=None):
+        if data is None:
+            raise ValueError(
+                "World model data is required to build a solve configuration."
+            )
         latent = self.model.apply(
             self.params, data[0], training=False, method=self.model.encode
-        ).squeeze(0)
+        )
+        if not isinstance(latent, (jax.Array, np.ndarray)):
+            raise TypeError("The world model encoder must return an array.")
+        latent = latent.squeeze(0)
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(),
             GoalSpec=self.State.from_unpacked(
@@ -396,9 +420,14 @@ class WorldModelPuzzleBase(Puzzle):
         )
 
     def get_initial_state(self, solve_config, key=None, data=None):
+        if data is None:
+            raise ValueError("World model data is required to build an initial state.")
         latent = self.model.apply(
             self.params, data[1], training=False, method=self.model.encode
-        ).squeeze(0)
+        )
+        if not isinstance(latent, (jax.Array, np.ndarray)):
+            raise TypeError("The world model encoder must return an array.")
+        latent = latent.squeeze(0)
         return self.State.from_unpacked(latent=jnp.round(latent).astype(jnp.bool_))
 
     def batched_get_actions(
@@ -426,6 +455,8 @@ class WorldModelPuzzleBase(Puzzle):
             training=False,
             method=self.model.transition,
         )
+        if not isinstance(next_latent, (jax.Array, np.ndarray)):
+            raise TypeError("The world model transition must return an array.")
         next_latent = jnp.swapaxes(jnp.round(next_latent).astype(jnp.bool_), 0, 1)
         next_states = jax.vmap(jax.vmap(self.State.from_unpacked))(latent=next_latent)
         costs = jnp.where(

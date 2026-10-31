@@ -90,7 +90,9 @@ class LightsOutDeepCubeABenchmark(Benchmark):
 
     def _convert_state(self, raw_state: Any) -> Xtructurable:
         tiles = extract_tiles(raw_state)
-        puzzle: LightsOut = self.puzzle
+        puzzle = self.puzzle
+        if not isinstance(puzzle, LightsOut):
+            raise TypeError("This benchmark requires a LightsOut puzzle.")
         board = np.asarray(tiles, dtype=np.bool_)
         if not puzzle.board_is_solvable(board, puzzle.size):
             raise ValueError(

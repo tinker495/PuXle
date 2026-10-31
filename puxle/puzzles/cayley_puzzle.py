@@ -6,8 +6,9 @@ and the convenience factory; nothing at module top level touches torch.
 
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Annotated, Optional
 
+import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -314,9 +315,12 @@ class CayleyPuzzle(Puzzle):
 
             @xtructure_dataclass
             class State:
-                permutation: FieldDescriptor.tensor(
-                    dtype=self._state_dtype, shape=(state_length,)
-                )
+                permutation: Annotated[
+                    chex.Array,
+                    FieldDescriptor.tensor(
+                        dtype=self._state_dtype, shape=(state_length,)
+                    ),
+                ]
 
                 def __str__(self, **kwargs):
                     return str_parser(self, **kwargs)
@@ -325,9 +329,10 @@ class CayleyPuzzle(Puzzle):
 
         @xtructure_dataclass
         class State:
-            vector: FieldDescriptor.tensor(
-                dtype=self._state_dtype, shape=(state_length,)
-            )
+            vector: Annotated[
+                chex.Array,
+                FieldDescriptor.tensor(dtype=self._state_dtype, shape=(state_length,)),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)

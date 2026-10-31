@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from math import gcd
+from typing import Annotated
 
 import chex
 import cv2
@@ -37,9 +38,12 @@ class SlidePuzzle(Puzzle):
 
         @xtructure_dataclass
         class State:
-            board: FieldDescriptor.packed_tensor(
-                shape=(size**2,), packed_bits=packed_bits
-            )
+            board: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(
+                    shape=(size**2,), packed_bits=packed_bits
+                ),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -267,7 +271,7 @@ class SlidePuzzle(Puzzle):
         # Count ordered pairs (i < j) where both tiles are non-blank and out of
         # order. Vectorized equivalent of the O(n^4) double loop.
         flat = self.size * self.size
-        a = board
+        a = jnp.asarray(board)
         out_of_order = a[:, None] > a[None, :]
         both_nonzero = (a[:, None] != 0) & (a[None, :] != 0)
         upper = jnp.triu(jnp.ones((flat, flat), dtype=bool), k=1)

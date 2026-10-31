@@ -1,7 +1,9 @@
 import os
 from collections.abc import Callable
 from enum import Enum
-from importlib.resources import files
+from importlib.resources import as_file, files
+from pathlib import Path
+from typing import Annotated
 
 import chex
 import jax
@@ -38,7 +40,7 @@ class Sokoban(Puzzle):
     """
 
     size: int = 10
-    solve_condition: "Sokoban.SolveCondition" = None
+    solve_condition: "Sokoban.SolveCondition | None" = None
 
     class Object(Enum):
         EMPTY = 0
@@ -61,7 +63,10 @@ class Sokoban(Puzzle):
 
         @xtructure_dataclass
         class State:
-            board: FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=2)
+            board: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=2),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -97,8 +102,10 @@ class Sokoban(Puzzle):
         try:
             # Try to load as package resources first (for installed packages)
             data_pkg = files("puxle.data.sokoban")
-            self.init_puzzles = jnp.load(data_pkg / init_name)
-            self.target_puzzles = jnp.load(data_pkg / target_name)
+            with (data_pkg / init_name).open("rb") as init_file:
+                self.init_puzzles = jnp.load(init_file)
+            with (data_pkg / target_name).open("rb") as target_file:
+                self.target_puzzles = jnp.load(target_file)
         except (FileNotFoundError, ModuleNotFoundError):
             # Fallback to relative paths (for development/source directory)
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -109,7 +116,9 @@ class Sokoban(Puzzle):
 
         self.num_puzzles = self.init_puzzles.shape[0]
 
-    def get_data(self, key: jax.random.PRNGKey) -> tuple[chex.Array, chex.Array]:
+    def get_data(self, key: chex.Array | None = None) -> tuple[chex.Array, chex.Array]:
+        if key is None:
+            raise ValueError("A random key is required to sample Sokoban data.")
         idx = jax.random.randint(key, (), 0, self.num_puzzles)
         return self.target_puzzles[idx, ...], self.init_puzzles[idx, ...]
 
@@ -148,7 +157,7 @@ class Sokoban(Puzzle):
 
     def is_solved(
         self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State"
-    ) -> bool:
+    ) -> jax.Array:
         # Unpack boards for comparison.
         board = state.board_unpacked
         t_board = solve_config.GoalSpec.board_unpacked
@@ -322,7 +331,7 @@ class Sokoban(Puzzle):
         except (FileNotFoundError, ModuleNotFoundError):
             # Fallback to relative paths (for development/source directory)
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            image_dir = os.path.join(current_dir, "..", "data", "sokoban", "imgs")
+            image_dir = Path(current_dir) / ".." / "data" / "sokoban" / "imgs"
 
         tile_filenames = {
             0: "floor.png",
@@ -333,28 +342,24 @@ class Sokoban(Puzzle):
             5: "agent_on_target.png",
             6: "box_on_target.png",
         }
-        assets = {
-            code: cv2.resize(
-                cv2.cvtColor(
-                    cv2.imread(os.path.join(image_dir, filename), cv2.IMREAD_COLOR),
-                    cv2.COLOR_BGR2RGB,
-                ),
+        assets = {}
+        for code, filename in tile_filenames.items():
+            with as_file(image_dir / filename) as image_path:
+                image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+            if image is None:
+                raise ValueError(f"Unable to decode Sokoban image asset: {filename}")
+            assets[code] = cv2.resize(
+                cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
                 (cell_w, cell_h),
                 interpolation=cv2.INTER_AREA,
             )
-            for code, filename in tile_filenames.items()
-        }
-        # Entry 7 is the "player pushing" sprite: same agent art with the green
-        # channel rolled into red instead of a BGR->RGB conversion.
-        assets[7] = cv2.resize(
-            np.roll(
-                cv2.imread(os.path.join(image_dir, "agent.png"), cv2.IMREAD_COLOR),
-                -1,
-                axis=2,  # color channel G -> R
-            ),
-            (cell_w, cell_h),
-            interpolation=cv2.INTER_AREA,
-        )
+            if code == Sokoban.Object.PLAYER.value:
+                # The player-pushing sprite rolls the green channel into red.
+                assets[7] = cv2.resize(
+                    np.roll(image, -1, axis=2),
+                    (cell_w, cell_h),
+                    interpolation=cv2.INTER_AREA,
+                )
 
         def img_func(
             state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs
@@ -421,8 +426,8 @@ class Sokoban(Puzzle):
         return img_func
 
     def _get_box_positions(
-        self, board: jnp.ndarray, number_of_boxes: int = 4
-    ) -> jnp.ndarray:
+        self, board: jax.Array, number_of_boxes: int = 4
+    ) -> tuple[jax.Array, ...]:
         """
         Get the positions of all boxes on the board.
         """
@@ -430,11 +435,13 @@ class Sokoban(Puzzle):
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
     def _place_agent_randomly(
-        self, board: jnp.ndarray, key: jax.random.PRNGKey
+        self, board: jnp.ndarray, key: chex.Array | None
     ) -> jnp.ndarray:
         """
         Place the agent randomly on the board.
         """
+        if key is None:
+            raise ValueError("A random key is required to place the Sokoban player.")
         box_xs, box_ys = self._get_box_positions(board)
         box_positions = jnp.expand_dims(
             jnp.stack([box_xs, box_ys], axis=1), 0
@@ -463,7 +470,7 @@ class Sokoban(Puzzle):
         return new_board
 
     def solve_config_to_state_transform(
-        self, solve_config: "Sokoban.SolveConfig", key: jax.random.PRNGKey = None
+        self, solve_config: "Sokoban.SolveConfig", key: chex.Array | None = None
     ) -> "Sokoban.State":
         """
         This function shoulde transformt the solve config to the state.

@@ -109,6 +109,7 @@ def world_model_train_builder(
 def world_model_eval_builder(train_info_fn: Callable, minibatch_size: int):
     def eval_fn(params: Any, trajectory: tuple[chex.Array, chex.Array]):
         states_all, actions = trajectory
+        states_all = jnp.asarray(states_all)
         data_size = actions.shape[0]
         if data_size == 0:
             raise ValueError("evaluation trajectory must contain at least one action")

@@ -207,7 +207,9 @@ class RubiksCubeDeepCubeABenchmark(Benchmark):
     def _convert_state(self, raw_state: Any):
         colors = getattr(raw_state, "colors", raw_state)
         faces = jnp.asarray(colors, dtype=jnp.uint8)
-        puzzle: RubiksCube = self.puzzle
+        puzzle = self.puzzle
+        if not isinstance(puzzle, RubiksCube):
+            raise TypeError("This benchmark requires a RubiksCube puzzle.")
         faces = self._convert_deepcubea_to_puxle(faces, puzzle.size)
         faces = puzzle.convert_tile_to_color_embedding(faces)
         return puzzle.State.from_unpacked(faces=faces.reshape(6, -1))

@@ -1,7 +1,7 @@
 import re
 from collections.abc import Callable
 from functools import partial
-from typing import Any
+from typing import Annotated, Any
 
 import chex
 import cv2
@@ -222,7 +222,7 @@ class RubiksCube(Puzzle):
     """
 
     size: int
-    index_grid: chex.Array
+    index_grid: jax.Array
 
     @property
     def _active_bits(self) -> int:
@@ -239,9 +239,10 @@ class RubiksCube(Puzzle):
 
         @xtructure_dataclass
         class State:
-            faces: FieldDescriptor.packed_tensor(
-                shape=raw_shape, packed_bits=active_bits
-            )
+            faces: Annotated[
+                chex.Array,
+                FieldDescriptor.packed_tensor(shape=raw_shape, packed_bits=active_bits),
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -551,7 +552,9 @@ class RubiksCube(Puzzle):
         return f"{face_str}{suffix}"
 
     @staticmethod
-    def _rotate_face(shaped_faces: chex.Array, clockwise: bool, mul: int):
+    def _rotate_face(
+        shaped_faces: jax.Array, clockwise: bool | int | jax.Array, mul: int
+    ):
         return rot90_traceable(shaped_faces, jnp.where(clockwise, mul, -mul))
 
     def _rotate(
@@ -570,7 +573,7 @@ class RubiksCube(Puzzle):
         )
         actions = jnp.arange(self.action_size, dtype=jnp.int32)
 
-        def rotate(action: chex.Array) -> chex.Array:
+        def rotate(action: jax.Array) -> jax.Array:
             axis = (action // 2) % 3
             index = self.index_grid[action // 6]
             clockwise = action % 2
@@ -579,9 +582,13 @@ class RubiksCube(Puzzle):
         return jax.jit(jax.vmap(rotate))(actions)
 
     def _rotate_faces(
-        self, faces: chex.Array, axis: int, index: int, clockwise: bool = True
-    ) -> chex.Array:
-        shaped_faces = faces.reshape((6, self.size, self.size))
+        self,
+        faces: jax.Array,
+        axis: int | jax.Array,
+        index: int | jax.Array,
+        clockwise: bool | int | jax.Array = True,
+    ) -> jax.Array:
+        shaped_faces = jnp.asarray(faces).reshape((6, self.size, self.size))
 
         rotate_edge_map = jnp.array(
             [

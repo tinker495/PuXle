@@ -19,6 +19,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import xtructure.numpy as xnp
+from xtructure.core.protocol import Xtructurable
 
 if TYPE_CHECKING:
     from puxle.core.puzzle_base import Puzzle
@@ -31,8 +32,8 @@ class PuzzleTrajectory:
     shuffled states, paths, and their corresponding algorithmic generation costs.
     """
 
-    solve_configs: chex.Array
-    states: chex.Array
+    solve_configs: Xtructurable
+    states: Xtructurable
     move_costs: chex.Array
     move_costs_tm1: chex.Array
     actions: chex.Array
@@ -112,20 +113,22 @@ def create_target_shuffled_path(
         k_max, shuffle_parallel, key, non_backtracking_steps=non_backtracking_steps
     )
     solve_configs = inverse_trajectory.solve_configs
+    move_costs = jnp.asarray(inverse_trajectory.move_costs)
+    move_costs_tm1 = jnp.asarray(inverse_trajectory.move_costs_tm1)
     if include_solved_states:
         states = jax.tree_util.tree_map(
             lambda leaf: leaf[:-1, ...], inverse_trajectory.states
         )
-        move_costs = inverse_trajectory.move_costs[:-1, ...]
-        move_costs_tm1 = inverse_trajectory.move_costs_tm1[:-1, ...]
+        move_costs = move_costs[:-1, ...]
+        move_costs_tm1 = move_costs_tm1[:-1, ...]
     else:
         states = jax.tree_util.tree_map(
             lambda leaf: leaf[1:, ...], inverse_trajectory.states
         )
-        move_costs = inverse_trajectory.move_costs[1:, ...]
-        move_costs_tm1 = inverse_trajectory.move_costs_tm1[1:, ...]
-    inv_actions = inverse_trajectory.actions
-    action_costs = inverse_trajectory.action_costs
+        move_costs = move_costs[1:, ...]
+        move_costs_tm1 = move_costs_tm1[1:, ...]
+    inv_actions = jnp.asarray(inverse_trajectory.actions)
+    action_costs = jnp.asarray(inverse_trajectory.action_costs)
 
     states = states.transpose((1, 0))
     move_costs = move_costs.transpose((1, 0))
@@ -167,10 +170,10 @@ def create_hindsight_target_shuffled_path(
 
     original_solve_configs = trajectory.solve_configs
     states = trajectory.states
-    move_costs = trajectory.move_costs
-    move_costs_tm1 = trajectory.move_costs_tm1
-    actions = trajectory.actions
-    action_costs = trajectory.action_costs
+    move_costs = jnp.asarray(trajectory.move_costs)
+    move_costs_tm1 = jnp.asarray(trajectory.move_costs_tm1)
+    actions = jnp.asarray(trajectory.actions)
+    action_costs = jnp.asarray(trajectory.action_costs)
 
     targets = states[-1, ...]
     if include_solved_states:
@@ -248,10 +251,10 @@ def create_hindsight_target_triangular_shuffled_path(
 
     original_solve_configs = trajectory.solve_configs
     states = trajectory.states
-    move_costs = trajectory.move_costs
-    move_costs_tm1 = trajectory.move_costs_tm1
-    actions = trajectory.actions
-    action_costs = trajectory.action_costs
+    move_costs = jnp.asarray(trajectory.move_costs)
+    move_costs_tm1 = jnp.asarray(trajectory.move_costs_tm1)
+    actions = jnp.asarray(trajectory.actions)
+    action_costs = jnp.asarray(trajectory.action_costs)
 
     key, key_k, key_i = jax.random.split(key, 3)
 

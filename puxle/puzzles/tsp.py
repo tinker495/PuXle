@@ -1,5 +1,7 @@
 from collections.abc import Callable
+from typing import Annotated
 
+import chex
 import cv2
 import jax
 import jax.numpy as jnp
@@ -40,8 +42,12 @@ class TSP(Puzzle):
 
         @xtructure_dataclass
         class State:
-            mask: FieldDescriptor.packed_tensor(shape=(size,), packed_bits=1)
-            point: FieldDescriptor.scalar(dtype=self._point_dtype)
+            mask: Annotated[
+                chex.Array, FieldDescriptor.packed_tensor(shape=(size,), packed_bits=1)
+            ]
+            point: Annotated[
+                chex.Array, FieldDescriptor.scalar(dtype=self._point_dtype)
+            ]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
@@ -51,11 +57,17 @@ class TSP(Puzzle):
     def define_instance_context_class(self) -> type[Xtructurable]:
         @xtructure_dataclass
         class InstanceContext:
-            points: FieldDescriptor.tensor(dtype=jnp.float32, shape=(self.size, 2))
-            distance_matrix: FieldDescriptor.tensor(
-                dtype=jnp.float32, shape=(self.size, self.size)
-            )
-            start: FieldDescriptor.scalar(dtype=self._point_dtype)
+            points: Annotated[
+                chex.Array,
+                FieldDescriptor.tensor(dtype=jnp.float32, shape=(self.size, 2)),
+            ]
+            distance_matrix: Annotated[
+                chex.Array,
+                FieldDescriptor.tensor(dtype=jnp.float32, shape=(self.size, self.size)),
+            ]
+            start: Annotated[
+                chex.Array, FieldDescriptor.scalar(dtype=self._point_dtype)
+            ]
 
         return InstanceContext
 
@@ -109,6 +121,8 @@ class TSP(Puzzle):
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         # Split PRNG key so that the start index is independent of point positions.
+        if key is None:
+            raise ValueError("A random key is required to generate a TSP instance.")
         key_points, key_start = jax.random.split(key)
 
         points = jax.random.uniform(

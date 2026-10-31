@@ -1,12 +1,13 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 import chex
 import jax
 import jax.numpy as jnp
 from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
 from xtructure.core.layout import get_type_layout
+from xtructure.core.protocol import Xtructurable as XtructurableProtocol
 
 from puxle.render import attach_state_renderer
 
@@ -144,8 +145,12 @@ class Puzzle(ABC):
 
         @xtructure_dataclass
         class SolveConfig:
-            InstanceContext: FieldDescriptor.scalar(dtype=self.InstanceContext)
-            GoalSpec: FieldDescriptor.scalar(dtype=self.GoalSpec)
+            InstanceContext: Annotated[
+                XtructurableProtocol, FieldDescriptor.scalar(dtype=self.InstanceContext)
+            ]
+            GoalSpec: Annotated[
+                XtructurableProtocol, FieldDescriptor.scalar(dtype=self.GoalSpec)
+            ]
 
             def __str__(solve_config, **kwargs):
                 return string_parser(solve_config, **kwargs)
@@ -306,6 +311,8 @@ class Puzzle(ABC):
         Returns:
             A ``(SolveConfig, State)`` tuple.
         """
+        if key is None:
+            raise ValueError("A random key is required to generate initial states.")
         datakey, solveconfigkey, initkey = jax.random.split(key, 3)
         data = self.get_data(datakey)
         solve_config = self.get_solve_config(solveconfigkey, data)
@@ -558,7 +565,7 @@ class Puzzle(ABC):
         return jax.vmap(self.hindsight_transform)(solve_configs, states)
 
     def solve_config_to_state_transform(
-        self, solve_config: SolveConfig, key: jax.random.PRNGKey = None
+        self, solve_config: SolveConfig, key: chex.PRNGKey | None = None
     ) -> State:
         """Convert a ``SolveConfig`` into the corresponding target ``State``.
 
