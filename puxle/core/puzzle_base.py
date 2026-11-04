@@ -1,18 +1,35 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Annotated, Any, Optional
+from typing import TYPE_CHECKING, Annotated, Any, Generic, Optional
 
 import chex
 import jax
 import jax.numpy as jnp
+from typing_extensions import TypeVar
 from xtructure import FieldDescriptor, Xtructurable
 from xtructure.core.layout import get_type_layout
-from xtructure.core.protocol import Xtructurable as XtructurableProtocol
 
 from puxle.render import attach_state_renderer
 
+# A puzzle's state, instance-context and goal-spec types. Puzzle is invariant in
+# them, so they default to Any: an unparameterized ``Puzzle`` accepts every puzzle.
+StateT = TypeVar("StateT", bound=Xtructurable, default=Any)
+ContextT = TypeVar("ContextT", bound=Xtructurable, default=Any)
+GoalT = TypeVar("GoalT", bound=Xtructurable, default=Any)
 
-class Puzzle(ABC):
+
+class EmptyInstanceContext(Xtructurable, abstract=True):
+    """Typed view of the field-less instance context of context-free puzzles."""
+
+
+class SolveConfigView(Xtructurable, Generic[ContextT, GoalT], abstract=True):
+    """Typed view of a puzzle's per-instance ``SolveConfig`` class."""
+
+    InstanceContext: ContextT
+    GoalSpec: GoalT
+
+
+class Puzzle(ABC, Generic[StateT, ContextT, GoalT]):
     """Abstract base class for all PuXle puzzle and planning environments.
 
     Every concrete puzzle subclass must:
@@ -66,29 +83,32 @@ class Puzzle(ABC):
         """
         return self.inverse_action_map is not None
 
-    State = InstanceContext = GoalSpec = SolveConfig = Xtructurable
-
-    def define_instance_context_class(self) -> type[Xtructurable]:
-        """Return the instance-specific transition context type.
-
-        The default context is empty because most puzzles encode all transition
-        rules in their class and state.
-        """
-
-        class InstanceContext(Xtructurable):
-            pass
-
-        return InstanceContext
-
-    def define_goal_spec_class(self) -> type[Xtructurable]:
-        """Return the objective type.
-
-        A goal described by one target state uses the state class directly.
-        """
-        return self.State
+    if TYPE_CHECKING:
+        State: type[StateT]
+        InstanceContext: type[ContextT]
+        GoalSpec: type[GoalT]
+        SolveConfig: type[SolveConfigView[ContextT, GoalT]]
+    else:
+        # Eagerly evaluated annotations such as ``Puzzle.State`` keep importing;
+        # __init__ rebinds these per instance.
+        State = InstanceContext = GoalSpec = SolveConfig = Xtructurable
 
     @abstractmethod
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_instance_context_class(self) -> type[ContextT]:
+        """Return the instance-specific transition context type.
+
+        ``ContextFreePuzzle`` provides the empty context most puzzles use.
+        """
+
+    @abstractmethod
+    def define_goal_spec_class(self) -> type[GoalT]:
+        """Return the objective type.
+
+        ``TargetPuzzle`` uses the state class itself (one target state).
+        """
+
+    @abstractmethod
+    def define_state_class(self) -> type[StateT]:
         """Return the ``Xtructurable`` subclass used for puzzle states.
 
         Subclasses **must** implement this method.  The returned class should
@@ -142,12 +162,12 @@ class Puzzle(ABC):
         self.GoalSpec = self.define_goal_spec_class()
         string_parser = self.get_solve_config_string_parser()
 
-        class SolveConfig(Xtructurable):
+        class SolveConfig(SolveConfigView[Any, Any]):
             InstanceContext: Annotated[
-                XtructurableProtocol, FieldDescriptor.scalar(dtype=self.InstanceContext)
+                Xtructurable, FieldDescriptor.scalar(dtype=self.InstanceContext)
             ]
             GoalSpec: Annotated[
-                XtructurableProtocol, FieldDescriptor.scalar(dtype=self.GoalSpec)
+                Xtructurable, FieldDescriptor.scalar(dtype=self.GoalSpec)
             ]
 
             def __str__(solve_config, **kwargs):
@@ -212,7 +232,9 @@ class Puzzle(ABC):
         )
         stringparser_state = self.get_string_parser()
 
-        def stringparser(solve_config: "Puzzle.SolveConfig", **kwargs) -> str:
+        def stringparser(
+            solve_config: SolveConfigView[ContextT, GoalT], **kwargs
+        ) -> str:
             return stringparser_state(solve_config.GoalSpec, **kwargs)
 
         return stringparser
@@ -242,7 +264,9 @@ class Puzzle(ABC):
         )
         imgparser_state = self.get_img_parser()
 
-        def imgparser(solve_config: "Puzzle.SolveConfig", **kwargs) -> jnp.ndarray:
+        def imgparser(
+            solve_config: SolveConfigView[ContextT, GoalT], **kwargs
+        ) -> jnp.ndarray:
             return imgparser_state(solve_config.GoalSpec, **kwargs)
 
         return imgparser
@@ -269,7 +293,7 @@ class Puzzle(ABC):
         return None
 
     @abstractmethod
-    def get_solve_config(self, key=None, data=None) -> SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> SolveConfigView[ContextT, GoalT]:
         """Build and return an instance context and goal specification.
 
         Args:
@@ -283,8 +307,8 @@ class Puzzle(ABC):
 
     @abstractmethod
     def get_initial_state(
-        self, solve_config: SolveConfig, key=None, data=None
-    ) -> State:
+        self, solve_config: SolveConfigView[ContextT, GoalT], key=None, data=None
+    ) -> StateT:
         """Build and return the initial state for a solve configuration.
 
         Args:
@@ -297,7 +321,7 @@ class Puzzle(ABC):
         """
         pass
 
-    def get_inits(self, key=None) -> tuple[SolveConfig, State]:
+    def get_inits(self, key=None) -> tuple[SolveConfigView[ContextT, GoalT], StateT]:
         """Convenience method returning ``(solve_config, initial_state)``.
 
         Splits ``key`` internally to call :meth:`get_data`,
@@ -318,12 +342,12 @@ class Puzzle(ABC):
 
     def batched_get_actions(
         self,
-        solve_configs: SolveConfig,
-        states: State,
+        solve_configs: SolveConfigView[ContextT, GoalT],
+        states: StateT,
         actions: jax.Array,
         filleds: bool | jax.Array = True,
         multi_solve_config: bool = False,
-    ) -> tuple[State, chex.Array]:
+    ) -> tuple[StateT, chex.Array]:
         """Vectorised version of :meth:`get_actions`.
 
         Args:
@@ -349,11 +373,11 @@ class Puzzle(ABC):
 
     def get_actions(
         self,
-        solve_config: SolveConfig,
-        state: State,
+        solve_config: SolveConfigView[ContextT, GoalT],
+        state: StateT,
         action: int | jax.Array,
         filled: bool | jax.Array = True,
-    ) -> tuple[State, jax.Array]:
+    ) -> tuple[StateT, jax.Array]:
         """Apply a single action, enforcing the filled/inf-cost contract.
 
         Puzzles implement the pure transition in :meth:`_apply`; this method
@@ -382,10 +406,10 @@ class Puzzle(ABC):
 
     def _apply(
         self,
-        solve_config: SolveConfig,
-        state: State,
+        solve_config: SolveConfigView[ContextT, GoalT],
+        state: StateT,
         action: jax.Array,
-    ) -> tuple[State, jax.Array | float]:
+    ) -> tuple[StateT, jax.Array | float]:
         """Pure state transition for one action — the puzzle-specific seam.
 
         Return ``(next_state, cost)`` for taking ``action`` in ``state``. Set
@@ -400,11 +424,11 @@ class Puzzle(ABC):
 
     def batched_get_neighbours(
         self,
-        solve_configs: SolveConfig,
-        states: State,
+        solve_configs: SolveConfigView[ContextT, GoalT],
+        states: StateT,
         filleds: bool = True,
         multi_solve_config: bool = False,
-    ) -> tuple[State, chex.Array]:
+    ) -> tuple[StateT, chex.Array]:
         """Vectorised version of :meth:`get_neighbours`.
 
         Args:
@@ -428,8 +452,11 @@ class Puzzle(ABC):
             )
 
     def get_neighbours(
-        self, solve_config: SolveConfig, state: State, filled: bool | jax.Array = True
-    ) -> tuple[State, jax.Array]:
+        self,
+        solve_config: SolveConfigView[ContextT, GoalT],
+        state: StateT,
+        filled: bool | jax.Array = True,
+    ) -> tuple[StateT, jax.Array]:
         """Compute all successor states for every action.
 
         The result is equivalent to stacking :meth:`get_actions`. Native puzzles
@@ -464,8 +491,8 @@ class Puzzle(ABC):
         return jax.vmap(restore_invalid)(states, costs)
 
     def _get_neighbours(
-        self, solve_config: SolveConfig, state: State
-    ) -> tuple[State, jax.Array]:
+        self, solve_config: SolveConfigView[ContextT, GoalT], state: StateT
+    ) -> tuple[StateT, jax.Array]:
         """Return candidates and costs in action order, without filled handling.
 
         Native puzzles implement this bulk kernel separately from :meth:`_apply`.
@@ -479,8 +506,8 @@ class Puzzle(ABC):
 
     def batched_is_solved(
         self,
-        solve_configs: SolveConfig,
-        states: State,
+        solve_configs: SolveConfigView[ContextT, GoalT],
+        states: StateT,
         multi_solve_config: bool = False,
     ) -> jax.Array | bool:
         """Vectorised version of :meth:`is_solved`.
@@ -499,7 +526,9 @@ class Puzzle(ABC):
         else:
             return jax.vmap(self.is_solved, in_axes=(None, 0))(solve_configs, states)
 
-    def is_solved(self, solve_config: SolveConfig, state: State) -> jax.Array | bool:
+    def is_solved(
+        self, solve_config: SolveConfigView[ContextT, GoalT], state: StateT
+    ) -> jax.Array | bool:
         """Return whether ``state`` equals the single-state goal.
 
         Override when :attr:`GoalSpec` describes a predicate rather than one
@@ -549,8 +578,8 @@ class Puzzle(ABC):
         return form
 
     def batched_hindsight_transform(
-        self, solve_configs: SolveConfig, states: State
-    ) -> SolveConfig:
+        self, solve_configs: SolveConfigView[ContextT, GoalT], states: StateT
+    ) -> SolveConfigView[ContextT, GoalT]:
         """Vectorised version of :meth:`hindsight_transform`.
 
         Args:
@@ -563,12 +592,13 @@ class Puzzle(ABC):
         return jax.vmap(self.hindsight_transform)(solve_configs, states)
 
     def solve_config_to_state_transform(
-        self, solve_config: SolveConfig, key: chex.PRNGKey | None = None
-    ) -> State:
+        self,
+        solve_config: SolveConfigView[ContextT, GoalT],
+        key: chex.PRNGKey | None = None,
+    ) -> StateT:
         """Convert a ``SolveConfig`` into the corresponding target ``State``.
 
-        The default implementation simply extracts ``solve_config.GoalSpec``.
-        Override for puzzles whose goal is not a single target state.
+        ``TargetPuzzle`` extracts ``solve_config.GoalSpec``; other puzzles override it.
 
         Args:
             solve_config: The solve configuration.
@@ -578,14 +608,15 @@ class Puzzle(ABC):
             The target ``State`` encoded in the configuration.
 
         Raises:
-            AssertionError: If ``GoalSpec`` is not exactly ``State``.
+            NotImplementedError: If the puzzle has no target state and does not override it.
         """
-        assert self.has_target, "This puzzle does not have target state"
-        return solve_config.GoalSpec
+        raise NotImplementedError(
+            f"{type(self).__name__} has no target state; override solve_config_to_state_transform"
+        )
 
     def hindsight_transform(
-        self, solve_config: SolveConfig, states: State
-    ) -> SolveConfig:
+        self, solve_config: SolveConfigView[ContextT, GoalT], states: StateT
+    ) -> SolveConfigView[ContextT, GoalT]:
         """Hindsight experience replay: rewrite the goal to match *states*.
 
         Creates a new ``SolveConfig`` whose ``GoalSpec`` equals the given state,
@@ -601,12 +632,16 @@ class Puzzle(ABC):
         Raises:
             AssertionError: If the puzzle goal is not a simple target state.
         """
-        assert self.has_target, "This puzzle does not have target state"
-        return solve_config.replace(GoalSpec=states)
+        raise NotImplementedError(
+            f"{type(self).__name__} has no target state; override hindsight_transform"
+        )
 
     def get_inverse_neighbours(
-        self, solve_config: SolveConfig, state: State, filled: bool = True
-    ) -> tuple[State, chex.Array]:
+        self,
+        solve_config: SolveConfigView[ContextT, GoalT],
+        state: StateT,
+        filled: bool = True,
+    ) -> tuple[StateT, chex.Array]:
         """
         This function should return inverse neighbours and the cost of the move.
         By default, it uses `inverse_action_map` to calculate inverse transitions
@@ -626,18 +661,20 @@ class Puzzle(ABC):
         neighbours, costs = self.get_neighbours(solve_config, state, filled)
         # The i-th inverse neighbour is the state from which applying action i leads to the current state.
         # This is found by permuting the forward neighbours using _inverse_action_permutation.
-        permuted_neighbours = neighbours[self._inverse_action_permutation]
+        # shortcut: explicit __getitem__ because pyrefly drops the TypeVar on subscripts of a
+        # TypeVar-typed value; use plain indexing once pyrefly binds Self there.
+        permuted_neighbours = neighbours.__getitem__(self._inverse_action_permutation)
         permuted_costs = costs[self._inverse_action_permutation]
 
         return permuted_neighbours, permuted_costs
 
     def batched_get_inverse_neighbours(
         self,
-        solve_configs: SolveConfig,
-        states: State,
+        solve_configs: SolveConfigView[ContextT, GoalT],
+        states: StateT,
         filleds: bool = True,
         multi_solve_config: bool = False,
-    ) -> tuple[State, chex.Array]:
+    ) -> tuple[StateT, chex.Array]:
         """Vectorised version of :meth:`get_inverse_neighbours`.
 
         Args:
@@ -660,11 +697,11 @@ class Puzzle(ABC):
 
     def _get_shuffled_state(
         self,
-        solve_config: "Puzzle.SolveConfig",
-        init_state: "Puzzle.State",
+        solve_config: SolveConfigView[ContextT, GoalT],
+        init_state: StateT,
         key,
         num_shuffle,
-    ):
+    ) -> StateT:
         """Generate a scrambled state by applying random actions.
 
         Uses a ``while_loop`` to apply ``num_shuffle`` (±1) random actions,
@@ -722,3 +759,34 @@ class Puzzle(ABC):
             f"state_fields={state_fields}, "
             f"solve_config_fields={solve_config_fields})"
         )
+
+
+class ContextFreePuzzle(Puzzle[StateT, EmptyInstanceContext, GoalT]):
+    """Puzzle whose transitions need no per-instance context."""
+
+    def define_instance_context_class(self) -> type[EmptyInstanceContext]:
+        class InstanceContext(EmptyInstanceContext):
+            pass
+
+        return InstanceContext
+
+
+class TargetPuzzle(ContextFreePuzzle[StateT, StateT]):
+    """Context-free puzzle whose goal is one target state (``has_target``)."""
+
+    def define_goal_spec_class(self) -> type[StateT]:
+        return self.State
+
+    def solve_config_to_state_transform(
+        self,
+        solve_config: SolveConfigView[EmptyInstanceContext, StateT],
+        key: chex.PRNGKey | None = None,
+    ) -> StateT:
+        return solve_config.GoalSpec
+
+    def hindsight_transform(
+        self,
+        solve_config: SolveConfigView[EmptyInstanceContext, StateT],
+        states: StateT,
+    ) -> SolveConfigView[EmptyInstanceContext, StateT]:
+        return solve_config.replace(GoalSpec=states)

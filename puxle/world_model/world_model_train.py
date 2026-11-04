@@ -7,7 +7,6 @@ import jax.numpy as jnp
 import optax
 
 from ._utils import build_new_params_from_updates
-from .world_model_puzzle_base import WorldModelPuzzleBase
 
 
 def accuracy_fn(preds: chex.Array, labels: chex.Array) -> chex.Array:
@@ -62,9 +61,7 @@ def world_model_train_builder(
 
     def train_fn(
         key: chex.PRNGKey,
-        dataset: tuple[
-            WorldModelPuzzleBase.State, WorldModelPuzzleBase.State, chex.Array
-        ],
+        dataset: tuple[chex.Array, chex.Array, chex.Array],
         params: Any,
         opt_state: optax.OptState,
         epoch: int,

@@ -27,10 +27,14 @@ def get_all_puzzles():
         try:
             module = importlib.import_module(name)
             for name, obj in inspect.getmembers(module):
+                # Author: tinker495.
+                # Migrated: puzzle modules now import the abstract TargetPuzzle /
+                # ContextFreePuzzle bases, which are not puzzles to instantiate.
                 if (
                     inspect.isclass(obj)
                     and issubclass(obj, Puzzle)
                     and obj is not Puzzle
+                    and not inspect.isabstract(obj)
                 ):
                     puzzles.append(obj)
         except Exception as e:

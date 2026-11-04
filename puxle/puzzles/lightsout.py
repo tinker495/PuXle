@@ -1,14 +1,17 @@
 from collections.abc import Callable
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Self, TypeAlias
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import (
+    EmptyInstanceContext,
+    SolveConfigView,
+    TargetPuzzle,
+)
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint8
@@ -30,7 +33,28 @@ def action_to_char(action: int) -> str:
         return colored_str(chr(action + 29), "light_yellow")
 
 
-class LightsOut(Puzzle):
+class LightsOutState(Xtructurable, abstract=True):
+    """Typed view of :class:`LightsOut` states."""
+
+    board: jax.Array
+
+    if TYPE_CHECKING:
+
+        @property
+        def board_unpacked(self) -> jax.Array: ...
+
+        @classmethod
+        def from_unpacked(
+            cls, *, shape: tuple[int, ...] = (), board: jax.Array = ...
+        ) -> Self: ...
+
+        def set_unpacked(self, *, board: jax.Array = ...) -> Self: ...
+
+
+LightsOutSolveConfig: TypeAlias = SolveConfigView[EmptyInstanceContext, LightsOutState]
+
+
+class LightsOut(TargetPuzzle[LightsOutState]):
     """Lights Out puzzle on an N×N grid.
 
     Pressing a button toggles it and its four orthogonal neighbours.
@@ -47,14 +71,14 @@ class LightsOut(Puzzle):
 
     size: int
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[LightsOutState]:
         """Defines the state class for LightsOut using xtructure."""
         str_parser = self.get_string_parser()
         size = self.size
 
-        class State(Xtructurable):
+        class State(LightsOutState):
             board: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1),
             ]
 
@@ -75,15 +99,15 @@ class LightsOut(Puzzle):
         def to_char(x):
             return "□" if x == 0 else "■"
 
-        def parser(state: "LightsOut.State", **kwargs):
+        def parser(state: LightsOutState, **kwargs):
             # Host copy first; per-cell reads off a device array sync per character.
             return form.format(*map(to_char, jax.device_get(state).board_unpacked))
 
         return parser
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "LightsOut.State":
+        self, solve_config: LightsOutSolveConfig, key=None, data=None
+    ) -> LightsOutState:
         return self._get_shuffled_state(
             solve_config,
             solve_config.GoalSpec,
@@ -91,11 +115,11 @@ class LightsOut(Puzzle):
             num_shuffle=self.initial_shuffle,
         )
 
-    def get_target_state(self, key=None) -> "LightsOut.State":
+    def get_target_state(self, key=None) -> LightsOutState:
         board = jnp.zeros(self.size**2, dtype=jnp.bool_)
         return self.State.from_unpacked(board=board)
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> LightsOutSolveConfig:
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(),
             GoalSpec=self.get_target_state(key),
@@ -103,10 +127,10 @@ class LightsOut(Puzzle):
 
     def _apply(
         self,
-        solve_config: Puzzle.SolveConfig,
-        state: "LightsOut.State",
+        solve_config: LightsOutSolveConfig,
+        state: LightsOutState,
         action: jax.Array,
-    ) -> tuple["LightsOut.State", float]:
+    ) -> tuple[LightsOutState, float]:
         """Pure transition: every toggle is valid with unit cost."""
         masks = jnp.asarray(
             np.packbits(self._move_matrix(self.size), axis=1, bitorder="little")
@@ -114,8 +138,8 @@ class LightsOut(Puzzle):
         return state.replace(board=state.board ^ masks[action]), 1.0
 
     def _get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "LightsOut.State"
-    ) -> tuple["LightsOut.State", jax.Array]:
+        self, solve_config: LightsOutSolveConfig, state: LightsOutState
+    ) -> tuple[LightsOutState, jax.Array]:
         masks = jnp.asarray(
             np.packbits(self._move_matrix(self.size), axis=1, bitorder="little")
         )
@@ -187,7 +211,7 @@ class LightsOut(Puzzle):
         )
         return not bool(np.any(inconsistent))
 
-    def is_state_solvable(self, state: "LightsOut.State") -> bool:
+    def is_state_solvable(self, state: LightsOutState) -> bool:
         board = np.array(state.board_unpacked, dtype=np.uint8)
         return self.board_is_solvable(board, self.size)
 
@@ -228,7 +252,7 @@ class LightsOut(Puzzle):
         grid_color = (50, 50, 50)
         bg_color = (30, 30, 30)
 
-        def img_func(state: "LightsOut.State", **kwargs):
+        def img_func(state: LightsOutState, **kwargs):
             imgsize = IMG_SIZE[0]
             img = np.full((IMG_SIZE[1], IMG_SIZE[0], 3), bg_color, dtype=np.uint8)
             cell_size = imgsize // size
@@ -254,7 +278,7 @@ class LightsOutRandom(LightsOut):
     def fixed_target(self) -> bool:
         return False
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> LightsOutSolveConfig:
         solve_config = super().get_solve_config(key, data)
         return solve_config.replace(
             GoalSpec=self._get_shuffled_state(
@@ -266,8 +290,8 @@ class LightsOutRandom(LightsOut):
         )
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> LightsOut.State:
+        self, solve_config: LightsOutSolveConfig, key=None, data=None
+    ) -> LightsOutState:
         return self._get_shuffled_state(
             solve_config,
             solve_config.GoalSpec,

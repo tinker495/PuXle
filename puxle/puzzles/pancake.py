@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
 import chex
 import cv2
@@ -8,7 +8,11 @@ import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import (
+    EmptyInstanceContext,
+    SolveConfigView,
+    TargetPuzzle,
+)
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint8
@@ -20,7 +24,18 @@ def get_color(size):
     return colors[int(size) % len(colors)]
 
 
-class PancakeSorting(Puzzle):
+class PancakeSortingState(Xtructurable, abstract=True):
+    """Typed view of :class:`PancakeSorting` states."""
+
+    stack: jax.Array
+
+
+PancakeSortingSolveConfig: TypeAlias = SolveConfigView[
+    EmptyInstanceContext, PancakeSortingState
+]
+
+
+class PancakeSorting(TargetPuzzle[PancakeSortingState]):
     """Pancake Sorting (prefix-reversal) puzzle.
 
     A stack of ``size`` distinctly-sized pancakes must be sorted so that
@@ -39,13 +54,13 @@ class PancakeSorting(Puzzle):
 
     size: int
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[PancakeSortingState]:
         """Defines the state class for PancakeSorting using xtructure."""
         str_parser = self.get_string_parser()
 
-        class State(Xtructurable):
+        class State(PancakeSortingState):
             stack: Annotated[
-                chex.Array, FieldDescriptor.tensor(dtype=TYPE, shape=(self.size,))
+                jax.Array, FieldDescriptor.tensor(dtype=TYPE, shape=(self.size,))
             ]
 
             def __str__(self, **kwargs):
@@ -67,7 +82,7 @@ class PancakeSorting(Puzzle):
     def get_string_parser(self):
         """Returns a function to convert a state to a string representation"""
 
-        def parser(state: "PancakeSorting.State", **kwargs):
+        def parser(state: PancakeSortingState, **kwargs):
             result = []
             # Host copy first; formatting a device array element-wise syncs per item.
             for i, pancake in enumerate(jax.device_get(state).stack):
@@ -86,7 +101,7 @@ class PancakeSorting(Puzzle):
     def get_img_parser(self) -> Callable:
         """Returns a function to convert a state to an image representation"""
 
-        def img_func(state: "PancakeSorting.State", **kwargs):
+        def img_func(state: PancakeSortingState, **kwargs):
             # IMG_SIZE is actually a tuple (width, height)
             image = np.full(
                 (IMG_SIZE[1], IMG_SIZE[0], 3), (240, 240, 240), dtype=np.uint8
@@ -211,12 +226,12 @@ class PancakeSorting(Puzzle):
         return img_func
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "PancakeSorting.State":
+        self, solve_config: PancakeSortingSolveConfig, key=None, data=None
+    ) -> PancakeSortingState:
         """Generate a random initial state for the puzzle"""
         return self._get_random_state(key)
 
-    def get_solve_config(self, key=None, data=None) -> "PancakeSorting.SolveConfig":
+    def get_solve_config(self, key=None, data=None) -> PancakeSortingSolveConfig:
         """Create the solving configuration (target state)"""
         # Target is the sorted order, largest at the bottom (index size-1)
         target_stack = jnp.arange(1, self.size + 1, dtype=TYPE)
@@ -227,10 +242,10 @@ class PancakeSorting(Puzzle):
 
     def _apply(
         self,
-        solve_config: "PancakeSorting.SolveConfig",
-        state: "PancakeSorting.State",
+        solve_config: PancakeSortingSolveConfig,
+        state: PancakeSortingState,
         action: chex.Array,
-    ) -> tuple["PancakeSorting.State", float]:
+    ) -> tuple[PancakeSortingState, float]:
         """Pure transition: every flip is valid with unit cost.
 
         flip_pos = action + 1
@@ -241,8 +256,8 @@ class PancakeSorting(Puzzle):
         return self.State(stack=state.stack[source]), 1.0
 
     def _get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "PancakeSorting.State"
-    ) -> tuple["PancakeSorting.State", jax.Array]:
+        self, solve_config: PancakeSortingSolveConfig, state: PancakeSortingState
+    ) -> tuple[PancakeSortingState, jax.Array]:
         indices = jnp.arange(self.size)[None, :]
         ends = jnp.arange(1, self.size)[:, None]
         source = jnp.where(indices <= ends, ends - indices, indices)

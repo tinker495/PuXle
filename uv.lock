@@ -1684,6 +1684,7 @@ dependencies = [
     { name = "numpy" },
     { name = "opencv-python-headless" },
     { name = "pddl" },
+    { name = "typing-extensions" },
     { name = "tyro" },
     { name = "xtructure" },
 ]
@@ -1753,6 +1754,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.0" },
     { name = "sphinx-autodoc-typehints", marker = "extra == 'docs'" },
+    { name = "typing-extensions", specifier = ">=4.12" },
     { name = "tyro", specifier = ">=1.0.16,<2" },
     { name = "xtructure", git = "https://github.com/tinker495/xtructure.git" },
 ]
@@ -2417,7 +2419,7 @@ wheels = [
 [[package]]
 name = "xtructure"
 version = "0.1.3"
-source = { git = "https://github.com/tinker495/xtructure.git#e794a80d500a7c7e949a3d1bf76f793fbcaf7934" }
+source = { git = "https://github.com/tinker495/xtructure.git#9913a20a580cb1dd94d4d2166aea63b895b4d994" }
 dependencies = [
     { name = "absl-py" },
     { name = "chex" },

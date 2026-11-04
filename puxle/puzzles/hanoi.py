@@ -1,21 +1,50 @@
 import colorsys
 from collections.abc import Callable
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Self, TypeAlias
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import (
+    EmptyInstanceContext,
+    SolveConfigView,
+    TargetPuzzle,
+)
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint8
 
 
-class TowerOfHanoi(Puzzle):
+class TowerOfHanoiState(Xtructurable, abstract=True):
+    """Typed view of :class:`TowerOfHanoi` states."""
+
+    disk_pegs: jax.Array
+
+    if TYPE_CHECKING:
+
+        @property
+        def disk_pegs_unpacked(self) -> jax.Array: ...
+
+        @classmethod
+        def from_unpacked(
+            cls, *, shape: tuple[int, ...] = (), disk_pegs: jax.Array = ...
+        ) -> Self: ...
+
+        def set_unpacked(self, *, disk_pegs: jax.Array = ...) -> Self: ...
+
+        @property
+        def pegs(self) -> jax.Array | np.ndarray: ...
+
+
+TowerOfHanoiSolveConfig: TypeAlias = SolveConfigView[
+    EmptyInstanceContext, TowerOfHanoiState
+]
+
+
+class TowerOfHanoi(TargetPuzzle[TowerOfHanoiState]):
     """Tower of Hanoi puzzle with packed disk-to-peg positions.
 
     Move all disks from the first peg to the third peg, obeying three rules:
@@ -40,21 +69,21 @@ class TowerOfHanoi(Puzzle):
     num_pegs: int = 3  # Classic Tower of Hanoi has 3 pegs
     max_disk_value: int
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[TowerOfHanoiState]:
         """Defines the state class for Tower of Hanoi using xtructure."""
         str_parser = self.get_string_parser()
         count, peg_count = self.num_disks, self.num_pegs
 
-        class State(Xtructurable):
+        class State(TowerOfHanoiState):
             disk_pegs: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.packed_tensor(
                     shape=(count,), packed_bits=(peg_count - 1).bit_length()
                 ),
             ]
 
             @property
-            def pegs(self: "TowerOfHanoi.State") -> jax.Array | np.ndarray:
+            def pegs(self: TowerOfHanoiState) -> jax.Array | np.ndarray:
                 """Materialize ordered peg rows, retaining host arrays on the host."""
                 positions = self.disk_pegs_unpacked
                 xp = np if isinstance(positions, np.ndarray) else jnp
@@ -100,7 +129,7 @@ class TowerOfHanoi(Puzzle):
     def get_string_parser(self):
         """Returns a function to convert a state to a string representation"""
 
-        def parser(state: "TowerOfHanoi.State", **kwargs):
+        def parser(state: TowerOfHanoiState, **kwargs):
             result = []
 
             # Get the pegs array - has shape (num_pegs, num_disks + 1)
@@ -161,7 +190,7 @@ class TowerOfHanoi(Puzzle):
     def get_img_parser(self) -> Callable:
         """Returns a function to convert a state to an image representation"""
 
-        def img_func(state: "TowerOfHanoi.State", **kwargs):
+        def img_func(state: TowerOfHanoiState, **kwargs):
             # Get dimensions
             width, height = IMG_SIZE
 
@@ -270,12 +299,12 @@ class TowerOfHanoi(Puzzle):
         return img_func
 
     def get_initial_state(
-        self, solve_config: "TowerOfHanoi.SolveConfig", key=None, data=None
-    ) -> "TowerOfHanoi.State":
+        self, solve_config: TowerOfHanoiSolveConfig, key=None, data=None
+    ) -> TowerOfHanoiState:
         """Generate the initial state with all disks on the first peg."""
         return self.State.from_unpacked(disk_pegs=jnp.zeros(self.num_disks, dtype=TYPE))
 
-    def get_solve_config(self, key=None, data=None) -> "TowerOfHanoi.SolveConfig":
+    def get_solve_config(self, key=None, data=None) -> TowerOfHanoiSolveConfig:
         """Create the solving configuration (target) with all disks on the third peg."""
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(),
@@ -286,10 +315,10 @@ class TowerOfHanoi(Puzzle):
 
     def _apply(
         self,
-        solve_config: "TowerOfHanoi.SolveConfig",
-        state: "TowerOfHanoi.State",
+        solve_config: TowerOfHanoiSolveConfig,
+        state: TowerOfHanoiState,
         action: jax.Array,
-    ) -> tuple["TowerOfHanoi.State", jax.Array]:
+    ) -> tuple[TowerOfHanoiState, jax.Array]:
         source, target = self._possible_moves[action]
         positions = state.disk_pegs_unpacked
         disks = jnp.arange(self.num_disks)
@@ -309,8 +338,8 @@ class TowerOfHanoi(Puzzle):
         )
 
     def _get_neighbours(
-        self, solve_config: "TowerOfHanoi.SolveConfig", state: "TowerOfHanoi.State"
-    ) -> tuple["TowerOfHanoi.State", jax.Array]:
+        self, solve_config: TowerOfHanoiSolveConfig, state: TowerOfHanoiState
+    ) -> tuple[TowerOfHanoiState, jax.Array]:
         positions = state.disk_pegs_unpacked
         disks = jnp.arange(self.num_disks)
         top = jnp.min(

@@ -1,21 +1,58 @@
 from collections.abc import Callable
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Self, TypeAlias
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import Puzzle, SolveConfigView
 from puxle.utils.util import IMG_SIZE
 
 # Use 16-bit unsigned integers so that problem sizes >255 are handled without overflow.
 TYPE = jnp.uint16
 
 
-class TSP(Puzzle):
+class TSPState(Xtructurable, abstract=True):
+    """Typed view of :class:`TSP` states."""
+
+    mask: jax.Array
+    point: jax.Array
+
+    if TYPE_CHECKING:
+
+        @property
+        def mask_unpacked(self) -> jax.Array: ...
+
+        @classmethod
+        def from_unpacked(
+            cls,
+            *,
+            shape: tuple[int, ...] = (),
+            mask: jax.Array = ...,
+            point: jax.Array = ...,
+        ) -> Self: ...
+
+        def set_unpacked(self, *, mask: jax.Array = ...) -> Self: ...
+
+
+class TSPInstanceContext(Xtructurable, abstract=True):
+    """Typed view of :class:`TSP` instance contexts."""
+
+    points: jax.Array
+    distance_matrix: jax.Array
+    start: jax.Array
+
+
+class TSPGoalSpec(Xtructurable, abstract=True):
+    """Typed view of :class:`TSP` goal specs."""
+
+
+TSPSolveConfig: TypeAlias = SolveConfigView[TSPInstanceContext, TSPGoalSpec]
+
+
+class TSP(Puzzle[TSPState, TSPInstanceContext, TSPGoalSpec]):
     """Travelling Salesman Problem (TSP) as a sequential-visit puzzle.
 
     ``size`` cities are uniformly sampled in the unit square.  The agent
@@ -35,42 +72,38 @@ class TSP(Puzzle):
 
     size: int
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[TSPState]:
         """Defines the state class for TSP using xtructure."""
         str_parser = self.get_string_parser()
         size = self.size
 
-        class State(Xtructurable):
+        class State(TSPState):
             mask: Annotated[
-                chex.Array, FieldDescriptor.packed_tensor(shape=(size,), packed_bits=1)
+                jax.Array, FieldDescriptor.packed_tensor(shape=(size,), packed_bits=1)
             ]
-            point: Annotated[
-                chex.Array, FieldDescriptor.scalar(dtype=self._point_dtype)
-            ]
+            point: Annotated[jax.Array, FieldDescriptor.scalar(dtype=self._point_dtype)]
 
             def __str__(self, **kwargs):
                 return str_parser(self, **kwargs)
 
         return State
 
-    def define_instance_context_class(self) -> type[Xtructurable]:
-        class InstanceContext(Xtructurable):
+    def define_instance_context_class(self) -> type[TSPInstanceContext]:
+        class InstanceContext(TSPInstanceContext):
             points: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.tensor(dtype=jnp.float32, shape=(self.size, 2)),
             ]
             distance_matrix: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.tensor(dtype=jnp.float32, shape=(self.size, self.size)),
             ]
-            start: Annotated[
-                chex.Array, FieldDescriptor.scalar(dtype=self._point_dtype)
-            ]
+            start: Annotated[jax.Array, FieldDescriptor.scalar(dtype=self._point_dtype)]
 
         return InstanceContext
 
-    def define_goal_spec_class(self) -> type[Xtructurable]:
-        class GoalSpec(Xtructurable):
+    def define_goal_spec_class(self) -> type[TSPGoalSpec]:
+        class GoalSpec(TSPGoalSpec):
             pass
 
         return GoalSpec
@@ -82,7 +115,7 @@ class TSP(Puzzle):
         super().__init__(**kwargs)
 
     def get_solve_config_string_parser(self) -> Callable:
-        def parser(solve_config: "TSP.SolveConfig", **kwargs):
+        def parser(solve_config: TSPSolveConfig, **kwargs):
             return (
                 "TSP SolveConfig: "
                 f"{self.size} points, start at {solve_config.InstanceContext.start}"
@@ -96,7 +129,7 @@ class TSP(Puzzle):
         def to_char(x, true_char="■", false_char="☐"):
             return true_char if x else false_char
 
-        def parser(state: "TSP.State", **kwargs):
+        def parser(state: TSPState, **kwargs):
             # Host copy first; per-cell reads off a device array sync per character.
             state = jax.device_get(state)
             mask = state.mask_unpacked
@@ -109,14 +142,14 @@ class TSP(Puzzle):
         return parser
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=jax.random.PRNGKey(0), data=None
-    ) -> Puzzle.State:
+        self, solve_config: TSPSolveConfig, key=jax.random.PRNGKey(0), data=None
+    ) -> TSPState:
         mask = jnp.zeros(self.size, dtype=jnp.bool_)
         point = solve_config.InstanceContext.start
         mask = mask.at[point].set(True)
         return self.State.from_unpacked(mask=mask, point=point)
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> TSPSolveConfig:
         # Split PRNG key so that the start index is independent of point positions.
         if key is None:
             raise ValueError("A random key is required to generate a TSP instance.")
@@ -140,10 +173,10 @@ class TSP(Puzzle):
 
     def _apply(
         self,
-        solve_config: Puzzle.SolveConfig,
-        state: Puzzle.State,
+        solve_config: TSPSolveConfig,
+        state: TSPState,
         action: jax.Array,
-    ) -> tuple[Puzzle.State, jax.Array]:
+    ) -> tuple[TSPState, jax.Array]:
         """Pure transition: revisiting an already-visited point costs infinity.
 
         The closing leg back to the start is added once every point is visited.
@@ -167,8 +200,8 @@ class TSP(Puzzle):
         return self.State(mask=new_mask, point=action.astype(state.point.dtype)), cost
 
     def _get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "TSP.State"
-    ) -> tuple["TSP.State", jax.Array]:
+        self, solve_config: TSPSolveConfig, state: TSPState
+    ) -> tuple[TSPState, jax.Array]:
         actions = jnp.arange(self.size)
         bits = jnp.uint8(1) << (actions % 8).astype(jnp.uint8)
         visited = (state.mask[actions // 8] & bits) != 0
@@ -187,9 +220,7 @@ class TSP(Puzzle):
             mask=masks, point=actions.astype(state.point.dtype)
         ), jnp.where(visited, jnp.inf, costs)
 
-    def is_solved(
-        self, solve_config: Puzzle.SolveConfig, state: Puzzle.State
-    ) -> jax.Array:
+    def is_solved(self, solve_config: TSPSolveConfig, state: TSPState) -> jax.Array:
         """
         TSP is solved when all points have been visited.
         """
@@ -210,7 +241,7 @@ class TSP(Puzzle):
         return form
 
     def get_solve_config_img_parser(self) -> Callable:
-        def parser(solve_config: "TSP.SolveConfig", **kwargs):
+        def parser(solve_config: TSPSolveConfig, **kwargs):
             raise NotImplementedError("TSP does not support image visualization")
 
         return parser
@@ -224,8 +255,8 @@ class TSP(Puzzle):
         """
 
         def img_func(
-            state: "TSP.State",
-            solve_config: "TSP.SolveConfig",
+            state: TSPState,
+            solve_config: TSPSolveConfig,
             **kwargs,
         ):
             imgsize = IMG_SIZE[0]

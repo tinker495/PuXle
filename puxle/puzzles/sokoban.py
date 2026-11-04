@@ -3,7 +3,7 @@ from collections.abc import Callable
 from enum import Enum
 from importlib.resources import as_file, files
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Self, TypeAlias
 
 import chex
 import jax
@@ -11,13 +11,38 @@ import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import (
+    EmptyInstanceContext,
+    SolveConfigView,
+    TargetPuzzle,
+)
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint8
 
 
-class Sokoban(Puzzle):
+class SokobanState(Xtructurable, abstract=True):
+    """Typed view of :class:`Sokoban` states."""
+
+    board: jax.Array
+
+    if TYPE_CHECKING:
+
+        @property
+        def board_unpacked(self) -> jax.Array: ...
+
+        @classmethod
+        def from_unpacked(
+            cls, *, shape: tuple[int, ...] = (), board: jax.Array = ...
+        ) -> Self: ...
+
+        def set_unpacked(self, *, board: jax.Array = ...) -> Self: ...
+
+
+SokobanSolveConfig: TypeAlias = SolveConfigView[EmptyInstanceContext, SokobanState]
+
+
+class Sokoban(TargetPuzzle[SokobanState]):
     """Sokoban (box-pushing) puzzle using the Boxoban dataset.
 
     Each cell is one of four base types (empty / wall / player / box) packed
@@ -56,14 +81,14 @@ class Sokoban(Puzzle):
         ALL_BOXES_ON_TARGET = 0
         ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET = 1
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[SokobanState]:
         """Defines the state class for Sokoban using xtructure."""
         str_parser = self.get_string_parser()
         size = self.size
 
-        class State(Xtructurable):
+        class State(SokobanState):
             board: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=2),
             ]
 
@@ -115,15 +140,15 @@ class Sokoban(Puzzle):
 
         self.num_puzzles = self.init_puzzles.shape[0]
 
-    def get_data(self, key: chex.Array | None = None) -> tuple[chex.Array, chex.Array]:
+    def get_data(self, key: chex.Array | None = None) -> tuple[jax.Array, jax.Array]:
         if key is None:
             raise ValueError("A random key is required to sample Sokoban data.")
         idx = jax.random.randint(key, (), 0, self.num_puzzles)
         return self.target_puzzles[idx, ...], self.init_puzzles[idx, ...]
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "Sokoban.State":
+        self, solve_config: SokobanSolveConfig, key=None, data=None
+    ) -> SokobanState:
         # NOTE: The Boxoban dataset (init.npy, target.npy) contains already bit-packed
         # board data (2 bits per cell, 10x10 -> 25 bytes).
         # We pass it directly to the State constructor as the underlying packed buffer.
@@ -133,7 +158,7 @@ class Sokoban(Puzzle):
         _, init_data = data
         return self.State(board=init_data)
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> SokobanSolveConfig:
         if data is None:
             # When no data is provided, generate data using get_data method
             data = self.get_data(key)
@@ -155,7 +180,7 @@ class Sokoban(Puzzle):
         )
 
     def is_solved(
-        self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State"
+        self, solve_config: SokobanSolveConfig, state: SokobanState
     ) -> jax.Array:
         # Unpack boards for comparison.
         board = state.board_unpacked
@@ -176,7 +201,7 @@ class Sokoban(Puzzle):
         return self._directional_action_to_string(action)
 
     def get_solve_config_string_parser(self) -> Callable:
-        def parser(solve_config: "Sokoban.SolveConfig", **kwargs):
+        def parser(solve_config: SokobanSolveConfig, **kwargs):
             return solve_config.GoalSpec.str(solve_config=solve_config)
 
         return parser
@@ -206,7 +231,9 @@ class Sokoban(Puzzle):
                     return "?"
 
         def parser(
-            state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs
+            state: SokobanState,
+            solve_config: SokobanSolveConfig | None = None,
+            **kwargs,
         ):
             # Unpack the board before visualization. The overlay below walks every
             # cell in Python, so it has to run on a host copy — indexing a device
@@ -234,10 +261,10 @@ class Sokoban(Puzzle):
 
     def _apply(
         self,
-        solve_config: Puzzle.SolveConfig,
-        state: "Sokoban.State",
+        solve_config: SokobanSolveConfig,
+        state: SokobanState,
         action: jax.Array,
-    ) -> tuple["Sokoban.State", jax.Array]:
+    ) -> tuple[SokobanState, jax.Array]:
         board = state.board_unpacked
         player = jnp.argmax(board == Sokoban.Object.PLAYER.value)
         direction = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])[action]
@@ -267,8 +294,8 @@ class Sokoban(Puzzle):
         )
 
     def _get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State"
-    ) -> tuple["Sokoban.State", jax.Array]:
+        self, solve_config: SokobanSolveConfig, state: SokobanState
+    ) -> tuple[SokobanState, jax.Array]:
         board = state.board_unpacked
         player = jnp.argmax(board == Sokoban.Object.PLAYER.value)
         directions = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
@@ -308,7 +335,7 @@ class Sokoban(Puzzle):
         bottom_border = "┗━" + "━━" * size + "┛"
         return top_border + middle + bottom_border
 
-    def _get_player_position(self, state: "Sokoban.State"):
+    def _get_player_position(self, state: SokobanState):
         board = state.board_unpacked
         flat_index = jnp.argmax(board == Sokoban.Object.PLAYER.value)
         return jnp.unravel_index(flat_index, (self.size, self.size))
@@ -361,7 +388,9 @@ class Sokoban(Puzzle):
                 )
 
         def img_func(
-            state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs
+            state: SokobanState,
+            solve_config: SokobanSolveConfig | None = None,
+            **kwargs,
         ):
             img = np.zeros(IMG_SIZE + (3,), np.uint8)
 
@@ -469,8 +498,8 @@ class Sokoban(Puzzle):
         return new_board
 
     def solve_config_to_state_transform(
-        self, solve_config: "Sokoban.SolveConfig", key: chex.Array | None = None
-    ) -> "Sokoban.State":
+        self, solve_config: SokobanSolveConfig, key: chex.Array | None = None
+    ) -> SokobanState:
         """
         This function shoulde transformt the solve config to the state.
         """
@@ -481,12 +510,12 @@ class Sokoban(Puzzle):
         return self.State.from_unpacked(board=board)
 
     def hindsight_transform(
-        self, solve_config: "Sokoban.SolveConfig", state: "Sokoban.State"
-    ) -> "Sokoban.SolveConfig":
+        self, solve_config: SokobanSolveConfig, states: SokobanState
+    ) -> SokobanSolveConfig:
         """
         This function shoulde transformt the state to the solve config.
         """
-        board = state.board_unpacked
+        board = states.board_unpacked
         if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET:
             rm_player = jnp.where(
                 board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board
@@ -502,10 +531,10 @@ class Sokoban(Puzzle):
 
     def get_inverse_neighbours(
         self,
-        solve_config: "Sokoban.SolveConfig",
-        state: "Sokoban.State",
+        solve_config: SokobanSolveConfig,
+        state: SokobanState,
         filled: bool = True,
-    ) -> tuple["Sokoban.State", jax.Array]:
+    ) -> tuple[SokobanState, jax.Array]:
         """Generate pull moves; blocked directions remain unit-cost self-loops.
 
         This scrambling API preserves its cost-only ``filled`` mask.

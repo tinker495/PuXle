@@ -6,15 +6,18 @@ and the convenience factory; nothing at module top level touches torch.
 
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Annotated, Optional
+from typing import TYPE_CHECKING, Annotated, Optional, TypeAlias
 
-import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import (
+    EmptyInstanceContext,
+    SolveConfigView,
+    TargetPuzzle,
+)
 
 if TYPE_CHECKING:
     # Type-only import — never executed at runtime.
@@ -104,7 +107,33 @@ def _mat_key(mat: np.ndarray) -> bytes:
     return mat.astype(np.int64, copy=False).tobytes()
 
 
-class CayleyPuzzle(Puzzle):
+class CayleyPuzzleState(Xtructurable, abstract=True):
+    """Typed view of :class:`CayleyPuzzle` states.
+
+    The single tensor field is mode-resolved (PERMUTATION -> ``permutation``,
+    MATRIX -> ``vector``), so both names are declared here and only the field of
+    the puzzle's mode exists at runtime; type checkers cannot catch mode misuse.
+    """
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self, *, permutation: jax.Array = ..., vector: jax.Array = ...
+        ) -> None: ...
+
+        @property
+        def permutation(self) -> jax.Array: ...
+
+        @property
+        def vector(self) -> jax.Array: ...
+
+
+CayleyPuzzleSolveConfig: TypeAlias = SolveConfigView[
+    EmptyInstanceContext, CayleyPuzzleState
+]
+
+
+class CayleyPuzzle(TargetPuzzle[CayleyPuzzleState]):
     """Adapter exposing a ``cayleypy.CayleyGraphDef`` as a PuXle ``Puzzle``.
 
     Supports two generator types from cayleypy:
@@ -307,15 +336,15 @@ class CayleyPuzzle(Puzzle):
             "PermutationGroups, MatrixGroups, or Puzzles."
         )
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[CayleyPuzzleState]:
         str_parser = self.get_string_parser()
         state_length = int(self._state_length)
 
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
 
-            class State(Xtructurable):
+            class State(CayleyPuzzleState):
                 permutation: Annotated[
-                    chex.Array,
+                    jax.Array,
                     FieldDescriptor.tensor(
                         dtype=self._state_dtype, shape=(state_length,)
                     ),
@@ -326,9 +355,9 @@ class CayleyPuzzle(Puzzle):
 
             return State
 
-        class State(Xtructurable):
+        class State(CayleyPuzzleState):
             vector: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.tensor(dtype=self._state_dtype, shape=(state_length,)),
             ]
 
@@ -337,7 +366,7 @@ class CayleyPuzzle(Puzzle):
 
         return State
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> CayleyPuzzleSolveConfig:
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
             target = self.State(permutation=self._central_state_jax)
         else:
@@ -346,26 +375,26 @@ class CayleyPuzzle(Puzzle):
 
     def get_initial_state(
         self,
-        solve_config: Puzzle.SolveConfig,
+        solve_config: CayleyPuzzleSolveConfig,
         key=None,
         data=None,
-    ) -> "CayleyPuzzle.State":
+    ) -> CayleyPuzzleState:
         return self._get_shuffled_state(
             solve_config, solve_config.GoalSpec, key, self._num_shuffle
         )
 
     def _apply(
         self,
-        solve_config: Puzzle.SolveConfig,
-        state: "CayleyPuzzle.State",
+        solve_config: CayleyPuzzleSolveConfig,
+        state: CayleyPuzzleState,
         action: jax.Array,
-    ) -> tuple["CayleyPuzzle.State", float]:
+    ) -> tuple[CayleyPuzzleState, float]:
         """Pure transition: every generator is valid and costs ``1.0``."""
         return self._step_kernel(state, action)
 
     def _get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "CayleyPuzzle.State"
-    ) -> tuple["CayleyPuzzle.State", jax.Array]:
+        self, solve_config: CayleyPuzzleSolveConfig, state: CayleyPuzzleState
+    ) -> tuple[CayleyPuzzleState, jax.Array]:
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
             states = self.State(permutation=state.permutation[self._perms_jax])
         else:
@@ -386,7 +415,7 @@ class CayleyPuzzle(Puzzle):
 
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
 
-            def parser(state: "CayleyPuzzle.State", **kwargs) -> str:
+            def parser(state: CayleyPuzzleState, **kwargs) -> str:
                 values = " ".join(
                     str(int(x)) for x in jax.device_get(state.permutation)
                 )
@@ -394,7 +423,7 @@ class CayleyPuzzle(Puzzle):
 
             return parser
 
-        def parser(state: "CayleyPuzzle.State", **kwargs) -> str:
+        def parser(state: CayleyPuzzleState, **kwargs) -> str:
             values = " ".join(str(int(x)) for x in jax.device_get(state.vector))
             return f"{graph_name}: {values}"
 
@@ -404,7 +433,7 @@ class CayleyPuzzle(Puzzle):
         state_length = int(self._state_length)
         is_perm = self._generators_type == _GENERATORS_TYPE_PERMUTATION
 
-        def img_func(state: "CayleyPuzzle.State", **kwargs) -> np.ndarray:
+        def img_func(state: CayleyPuzzleState, **kwargs) -> np.ndarray:
             vec = np.asarray(state.permutation if is_perm else state.vector)
             if vec.size == 0:
                 return np.zeros((1, 1, 3), dtype=np.uint8)

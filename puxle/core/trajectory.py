@@ -22,7 +22,7 @@ import xtructure.numpy as xnp
 from xtructure.core.protocol import Xtructurable
 
 if TYPE_CHECKING:
-    from puxle.core.puzzle_base import Puzzle
+    from puxle.core.puzzle_base import Puzzle, SolveConfigView
 
 
 @chex.dataclass
@@ -32,7 +32,7 @@ class PuzzleTrajectory:
     shuffled states, paths, and their corresponding algorithmic generation costs.
     """
 
-    solve_configs: Xtructurable
+    solve_configs: SolveConfigView
     states: Xtructurable
     move_costs: chex.Array
     move_costs_tm1: chex.Array

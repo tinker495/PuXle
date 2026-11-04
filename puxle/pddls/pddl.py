@@ -1,14 +1,13 @@
 import os
 from collections.abc import Callable
-from typing import Optional, Union
+from typing import Optional, TypeAlias, Union
 
 import jax
 import jax.numpy as jnp
 import pddl
 from pddl.core import Domain, Problem
-from xtructure import Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import Puzzle, SolveConfigView
 
 from .formatting import (
     action_to_string as fmt_action_to_string,
@@ -21,14 +20,19 @@ from .formatting import (
 from .grounding import ground_actions, ground_predicates
 from .masks import build_goal_mask, build_initial_state, build_masks
 from .state_defs import (
+    PDDLGoalSpec,
+    PDDLInstanceContext,
+    PDDLState,
     build_goal_spec_class,
     build_instance_context_class,
     build_state_class,
 )
 from .type_system import collect_type_hierarchy, extract_objects_by_type
 
+PDDLSolveConfig: TypeAlias = SolveConfigView[PDDLInstanceContext, PDDLGoalSpec]
 
-class PDDL(Puzzle):
+
+class PDDL(Puzzle[PDDLState, PDDLInstanceContext, PDDLGoalSpec]):
     """PuXle wrapper that turns a PDDL domain + problem into a :class:`Puzzle`.
 
     Supports the **STRIPS** subset of PDDL:
@@ -162,27 +166,27 @@ class PDDL(Puzzle):
 
         _, self._label_text_color_map = build_label_color_maps(self.domain)
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[PDDLState]:
         """Define state class with packed atoms."""
         # Delegate to builder for clarity
         str_parser = self.get_string_parser()
         return build_state_class(self, self.num_atoms, self.init_state, str_parser)
 
-    def define_instance_context_class(self) -> type[Xtructurable]:
+    def define_instance_context_class(self) -> type[PDDLInstanceContext]:
         """Define grounded action masks used by transitions."""
         return build_instance_context_class(self)
 
-    def define_goal_spec_class(self) -> type[Xtructurable]:
+    def define_goal_spec_class(self) -> type[PDDLGoalSpec]:
         """Define the conjunctive goal mask."""
         return build_goal_spec_class(self)
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "PDDL.State":
+        self, solve_config: PDDLSolveConfig, key=None, data=None
+    ) -> PDDLState:
         """Return initial state."""
         return self.State.from_unpacked(atoms=self.init_state)
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> PDDLSolveConfig:
         """Return solve config with goal mask."""
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(
@@ -196,11 +200,11 @@ class PDDL(Puzzle):
 
     def get_actions(
         self,
-        solve_config: Puzzle.SolveConfig,
-        state: "PDDL.State",
+        solve_config: PDDLSolveConfig,
+        state: PDDLState,
         action: int | jax.Array,
         filled: bool | jax.Array = True,
-    ) -> tuple["PDDL.State", jax.Array]:
+    ) -> tuple[PDDLState, jax.Array]:
         """
         Get the next state and cost for a given action using JAX.
         """
@@ -235,9 +239,7 @@ class PDDL(Puzzle):
 
         return next_state, cost
 
-    def is_solved(
-        self, solve_config: Puzzle.SolveConfig, state: "PDDL.State"
-    ) -> jax.Array:
+    def is_solved(self, solve_config: PDDLSolveConfig, state: PDDLState) -> jax.Array:
         """Check if state satisfies goal conditions."""
         s = state.unpacked_atoms
         goal_mask = solve_config.GoalSpec.GoalMask
@@ -254,7 +256,7 @@ class PDDL(Puzzle):
         """Return image parser for states. If a solve_config is provided, annotate goal atoms."""
 
         def img_parser(
-            state: "PDDL.State", solve_config: "PDDL.SolveConfig" = None, **kwargs
+            state: PDDLState, solve_config: PDDLSolveConfig | None = None, **kwargs
         ):
             # Create a simple visualization: grid showing atom values
             atoms = state.unpacked_atoms
@@ -316,7 +318,7 @@ class PDDL(Puzzle):
     def get_solve_config_img_parser(self) -> Callable:
         """Return image parser for solve config with goal mask."""
 
-        def img_parser(solve_config: "PDDL.SolveConfig", **kwargs):
+        def img_parser(solve_config: PDDLSolveConfig, **kwargs):
             # Create a simple visualization of goal mask
             goal_mask = solve_config.GoalSpec.GoalMask
 
@@ -340,14 +342,12 @@ class PDDL(Puzzle):
 
         return img_parser
 
-    def state_to_atom_set(self, state: "PDDL.State") -> set[str]:
+    def state_to_atom_set(self, state: PDDLState) -> set[str]:
         """Convert state to set of true atom strings for testing."""
         s = state.unpacked_atoms
         return {self.grounded_atoms[i] for i in range(self.num_atoms) if bool(s[i])}
 
-    def static_predicate_profile(
-        self, state: "PDDL.State", pred_name: str
-    ) -> list[bool]:
+    def static_predicate_profile(self, state: PDDLState, pred_name: str) -> list[bool]:
         """Get truth values of all grounded atoms for a predicate in given state."""
         s = state.unpacked_atoms
         vals = []

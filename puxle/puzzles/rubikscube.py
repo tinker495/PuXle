@@ -1,16 +1,19 @@
 import re
 from collections.abc import Callable
 from functools import partial
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Self, TypeAlias
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import (
+    EmptyInstanceContext,
+    SolveConfigView,
+    TargetPuzzle,
+)
 from puxle.utils.util import IMG_SIZE, coloring_str
 
 TYPE = jnp.uint8
@@ -195,7 +198,30 @@ _SYM_PERM24, _SYM_K24 = _build_symmetry_maps_24()
 # 0: x-axis(left), 1: y-axis(up), 2: z-axis(front)
 
 
-class RubiksCube(Puzzle):
+class RubiksCubeState(Xtructurable, abstract=True):
+    """Typed view of :class:`RubiksCube` states."""
+
+    faces: jax.Array
+
+    if TYPE_CHECKING:
+
+        @property
+        def faces_unpacked(self) -> jax.Array: ...
+
+        @classmethod
+        def from_unpacked(
+            cls, *, shape: tuple[int, ...] = (), faces: jax.Array = ...
+        ) -> Self: ...
+
+        def set_unpacked(self, *, faces: jax.Array = ...) -> Self: ...
+
+
+RubiksCubeSolveConfig: TypeAlias = SolveConfigView[
+    EmptyInstanceContext, RubiksCubeState
+]
+
+
+class RubiksCube(TargetPuzzle[RubiksCubeState]):
     """N×N×N Rubik's Cube environment.
 
     Each face is stored as a 1-D array of ``size * size`` sticker values.
@@ -232,14 +258,14 @@ class RubiksCube(Puzzle):
     def _token_width(self) -> int:
         return 1 if self.color_embedding else len(str(self._num_tiles - 1))
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[RubiksCubeState]:
         str_parser = self.get_string_parser()
         raw_shape = (6, self.size * self.size)
         active_bits = self._active_bits
 
-        class State(Xtructurable):
+        class State(RubiksCubeState):
             faces: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.packed_tensor(shape=raw_shape, packed_bits=active_bits),
             ]
 
@@ -287,7 +313,7 @@ class RubiksCube(Puzzle):
                 "Tile-ID mode requires unique 8-bit identifiers; decrease cube size to keep tile count ≤ 256."
             )
 
-    def _solved_faces(self) -> chex.Array:
+    def _solved_faces(self) -> jax.Array:
         if self.color_embedding:
             return jnp.repeat(
                 jnp.arange(6, dtype=TYPE)[:, None], self._tile_count, axis=1
@@ -329,7 +355,7 @@ class RubiksCube(Puzzle):
         return coloring_str(token, rgb_map[color_idx])
 
     def get_string_parser(self) -> Callable:
-        def parser(state: "RubiksCube.State", *, use_color_overlay: bool = False, **_):
+        def parser(state: RubiksCubeState, *, use_color_overlay: bool = False, **_):
             # Unpack the state faces before printing. Host copy first: the tile
             # loop below reads one element at a time, which syncs per tile.
             unpacked_faces = jax.device_get(state).faces_unpacked
@@ -381,8 +407,8 @@ class RubiksCube(Puzzle):
         return parser
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "RubiksCube.State":
+        self, solve_config: RubiksCubeSolveConfig, key=None, data=None
+    ) -> RubiksCubeState:
         return self._get_shuffled_state(
             solve_config,
             solve_config.GoalSpec,
@@ -390,11 +416,11 @@ class RubiksCube(Puzzle):
             num_shuffle=self.initial_shuffle,
         )
 
-    def get_target_state(self, key=None) -> "RubiksCube.State":
+    def get_target_state(self, key=None) -> RubiksCubeState:
         faces = self._solved_faces()
         return self.State.from_unpacked(faces=faces)
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> RubiksCubeSolveConfig:
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(),
             GoalSpec=self.get_target_state(key),
@@ -402,10 +428,10 @@ class RubiksCube(Puzzle):
 
     def _apply(
         self,
-        solve_config: Puzzle.SolveConfig,
-        state: "RubiksCube.State",
+        solve_config: RubiksCubeSolveConfig,
+        state: RubiksCubeState,
         action: jax.Array,
-    ) -> tuple["RubiksCube.State", float]:
+    ) -> tuple[RubiksCubeState, float]:
         """Pure transition: every face rotation is valid with unit cost.
 
         Each action is a fixed permutation of the cube's stickers, so the hot
@@ -416,8 +442,8 @@ class RubiksCube(Puzzle):
         return state.set_unpacked(faces=faces), 1.0
 
     def _get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "RubiksCube.State"
-    ) -> tuple["RubiksCube.State", jax.Array]:
+        self, solve_config: RubiksCubeSolveConfig, state: RubiksCubeState
+    ) -> tuple[RubiksCubeState, jax.Array]:
         faces = state.faces_unpacked.reshape(-1)
 
         def rotate(permutation):
@@ -427,7 +453,7 @@ class RubiksCube(Puzzle):
 
         return jax.vmap(rotate)(self._action_permutations), jnp.ones(self.action_size)
 
-    def state_symmetries(self, state: "RubiksCube.State") -> "RubiksCube.State":
+    def state_symmetries(self, state: RubiksCubeState) -> RubiksCubeState:
         """
         Return all 24 global rotational symmetries of a cube `state`.
 
@@ -557,7 +583,7 @@ class RubiksCube(Puzzle):
         return rot90_traceable(shaped_faces, jnp.where(clockwise, mul, -mul))
 
     def _rotate(
-        self, state: "RubiksCube.State", axis: int, index: int, clockwise: bool = True
+        self, state: RubiksCubeState, axis: int, index: int, clockwise: bool = True
     ):
         # rotate the edge clockwise or counterclockwise
         # axis is the axis of the rotation, 0 for x, 1 for y, 2 for z
@@ -566,7 +592,7 @@ class RubiksCube(Puzzle):
         faces = self._rotate_faces(state.faces_unpacked, axis, index, clockwise)
         return state.set_unpacked(faces=faces)
 
-    def _build_action_permutations(self) -> chex.Array:
+    def _build_action_permutations(self) -> jax.Array:
         identity = jnp.arange(self._num_tiles, dtype=jnp.int32).reshape(
             (6, self._tile_count)
         )
@@ -759,7 +785,7 @@ class RubiksCube(Puzzle):
         This function is a decorator that adds an img_parser to the class.
         """
 
-        def img_func(state: "RubiksCube.State", another_faces: bool = True, **kwargs):
+        def img_func(state: RubiksCubeState, another_faces: bool = True, **kwargs):
             imgsize = IMG_SIZE[0]
             # Create a blank image with a neutral background
             img = np.full((imgsize, imgsize, 3), (190, 190, 190), dtype=np.uint8)
@@ -931,7 +957,7 @@ class RubiksCubeRandom(RubiksCube):
     def __init__(self, size: int = 3, initial_shuffle: int = 26, **kwargs):
         super().__init__(size=size, initial_shuffle=initial_shuffle, **kwargs)
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> RubiksCubeSolveConfig:
         solve_config = super().get_solve_config(key, data)
         return solve_config.replace(
             GoalSpec=self._get_shuffled_state(

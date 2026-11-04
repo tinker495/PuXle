@@ -3,7 +3,7 @@ import pytest
 from xtructure import FieldDescriptor, xtructure_dataclass
 
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import TargetPuzzle
 
 
 @xtructure_dataclass(bitpack="off")
@@ -11,7 +11,10 @@ class MockState:
     val: FieldDescriptor.scalar(dtype=jnp.int32)
 
 
-class MockPuzzle(Puzzle):
+# Author: tinker495.
+# Migrated: Puzzle no longer supplies default instance-context / goal-spec hooks;
+# TargetPuzzle provides the empty context and goal == state this mock relied on.
+class MockPuzzle(TargetPuzzle):
     def define_state_class(self):
         return MockState
 

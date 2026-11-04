@@ -7,7 +7,7 @@ outside the base interface.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 import chex
 import jax
@@ -16,7 +16,12 @@ import jax.numpy as jnp
 from puxle.core.trajectory import PuzzleTrajectory
 
 if TYPE_CHECKING:
-    from puxle.core.puzzle_base import Puzzle
+    from xtructure import Xtructurable
+
+    from puxle.core.puzzle_base import Puzzle, SolveConfigView
+
+
+_StateT = TypeVar("_StateT", bound="Xtructurable")
 
 
 def _masked_action_sample_uniform(mask: chex.Array, key: chex.PRNGKey) -> chex.Array:
@@ -113,11 +118,11 @@ def _roll_history(history_states, new_state):
 
 def _get_shuffled_state(
     puzzle: "Puzzle",
-    solve_config: "Puzzle.SolveConfig",
-    init_state: "Puzzle.State",
+    solve_config: "SolveConfigView",
+    init_state: _StateT,
     key,
     num_shuffle,
-):
+) -> _StateT:
     """Generate a scrambled state by applying random actions."""
     key, subkey = jax.random.split(key)
     num_shuffle += jax.random.randint(subkey, (), 0, 2)
@@ -197,8 +202,8 @@ def _drive_scramble_trajectory(
     puzzle: "Puzzle",
     shuffle_parallel: int,
     non_backtracking_steps: int,
-    solve_configs: "Puzzle.SolveConfig",
-    start_states: "Puzzle.State",
+    solve_configs: "SolveConfigView",
+    start_states: "Xtructurable",
     step_keys: chex.PRNGKey,
     neighbours_fn,
 ):

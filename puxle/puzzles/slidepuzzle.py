@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from math import gcd
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Self, TypeAlias
 
 import chex
 import cv2
@@ -9,13 +9,40 @@ import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import (
+    EmptyInstanceContext,
+    SolveConfigView,
+    TargetPuzzle,
+)
 from puxle.utils.util import IMG_SIZE
 
 TYPE = jnp.uint8
 
 
-class SlidePuzzle(Puzzle):
+class SlidePuzzleState(Xtructurable, abstract=True):
+    """Typed view of :class:`SlidePuzzle` states."""
+
+    board: jax.Array
+
+    if TYPE_CHECKING:
+
+        @property
+        def board_unpacked(self) -> jax.Array: ...
+
+        @classmethod
+        def from_unpacked(
+            cls, *, shape: tuple[int, ...] = (), board: jax.Array = ...
+        ) -> Self: ...
+
+        def set_unpacked(self, *, board: jax.Array = ...) -> Self: ...
+
+
+SlidePuzzleSolveConfig: TypeAlias = SolveConfigView[
+    EmptyInstanceContext, SlidePuzzleState
+]
+
+
+class SlidePuzzle(TargetPuzzle[SlidePuzzleState]):
     """N×N sliding tile puzzle (15-puzzle generalisation).
 
     The board is a flat array of ``size²`` values where ``0`` represents the
@@ -30,15 +57,15 @@ class SlidePuzzle(Puzzle):
 
     size: int
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[SlidePuzzleState]:
         str_parser = self.get_string_parser()
         size = self.size
         max_value = self.size**2 - 1
         packed_bits = max_value.bit_length()
 
-        class State(Xtructurable):
+        class State(SlidePuzzleState):
             board: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.packed_tensor(
                     shape=(size**2,), packed_bits=packed_bits
                 ),
@@ -64,18 +91,18 @@ class SlidePuzzle(Puzzle):
                 return chr(x + 55)
             return str(x)
 
-        def parser(state: "SlidePuzzle.State", **kwargs):
+        def parser(state: SlidePuzzleState, **kwargs):
             # Host copy first; per-cell reads off a device array sync per character.
             return form.format(*map(to_char, jax.device_get(state).board_unpacked))
 
         return parser
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "SlidePuzzle.State":
+        self, solve_config: SlidePuzzleSolveConfig, key=None, data=None
+    ) -> SlidePuzzleState:
         return self._get_random_state(key)
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> SlidePuzzleSolveConfig:
         target = jnp.array([*range(1, self.size**2), 0], dtype=TYPE)
         target_state = self.State.from_unpacked(board=target)
         return self.SolveConfig(
@@ -84,10 +111,10 @@ class SlidePuzzle(Puzzle):
 
     def _apply(
         self,
-        solve_config: Puzzle.SolveConfig,
-        state: "SlidePuzzle.State",
+        solve_config: SlidePuzzleSolveConfig,
+        state: SlidePuzzleState,
         action: jax.Array,
-    ) -> tuple["SlidePuzzle.State", jax.Array]:
+    ) -> tuple[SlidePuzzleState, jax.Array]:
         if self.size == 2:
             # A one-byte board needs no unpacked array or blank reduction.
             byte = state.board[0]
@@ -146,8 +173,8 @@ class SlidePuzzle(Puzzle):
         return self.State(board=state.board ^ toggle), cost
 
     def _get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "SlidePuzzle.State"
-    ) -> tuple["SlidePuzzle.State", jax.Array]:
+        self, solve_config: SlidePuzzleSolveConfig, state: SlidePuzzleState
+    ) -> tuple[SlidePuzzleState, jax.Array]:
         board = state.board_unpacked
         blank = jnp.argmax(board == 0)
         positions = jnp.array([blank // self.size, blank % self.size]) + jnp.array(
@@ -245,7 +272,7 @@ class SlidePuzzle(Puzzle):
         state, _ = jax.lax.while_loop(not_solverable, while_loop, (state, next_key))
         return state
 
-    def _solvable(self, state: "SlidePuzzle.State"):
+    def _solvable(self, state: SlidePuzzleState):
         """Check if the state is solvable"""
         board = state.board_unpacked
         N = self.size
@@ -282,7 +309,7 @@ class SlidePuzzle(Puzzle):
         """
         size = self.size
 
-        def img_func(state: "SlidePuzzle.State", **kwargs):
+        def img_func(state: SlidePuzzleState, **kwargs):
             imgsize = IMG_SIZE[0]
             img = np.full((IMG_SIZE[1], IMG_SIZE[0], 3), (144, 96, 8), dtype=np.uint8)
             img = cv2.rectangle(
@@ -351,8 +378,8 @@ class SlidePuzzleHard(SlidePuzzle):
             self.hardest_state = self.State.from_unpacked(board=board)
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> SlidePuzzle.State:
+        self, solve_config: SlidePuzzleSolveConfig, key=None, data=None
+    ) -> SlidePuzzleState:
         return self.hardest_state
 
 
@@ -365,11 +392,11 @@ class SlidePuzzleRandom(SlidePuzzle):
     def fixed_target(self) -> bool:
         return False
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> SlidePuzzleSolveConfig:
         solve_config = super().get_solve_config(key, data)
         return solve_config.replace(GoalSpec=self._get_random_state(key))
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> SlidePuzzle.State:
+        self, solve_config: SlidePuzzleSolveConfig, key=None, data=None
+    ) -> SlidePuzzleState:
         return self._get_random_state(key)

@@ -3,7 +3,9 @@ from typing import Never
 
 import flax.linen as nn
 import jax.numpy as jnp
+from xtructure import Xtructurable
 
+from ...core.puzzle_base import SolveConfigView
 from .._resources import world_model_data_path
 from .._utils import (
     DEFAULT_NORM_FN,
@@ -147,8 +149,8 @@ class WorldModel(nn.Module):
 class _SokobanMixin(WorldModelPuzzleBase):
     def batched_get_inverse_neighbours(
         self,
-        solve_configs: WorldModelPuzzleBase.SolveConfig,
-        states: WorldModelPuzzleBase.State,
+        solve_configs: SolveConfigView,
+        states: Xtructurable,
         filleds: bool = True,
         multi_solve_config: bool = False,
     ) -> Never:

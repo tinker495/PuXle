@@ -9,7 +9,8 @@ import jax.numpy as jnp
 import numpy as np
 
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
-from puxle.puzzles.rubikscube import RubiksCube
+from puxle.core.puzzle_base import EmptyInstanceContext
+from puxle.puzzles.rubikscube import RubiksCube, RubiksCubeState
 
 DATA_RELATIVE_PATH = Path("data") / "santa-2023" / "puzzles.csv"
 
@@ -31,7 +32,9 @@ class RubiksCubeSantaPreset(Enum):
         self.puzzle_type = puzzle_type
 
 
-class RubiksCubeSantaBenchmark(Benchmark):
+class RubiksCubeSantaBenchmark(
+    Benchmark[RubiksCubeState, EmptyInstanceContext, RubiksCubeState]
+):
     """
     Benchmark exposing the Santa 2023 Rubik's Cube puzzles.
 

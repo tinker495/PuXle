@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Self, TypeAlias
 
 import chex
 import cv2
@@ -8,13 +8,40 @@ import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import Puzzle, SolveConfigView
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint16
 
 
-class Maze(Puzzle):
+class MazeState(Xtructurable, abstract=True):
+    """Typed view of :class:`Maze` states."""
+
+    pos: jax.Array
+
+
+class MazeInstanceContext(Xtructurable, abstract=True):
+    """Typed view of :class:`Maze` instance contexts."""
+
+    Maze: jax.Array
+
+    if TYPE_CHECKING:
+
+        @property
+        def Maze_unpacked(self) -> jax.Array: ...
+
+        @classmethod
+        def from_unpacked(
+            cls, *, shape: tuple[int, ...] = (), Maze: jax.Array = ...
+        ) -> Self: ...
+
+        def set_unpacked(self, *, Maze: jax.Array = ...) -> Self: ...
+
+
+MazeSolveConfig: TypeAlias = SolveConfigView[MazeInstanceContext, MazeState]
+
+
+class Maze(Puzzle[MazeState, MazeInstanceContext, MazeState]):
     """Randomly-generated 2-D maze puzzle.
 
     A ``size × size`` boolean grid is generated via randomised depth-first
@@ -36,23 +63,36 @@ class Maze(Puzzle):
 
     size: int
 
-    def define_instance_context_class(self) -> type[Xtructurable]:
+    def define_goal_spec_class(self) -> type[MazeState]:
+        return self.State
+
+    def solve_config_to_state_transform(
+        self, solve_config: MazeSolveConfig, key: chex.PRNGKey | None = None
+    ) -> MazeState:
+        return solve_config.GoalSpec
+
+    def hindsight_transform(
+        self, solve_config: MazeSolveConfig, states: MazeState
+    ) -> MazeSolveConfig:
+        return solve_config.replace(GoalSpec=states)
+
+    def define_instance_context_class(self) -> type[MazeInstanceContext]:
         size = self.size
 
-        class InstanceContext(Xtructurable):
+        class InstanceContext(MazeInstanceContext):
             Maze: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1),
             ]
 
         return InstanceContext
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[MazeState]:
         str_parser = self.get_string_parser()
 
-        class State(Xtructurable):
+        class State(MazeState):
             pos: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.tensor(dtype=self._position_dtype, shape=(2,)),
             ]
 
@@ -68,7 +108,7 @@ class Maze(Puzzle):
         super().__init__(**kwargs)
 
     def get_solve_config_string_parser(self) -> Callable:
-        def parser(solve_config: "Maze.SolveConfig", **kwargs):
+        def parser(solve_config: MazeSolveConfig, **kwargs):
             return solve_config.GoalSpec.str(solve_config=solve_config)
 
         return parser
@@ -92,7 +132,7 @@ class Maze(Puzzle):
                     raise ValueError(f"Invalid value: {x}")
 
         def parser(
-            state: "Maze.State", solve_config: "Maze.SolveConfig" = None, **kwargs
+            state: MazeState, solve_config: MazeSolveConfig | None = None, **kwargs
         ):
             if solve_config is None:
                 # Fallback representation when no solve_config is provided
@@ -132,8 +172,8 @@ class Maze(Puzzle):
         return parser
 
     def get_initial_state(
-        self, solve_config: "Maze.SolveConfig", key=jax.random.PRNGKey(0), data=None
-    ) -> "Maze.State":
+        self, solve_config: MazeSolveConfig, key=jax.random.PRNGKey(0), data=None
+    ) -> MazeState:
         # Start state should also be chosen from valid path locations
         bool_maze = solve_config.InstanceContext.Maze_unpacked.reshape(
             (self.size, self.size)
@@ -142,7 +182,7 @@ class Maze(Puzzle):
 
     def get_solve_config(
         self, key=jax.random.PRNGKey(128), data=None
-    ) -> Puzzle.SolveConfig:
+    ) -> MazeSolveConfig:
         # Generate maze using DFS
         key, maze_key, target_key = jax.random.split(key, 3)
         bool_maze = self._generate_maze_dfs(
@@ -277,10 +317,10 @@ class Maze(Puzzle):
 
     def _apply(
         self,
-        solve_config: "Maze.SolveConfig",
-        state: "Maze.State",
+        solve_config: MazeSolveConfig,
+        state: MazeState,
         action: jax.Array,
-    ) -> tuple["Maze.State", jax.Array]:
+    ) -> tuple[MazeState, jax.Array]:
         """Pure transition: stepping out of bounds or into a wall costs infinity."""
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
         # Bounds must be checked before narrowing to the stored coordinate dtype.
@@ -298,8 +338,8 @@ class Maze(Puzzle):
         )
 
     def _get_neighbours(
-        self, solve_config: "Maze.SolveConfig", state: "Maze.State"
-    ) -> tuple["Maze.State", jax.Array]:
+        self, solve_config: MazeSolveConfig, state: MazeState
+    ) -> tuple[MazeState, jax.Array]:
         rows = state.pos[0].astype(jnp.int32) + jnp.array([0, 0, -1, 1])
         cols = state.pos[1].astype(jnp.int32) + jnp.array([-1, 1, 0, 0])
         index_dtype = jnp.uint32 if self.size**2 > 2**31 else jnp.int32
@@ -377,7 +417,7 @@ class Maze(Puzzle):
         on_target_color = (0, 255, 0)
 
         def img_func(
-            state: "Maze.State", solve_config: "Maze.SolveConfig" = None, **kwargs
+            state: MazeState, solve_config: MazeSolveConfig | None = None, **kwargs
         ):
             assert solve_config is not None, "This puzzle requires a solve_config"
             imgsize = IMG_SIZE[0]
@@ -437,7 +477,7 @@ class Maze(Puzzle):
         return img_func
 
     def get_solve_config_img_parser(self) -> Callable:
-        def parser(solve_config: "Maze.SolveConfig"):
+        def parser(solve_config: MazeSolveConfig):
             return self.get_img_parser()(solve_config.GoalSpec, solve_config)
 
         return parser

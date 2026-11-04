@@ -1,20 +1,32 @@
 from collections.abc import Callable
-from typing import Annotated
+from typing import Annotated, TypeAlias
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import (
+    EmptyInstanceContext,
+    SolveConfigView,
+    TargetPuzzle,
+)
 from puxle.utils.util import IMG_SIZE
 
 TYPE = jnp.uint8
 
 
-class TopSpin(Puzzle):
+class TopSpinState(Xtructurable, abstract=True):
+    """Typed view of :class:`TopSpin` states."""
+
+    permutation: jax.Array
+
+
+TopSpinSolveConfig: TypeAlias = SolveConfigView[EmptyInstanceContext, TopSpinState]
+
+
+class TopSpin(TargetPuzzle[TopSpinState]):
     """Top Spin puzzle on a circular track.
 
     ``n_discs`` numbered tokens sit on a ring.  Three actions are
@@ -39,13 +51,13 @@ class TopSpin(Puzzle):
     n_discs: int
     turnstile_size: int
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[TopSpinState]:
         """Defines the state class for TopSpin using xtructure."""
         str_parser = self.get_string_parser()
 
-        class State(Xtructurable):
+        class State(TopSpinState):
             permutation: Annotated[
-                chex.Array, FieldDescriptor.tensor(dtype=TYPE, shape=(self.n_discs,))
+                jax.Array, FieldDescriptor.tensor(dtype=TYPE, shape=(self.n_discs,))
             ]
 
             def __str__(self, **kwargs):
@@ -64,7 +76,7 @@ class TopSpin(Puzzle):
         super().__init__(**kwargs)
 
     def get_string_parser(self) -> Callable:
-        def parser(state: "TopSpin.State", **kwargs):
+        def parser(state: TopSpinState, **kwargs):
             # Host copy first; formatting a device array element-wise syncs per item.
             permutation = jax.device_get(state).permutation
             # Highlight the turnstile
@@ -78,7 +90,7 @@ class TopSpin(Puzzle):
 
         return parser
 
-    def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
+    def get_solve_config(self, key=None, data=None) -> TopSpinSolveConfig:
         # The target state is the sorted permutation
         target_state = self.State(
             permutation=jnp.arange(1, self.n_discs + 1, dtype=TYPE)
@@ -88,17 +100,17 @@ class TopSpin(Puzzle):
         )
 
     def get_initial_state(
-        self, solve_config: Puzzle.SolveConfig, key=None, data=None
-    ) -> "TopSpin.State":
+        self, solve_config: TopSpinSolveConfig, key=None, data=None
+    ) -> TopSpinState:
         # Start from solved state and apply random moves
         return self._get_shuffled_state(solve_config, solve_config.GoalSpec, key, 18)
 
     def _apply(
         self,
-        solve_config: Puzzle.SolveConfig,
-        state: "TopSpin.State",
+        solve_config: TopSpinSolveConfig,
+        state: TopSpinState,
         action: jax.Array,
-    ) -> tuple["TopSpin.State", float]:
+    ) -> tuple[TopSpinState, float]:
         """Pure transition: every TopSpin action is valid with unit cost."""
         # Match the prefix selected by the bulk kernel's Python slice.
         prefix_size = len(range(self.n_discs)[: self.turnstile_size])
@@ -131,8 +143,8 @@ class TopSpin(Puzzle):
         return self.State(permutation=state.permutation[source]), 1.0
 
     def _get_neighbours(
-        self, solve_config: Puzzle.SolveConfig, state: "TopSpin.State"
-    ) -> tuple["TopSpin.State", jax.Array]:
+        self, solve_config: TopSpinSolveConfig, state: TopSpinState
+    ) -> tuple[TopSpinState, jax.Array]:
         permutation = state.permutation
 
         def rotate(action):
@@ -171,7 +183,7 @@ class TopSpin(Puzzle):
         return jnp.array([1, 0, 2])
 
     def get_img_parser(self):
-        def img_func(state: "TopSpin.State", **kwargs):
+        def img_func(state: TopSpinState, **kwargs):
             imgsize = IMG_SIZE[0]
             img = np.full(
                 (IMG_SIZE[1], IMG_SIZE[0], 3), (240, 240, 240), dtype=np.uint8

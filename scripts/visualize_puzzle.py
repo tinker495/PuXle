@@ -23,6 +23,7 @@ import numpy as np
 import tyro
 from jax import tree_util
 from PIL import Image
+from xtructure import Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
 
@@ -57,7 +58,7 @@ def _save_image(array: jnp.ndarray | np.ndarray, path: Path) -> Path:
     return path
 
 
-def _format_state(puzzle: Puzzle, state: Puzzle.State) -> str:
+def _format_state(puzzle: Puzzle, state: Xtructurable) -> str:
     parser = puzzle.get_string_parser()
     try:
         return parser(state)
@@ -65,7 +66,7 @@ def _format_state(puzzle: Puzzle, state: Puzzle.State) -> str:
         return str(state)
 
 
-def _select_state(puzzle: Puzzle, state_tree: Puzzle.State, index: int) -> Puzzle.State:
+def _select_state(puzzle: Puzzle, state_tree: Xtructurable, index: int) -> Xtructurable:
     selected = tree_util.tree_map(lambda x: x[index], state_tree)
     if isinstance(selected, puzzle.State):
         return selected

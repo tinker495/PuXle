@@ -19,12 +19,14 @@ import jax
 import jax.numpy as jnp
 from xtructure import Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import Puzzle, SolveConfigView
 
 __all__ = ["BenchmarkSample", "Benchmark"]
 
 StateT = TypeVar("StateT", bound=Xtructurable)
-SolveConfigT = TypeVar("SolveConfigT", bound=Xtructurable)
+SolveConfigT = TypeVar("SolveConfigT", bound=SolveConfigView)
+ContextT = TypeVar("ContextT", bound=Xtructurable)
+GoalT = TypeVar("GoalT", bound=Xtructurable)
 
 
 @dataclass(frozen=True)
@@ -48,7 +50,7 @@ class BenchmarkSample(Generic[StateT, SolveConfigT]):
     optimal_path_costs: Optional[None | float]
 
 
-class Benchmark(ABC, Generic[StateT, SolveConfigT]):
+class Benchmark(ABC, Generic[StateT, ContextT, GoalT]):
     """Abstract base class for a benchmark dataset.
 
     Subclasses must implement:
@@ -65,21 +67,21 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
     """
 
     def __init__(self) -> None:
-        self._puzzle: Puzzle | None = None
+        self._puzzle: Puzzle[StateT, ContextT, GoalT] | None = None
         self._dataset: Any = None
         self._notation_to_action: dict[str, int] | None = None
         self._jitted_step = None
-        self._solve_config_cache: SolveConfigT | None = None
+        self._solve_config_cache: SolveConfigView[ContextT, GoalT] | None = None
 
     @property
-    def puzzle(self) -> Puzzle:
+    def puzzle(self) -> Puzzle[StateT, ContextT, GoalT]:
         """Return the puzzle used for this benchmark, constructing it lazily."""
         if self._puzzle is None:
             self._puzzle = self.build_puzzle()
         return self._puzzle
 
     @abstractmethod
-    def build_puzzle(self) -> Puzzle:
+    def build_puzzle(self) -> Puzzle[StateT, ContextT, GoalT]:
         """Instantiate the puzzle that defines this benchmark."""
 
     @property
@@ -98,12 +100,14 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         return range(len(self.dataset["states"]))
 
     @abstractmethod
-    def get_sample(self, sample_id: Hashable) -> BenchmarkSample[StateT, SolveConfigT]:
+    def get_sample(
+        self, sample_id: Hashable
+    ) -> BenchmarkSample[StateT, SolveConfigView[ContextT, GoalT]]:
         """Fetch the state, solve configuration and optimal action sequence for a sample."""
 
     def verify_solution(
         self,
-        sample: BenchmarkSample[StateT, SolveConfigT],
+        sample: BenchmarkSample[StateT, SolveConfigView[ContextT, GoalT]],
         states: Sequence[StateT] | None = None,
         action_sequence: Sequence[str] | None = None,
     ) -> bool | None:
@@ -177,11 +181,12 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
 
         return True
 
-    def _ensure_solve_config(self) -> SolveConfigT:
+    def _ensure_solve_config(self) -> SolveConfigView[ContextT, GoalT]:
         """Return the puzzle solve configuration, building it once and caching it."""
-        if self._solve_config_cache is None:
-            self._solve_config_cache = self.puzzle.get_solve_config()
-        return self._solve_config_cache
+        cache = self._solve_config_cache
+        if cache is None:
+            cache = self._solve_config_cache = self.puzzle.get_solve_config()
+        return cache
 
     @staticmethod
     def _normalize_dataset_path(dataset_path: str | Path | None) -> Path | None:

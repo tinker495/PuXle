@@ -7,7 +7,8 @@ import jax.numpy as jnp
 
 from puxle.benchmark._deepcubea import load_deepcubea_dataset
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
-from puxle.puzzles.rubikscube import RubiksCube
+from puxle.core.puzzle_base import EmptyInstanceContext
+from puxle.puzzles.rubikscube import RubiksCube, RubiksCubeState
 
 DEFAULT_DATASET_NAME = "size3-deepcubeA.pkl"
 DATA_RELATIVE_PATH = Path("data") / "rubikscube" / DEFAULT_DATASET_NAME
@@ -129,7 +130,9 @@ HARD_26_STATES = [
 ]
 
 
-class RubiksCubeDeepCubeABenchmark(Benchmark):
+class RubiksCubeDeepCubeABenchmark(
+    Benchmark[RubiksCubeState, EmptyInstanceContext, RubiksCubeState]
+):
     """Benchmark exposing the DeepCubeA 3x3 Rubik's Cube dataset."""
 
     def __init__(

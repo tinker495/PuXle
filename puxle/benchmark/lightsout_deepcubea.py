@@ -5,7 +5,6 @@ from typing import Any, Hashable, Sequence
 
 import jax.numpy as jnp
 import numpy as np
-from xtructure import Xtructurable
 
 from puxle.benchmark._deepcubea import (
     extract_tiles,
@@ -13,13 +12,16 @@ from puxle.benchmark._deepcubea import (
     load_deepcubea_dataset,
 )
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
-from puxle.puzzles.lightsout import LightsOut
+from puxle.core.puzzle_base import EmptyInstanceContext
+from puxle.puzzles.lightsout import LightsOut, LightsOutState
 
 DEFAULT_DATASET_NAME = "size7-deepcubeA.pkl"
 DATA_RELATIVE_PATH = Path("data") / "lightsout"
 
 
-class LightsOutDeepCubeABenchmark(Benchmark):
+class LightsOutDeepCubeABenchmark(
+    Benchmark[LightsOutState, EmptyInstanceContext, LightsOutState]
+):
     """Benchmark that exposes the DeepCubeA LightsOut dataset."""
 
     def __init__(
@@ -65,7 +67,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
     def verify_solution(
         self,
         sample: BenchmarkSample,
-        states: Sequence[Xtructurable] | None = None,
+        states: Sequence[LightsOutState] | None = None,
         action_sequence: Sequence[str] | None = None,
     ) -> bool | None:
         """
@@ -88,7 +90,7 @@ class LightsOutDeepCubeABenchmark(Benchmark):
 
         return result
 
-    def _convert_state(self, raw_state: Any) -> Xtructurable:
+    def _convert_state(self, raw_state: Any) -> LightsOutState:
         tiles = extract_tiles(raw_state)
         puzzle = self.puzzle
         if not isinstance(puzzle, LightsOut):

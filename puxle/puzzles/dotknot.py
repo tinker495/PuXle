@@ -1,14 +1,17 @@
 from collections.abc import Callable
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Self, TypeAlias
 
-import chex
 import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import (
+    ContextFreePuzzle,
+    EmptyInstanceContext,
+    SolveConfigView,
+)
 from puxle.utils.util import IMG_SIZE, coloring_str
 
 TYPE = jnp.uint8
@@ -21,7 +24,32 @@ COLOR_MAP = {
 }
 
 
-class DotKnot(Puzzle):
+class DotKnotState(Xtructurable, abstract=True):
+    """Typed view of :class:`DotKnot` states."""
+
+    board: jax.Array
+
+    if TYPE_CHECKING:
+
+        @property
+        def board_unpacked(self) -> jax.Array: ...
+
+        @classmethod
+        def from_unpacked(
+            cls, *, shape: tuple[int, ...] = (), board: jax.Array = ...
+        ) -> Self: ...
+
+        def set_unpacked(self, *, board: jax.Array = ...) -> Self: ...
+
+
+class DotKnotGoalSpec(Xtructurable, abstract=True):
+    """Typed view of :class:`DotKnot` goal specs."""
+
+
+DotKnotSolveConfig: TypeAlias = SolveConfigView[EmptyInstanceContext, DotKnotGoalSpec]
+
+
+class DotKnot(ContextFreePuzzle[DotKnotState, DotKnotGoalSpec]):
     """Dot-and-Knot path-connection puzzle.
 
     On an ``size × size`` grid, pairs of same-coloured dots must be
@@ -46,19 +74,19 @@ class DotKnot(Puzzle):
 
     size: int
 
-    def define_goal_spec_class(self) -> type[Xtructurable]:
-        class GoalSpec(Xtructurable):
+    def define_goal_spec_class(self) -> type[DotKnotGoalSpec]:
+        class GoalSpec(DotKnotGoalSpec):
             pass
 
         return GoalSpec
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[DotKnotState]:
         str_parser = self.get_string_parser()
         size = self.size
 
-        class State(Xtructurable):
+        class State(DotKnotState):
             board: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=4),
             ]
 
@@ -75,7 +103,7 @@ class DotKnot(Puzzle):
         super().__init__(**kwargs)
 
     def get_solve_config_string_parser(self) -> Callable:
-        def parser(solve_config: "DotKnot.SolveConfig"):
+        def parser(solve_config: DotKnotSolveConfig):
             return ""
 
         return parser
@@ -104,25 +132,25 @@ class DotKnot(Puzzle):
 
     def get_initial_state(
         self,
-        solve_config: "DotKnot.SolveConfig",
+        solve_config: DotKnotSolveConfig,
         key=jax.random.PRNGKey(128),
         data=None,
-    ) -> "DotKnot.State":
+    ) -> DotKnotState:
         return self._get_random_state(key)
 
     def get_solve_config(
         self, key=jax.random.PRNGKey(128), data=None
-    ) -> "DotKnot.SolveConfig":
+    ) -> DotKnotSolveConfig:
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(), GoalSpec=self.GoalSpec()
         )
 
     def _apply(
         self,
-        solve_config: "DotKnot.SolveConfig",
-        state: "DotKnot.State",
+        solve_config: DotKnotSolveConfig,
+        state: DotKnotState,
         action: jax.Array,
-    ) -> tuple["DotKnot.State", jax.Array]:
+    ) -> tuple[DotKnotState, jax.Array]:
         board = state.board_unpacked
         selected = jnp.min(
             jnp.where(
@@ -162,8 +190,8 @@ class DotKnot(Puzzle):
         )
 
     def _get_neighbours(
-        self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State"
-    ) -> tuple["DotKnot.State", jax.Array]:
+        self, solve_config: DotKnotSolveConfig, state: DotKnotState
+    ) -> tuple[DotKnotState, jax.Array]:
         board = state.board_unpacked
         selected = jnp.min(
             jnp.where(
@@ -210,7 +238,7 @@ class DotKnot(Puzzle):
         )
 
     def is_solved(
-        self, solve_config: "DotKnot.SolveConfig", state: "DotKnot.State"
+        self, solve_config: DotKnotSolveConfig, state: DotKnotState
     ) -> jax.Array:
         unpacked = state.board_unpacked
         empty = jnp.all(unpacked == 0)  # ALL empty is not solved condition
@@ -258,7 +286,7 @@ class DotKnot(Puzzle):
         return self.State.from_unpacked(board=board)
 
     def get_solve_config_img_parser(self) -> Callable:
-        def parser(solve_config: "DotKnot.SolveConfig"):
+        def parser(solve_config: DotKnotSolveConfig):
             pass
 
         return parser
@@ -268,7 +296,7 @@ class DotKnot(Puzzle):
         This function is a decorator that adds an img_parser to the class.
         """
 
-        def img_func(state: "DotKnot.State", **kwargs):
+        def img_func(state: DotKnotState, **kwargs):
             imgsize = IMG_SIZE[0]
             img = np.full(
                 (IMG_SIZE[1], IMG_SIZE[0], 3), (190, 190, 190), dtype=np.uint8

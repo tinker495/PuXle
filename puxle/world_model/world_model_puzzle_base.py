@@ -1,9 +1,8 @@
 import pickle
 from collections.abc import Callable
 from math import prod
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Self, TypeAlias
 
-import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -12,7 +11,11 @@ from flax import linen as nn
 from xtructure import FieldDescriptor, Xtructurable
 from xtructure import numpy as xnp
 
-from puxle.core.puzzle_base import Puzzle
+from puxle.core.puzzle_base import (
+    EmptyInstanceContext,
+    SolveConfigView,
+    TargetPuzzle,
+)
 from puxle.utils import IMG_SIZE
 
 from ._utils import (
@@ -32,6 +35,29 @@ from ._utils import (
     save_params_with_metadata,
 )
 from .util import download_world_model_dataset, is_world_model_dataset_downloaded
+
+
+class WorldModelState(Xtructurable, abstract=True):
+    """Typed view of :class:`WorldModelPuzzleBase` states."""
+
+    latent: jax.Array
+
+    if TYPE_CHECKING:
+
+        @property
+        def latent_unpacked(self) -> jax.Array: ...
+
+        @classmethod
+        def from_unpacked(
+            cls, *, shape: tuple[int, ...] = (), latent: jax.Array = ...
+        ) -> Self: ...
+
+        def set_unpacked(self, *, latent: jax.Array = ...) -> Self: ...
+
+
+WorldModelSolveConfig: TypeAlias = SolveConfigView[
+    EmptyInstanceContext, WorldModelState
+]
 
 
 class Encoder(nn.Module):
@@ -143,7 +169,7 @@ class WorldModel(nn.Module):
         return jnp.reshape(x, (x.shape[0], self.action_size) + self.latent_shape)
 
 
-class WorldModelPuzzleBase(Puzzle):
+class WorldModelPuzzleBase(TargetPuzzle[WorldModelState]):
     inits: jnp.ndarray
     targets: jnp.ndarray
     init_state_size: int = 0
@@ -154,13 +180,13 @@ class WorldModelPuzzleBase(Puzzle):
     def fixed_target(self) -> bool:
         return False
 
-    def define_state_class(self) -> type[Xtructurable]:
+    def define_state_class(self) -> type[WorldModelState]:
         str_parser = self.get_string_parser()
         latent_shape = self.latent_shape
 
-        class State(Xtructurable):
+        class State(WorldModelState):
             latent: Annotated[
-                chex.Array,
+                jax.Array,
                 FieldDescriptor.packed_tensor(shape=latent_shape, packed_bits=1),
             ]
 
@@ -441,9 +467,9 @@ class WorldModelPuzzleBase(Puzzle):
             jnp.squeeze(jnp.take_along_axis(costs, indices, axis=0), axis=0),
         )
 
-    def get_actions(self, solve_config, state, actions, filled=True):
+    def get_actions(self, solve_config, state, action, filled=True):
         neighbours, costs = self.get_neighbours(solve_config, state, filled)
-        return xnp.take(neighbours, actions, axis=0), jnp.take(costs, actions, axis=0)
+        return xnp.take(neighbours, action, axis=0), jnp.take(costs, action, axis=0)
 
     def batched_get_neighbours(
         self, solve_configs, states, filleds=True, multi_solve_config=False
