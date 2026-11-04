@@ -9,10 +9,11 @@ import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable
+from xtructure import FieldDescriptor
 
 from puxle.core.puzzle_base import (
     EmptyInstanceContext,
+    RenderedStateView,
     SolveConfigView,
     TargetPuzzle,
 )
@@ -21,7 +22,7 @@ from puxle.utils.util import IMG_SIZE, colored_str
 TYPE = jnp.uint8
 
 
-class SokobanState(Xtructurable, abstract=True):
+class SokobanState(RenderedStateView, abstract=True):
     """Typed view of :class:`Sokoban` states."""
 
     board: jax.Array

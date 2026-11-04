@@ -7,10 +7,11 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable
+from xtructure import FieldDescriptor
 
 from puxle.core.puzzle_base import (
     EmptyInstanceContext,
+    RenderedStateView,
     SolveConfigView,
     TargetPuzzle,
 )
@@ -198,7 +199,7 @@ _SYM_PERM24, _SYM_K24 = _build_symmetry_maps_24()
 # 0: x-axis(left), 1: y-axis(up), 2: z-axis(front)
 
 
-class RubiksCubeState(Xtructurable, abstract=True):
+class RubiksCubeState(RenderedStateView, abstract=True):
     """Typed view of :class:`RubiksCube` states."""
 
     faces: jax.Array

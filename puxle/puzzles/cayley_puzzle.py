@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING, Annotated, Optional, TypeAlias
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable
+from xtructure import FieldDescriptor
 
 from puxle.core.puzzle_base import (
     EmptyInstanceContext,
+    RenderedStateView,
     SolveConfigView,
     TargetPuzzle,
 )
@@ -107,7 +108,7 @@ def _mat_key(mat: np.ndarray) -> bytes:
     return mat.astype(np.int64, copy=False).tobytes()
 
 
-class CayleyPuzzleState(Xtructurable, abstract=True):
+class CayleyPuzzleState(RenderedStateView, abstract=True):
     """Typed view of :class:`CayleyPuzzle` states.
 
     The single tensor field is mode-resolved (PERMUTATION -> ``permutation``,

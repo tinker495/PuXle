@@ -8,11 +8,12 @@ import jax.numpy as jnp
 import numpy as np
 from aqt.jax.v2.flax import aqt_flax
 from flax import linen as nn
-from xtructure import FieldDescriptor, Xtructurable
+from xtructure import FieldDescriptor
 from xtructure import numpy as xnp
 
 from puxle.core.puzzle_base import (
     EmptyInstanceContext,
+    RenderedStateView,
     SolveConfigView,
     TargetPuzzle,
 )
@@ -37,7 +38,7 @@ from ._utils import (
 from .util import download_world_model_dataset, is_world_model_dataset_downloaded
 
 
-class WorldModelState(Xtructurable, abstract=True):
+class WorldModelState(RenderedStateView, abstract=True):
     """Typed view of :class:`WorldModelPuzzleBase` states."""
 
     latent: jax.Array

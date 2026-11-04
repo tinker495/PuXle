@@ -8,13 +8,13 @@ import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle, SolveConfigView
+from puxle.core.puzzle_base import Puzzle, RenderedStateView, SolveConfigView
 from puxle.utils.util import IMG_SIZE, colored_str
 
 TYPE = jnp.uint16
 
 
-class MazeState(Xtructurable, abstract=True):
+class MazeState(RenderedStateView, abstract=True):
     """Typed view of :class:`Maze` states."""
 
     pos: jax.Array

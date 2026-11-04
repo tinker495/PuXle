@@ -7,10 +7,11 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable
+from xtructure import FieldDescriptor
 
 from puxle.core.puzzle_base import (
     EmptyInstanceContext,
+    RenderedStateView,
     SolveConfigView,
     TargetPuzzle,
 )
@@ -19,7 +20,7 @@ from puxle.utils.util import IMG_SIZE
 TYPE = jnp.uint8
 
 
-class SlidePuzzleState(Xtructurable, abstract=True):
+class SlidePuzzleState(RenderedStateView, abstract=True):
     """Typed view of :class:`SlidePuzzle` states."""
 
     board: jax.Array

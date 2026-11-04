@@ -10,6 +10,7 @@ from xtructure import FieldDescriptor, Xtructurable
 from puxle.core.puzzle_base import (
     ContextFreePuzzle,
     EmptyInstanceContext,
+    RenderedStateView,
     SolveConfigView,
 )
 from puxle.utils.util import IMG_SIZE, coloring_str
@@ -24,7 +25,7 @@ COLOR_MAP = {
 }
 
 
-class DotKnotState(Xtructurable, abstract=True):
+class DotKnotState(RenderedStateView, abstract=True):
     """Typed view of :class:`DotKnot` states."""
 
     board: jax.Array

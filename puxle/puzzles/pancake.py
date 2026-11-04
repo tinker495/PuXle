@@ -6,10 +6,11 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable
+from xtructure import FieldDescriptor
 
 from puxle.core.puzzle_base import (
     EmptyInstanceContext,
+    RenderedStateView,
     SolveConfigView,
     TargetPuzzle,
 )
@@ -24,7 +25,7 @@ def get_color(size):
     return colors[int(size) % len(colors)]
 
 
-class PancakeSortingState(Xtructurable, abstract=True):
+class PancakeSortingState(RenderedStateView, abstract=True):
     """Typed view of :class:`PancakeSorting` states."""
 
     stack: jax.Array

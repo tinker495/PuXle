@@ -7,14 +7,14 @@ import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
-from puxle.core.puzzle_base import Puzzle, SolveConfigView
+from puxle.core.puzzle_base import Puzzle, RenderedStateView, SolveConfigView
 from puxle.utils.util import IMG_SIZE
 
 # Use 16-bit unsigned integers so that problem sizes >255 are handled without overflow.
 TYPE = jnp.uint16
 
 
-class TSPState(Xtructurable, abstract=True):
+class TSPState(RenderedStateView, abstract=True):
     """Typed view of :class:`TSP` states."""
 
     mask: jax.Array

@@ -6,10 +6,11 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable
+from xtructure import FieldDescriptor
 
 from puxle.core.puzzle_base import (
     EmptyInstanceContext,
+    RenderedStateView,
     SolveConfigView,
     TargetPuzzle,
 )
@@ -18,7 +19,7 @@ from puxle.utils.util import IMG_SIZE, colored_str
 TYPE = jnp.uint8
 
 
-class TowerOfHanoiState(Xtructurable, abstract=True):
+class TowerOfHanoiState(RenderedStateView, abstract=True):
     """Typed view of :class:`TowerOfHanoi` states."""
 
     disk_pegs: jax.Array

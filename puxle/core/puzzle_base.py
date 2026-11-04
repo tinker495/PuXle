@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Generic, Optional
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 from typing_extensions import TypeVar
 from xtructure import FieldDescriptor, Xtructurable
 from xtructure.core.layout import get_type_layout
@@ -22,7 +23,19 @@ class EmptyInstanceContext(Xtructurable, abstract=True):
     """Typed view of the field-less instance context of context-free puzzles."""
 
 
-class SolveConfigView(Xtructurable, Generic[ContextT, GoalT], abstract=True):
+class RenderedStateView(Xtructurable, abstract=True):
+    """Typed view of the puzzle classes ``attach_state_renderer`` decorates.
+
+    Every puzzle's ``State`` and ``SolveConfig`` gain an ``img(**kwargs)`` method
+    at runtime; this view declares it for type checkers.
+    """
+
+    if TYPE_CHECKING:
+
+        def img(self, **kwargs: Any) -> np.ndarray: ...
+
+
+class SolveConfigView(RenderedStateView, Generic[ContextT, GoalT], abstract=True):
     """Typed view of a puzzle's per-instance ``SolveConfig`` class."""
 
     InstanceContext: ContextT

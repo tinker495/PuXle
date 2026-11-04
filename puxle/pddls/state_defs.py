@@ -10,8 +10,10 @@ import jax
 import jax.numpy as jnp
 from xtructure import FieldDescriptor, Xtructurable
 
+from puxle.core.puzzle_base import RenderedStateView
 
-class PDDLState(Xtructurable, abstract=True):
+
+class PDDLState(RenderedStateView, abstract=True):
     """Typed view of PDDL states (packed atom vector)."""
 
     atoms: jax.Array

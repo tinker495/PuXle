@@ -5,10 +5,11 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable
+from xtructure import FieldDescriptor
 
 from puxle.core.puzzle_base import (
     EmptyInstanceContext,
+    RenderedStateView,
     SolveConfigView,
     TargetPuzzle,
 )
@@ -33,7 +34,7 @@ def action_to_char(action: int) -> str:
         return colored_str(chr(action + 29), "light_yellow")
 
 
-class LightsOutState(Xtructurable, abstract=True):
+class LightsOutState(RenderedStateView, abstract=True):
     """Typed view of :class:`LightsOut` states."""
 
     board: jax.Array
