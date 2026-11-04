@@ -6,7 +6,7 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.utils.util import IMG_SIZE, colored_str
@@ -52,8 +52,7 @@ class LightsOut(Puzzle):
         str_parser = self.get_string_parser()
         size = self.size
 
-        @xtructure_dataclass
-        class State:
+        class State(Xtructurable):
             board: Annotated[
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1),

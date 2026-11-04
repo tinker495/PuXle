@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 from aqt.jax.v2.flax import aqt_flax
 from flax import linen as nn
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 from xtructure import numpy as xnp
 
 from puxle.core.puzzle_base import Puzzle
@@ -158,8 +158,7 @@ class WorldModelPuzzleBase(Puzzle):
         str_parser = self.get_string_parser()
         latent_shape = self.latent_shape
 
-        @xtructure_dataclass
-        class State:
+        class State(Xtructurable):
             latent: Annotated[
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=latent_shape, packed_bits=1),

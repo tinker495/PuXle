@@ -22,11 +22,10 @@ packed bytes in-memory.
 
 ```python
 import jax.numpy as jnp
-from xtructure import FieldDescriptor, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 
-@xtructure_dataclass
-class State:
+class State(Xtructurable):
     board: FieldDescriptor.packed_tensor(shape=(49,), packed_bits=1)
 
 
@@ -45,11 +44,10 @@ state2 = state.set_unpacked(board=jnp.logical_not(board_view))
 
 ```python
 import jax.numpy as jnp
-from xtructure import FieldDescriptor, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 
-@xtructure_dataclass
-class CubeState:
+class CubeState(Xtructurable):
     # 6 faces x (size*size) stickers, each in [0..5] => 3 bits
     faces: FieldDescriptor.packed_tensor(shape=(6, 9), packed_bits=3)
 
