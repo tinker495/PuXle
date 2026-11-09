@@ -28,9 +28,9 @@ from ._utils import (
     is_model_downloaded,
     load_params_with_metadata,
     resolve_model_path,
-    round_through_gradient,
     save_params_with_metadata,
 )
+from .fsq import FSQ
 from .util import download_world_model_dataset, is_world_model_dataset_downloaded
 
 
@@ -95,23 +95,27 @@ class AutoEncoder(nn.Module):
     norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
+    fsq_levels: int = 8
 
     def setup(self):
-        self.encoder = Encoder(
+        self.encoder: nn.Module = Encoder(
             self.latent_shape,
             norm_fn=self.norm_fn,
             aqt_cfg=self.aqt_cfg,
             quant_mode=self.quant_mode,
         )
-        self.decoder = Decoder(
+        self.decoder: nn.Module = Decoder(
             self.data_shape,
             norm_fn=self.norm_fn,
             aqt_cfg=self.aqt_cfg,
             quant_mode=self.quant_mode,
         )
 
+    def encode(self, data, training=False):
+        return FSQ(self.fsq_levels)(self.encoder(data, training))
+
     def __call__(self, x0, training=False):
-        latent = self.encoder(x0, training)
+        latent = self.encode(x0, training)
         return latent, self.decoder(latent, training)
 
 
@@ -157,12 +161,17 @@ class WorldModelPuzzleBase(Puzzle):
     def define_state_class(self) -> type[Xtructurable]:
         str_parser = self.get_string_parser()
         latent_shape = self.latent_shape
+        packed_bits = self.fsq.packed_bits
 
         @xtructure_dataclass
         class State:
             latent: Annotated[
                 chex.Array,
-                FieldDescriptor.packed_tensor(shape=latent_shape, packed_bits=1),
+                FieldDescriptor.packed_tensor(
+                    shape=latent_shape,
+                    packed_bits=packed_bits,
+                    unpacked_dtype=jnp.uint8,
+                ),
             ]
 
             def __str__(self, **kwargs):
@@ -180,18 +189,20 @@ class WorldModelPuzzleBase(Puzzle):
         WM=WorldModel,
         init_params: bool = False,
         path: str | None = None,
+        fsq_levels: int = 8,
         **kwargs,
     ):
         self.data_path = data_path
         self.data_shape = data_shape
         self.latent_shape = latent_shape
         self.latent_size = int(np.prod(latent_shape))
-        self.pad_size = int(np.ceil(self.latent_size / 8) * 8 - self.latent_size)
+        self.fsq = FSQ(fsq_levels)
         self.action_size = action_size
         self.path = path
         self.metadata = {}
         self.aqt_cfg = kwargs.pop("aqt_cfg", None)
         kwargs["norm_fn"] = get_norm_fn(kwargs.get("norm_fn", "batch"))
+        fsq = self.fsq
 
         class total_model(nn.Module):
             autoencoder: AutoEncoder
@@ -200,44 +211,40 @@ class WorldModelPuzzleBase(Puzzle):
             @nn.compact
             def __call__(self, x, training=False):
                 latent, decoded = self.autoencoder(x, training)
-                return self.world_model(latent, training), decoded
+                return self.transition(latent, training), decoded
 
             def decode(self, latent, training=False):
                 return self.autoencoder.decoder(latent, training)
 
             def encode(self, data, training=False):
-                return nn.sigmoid(self.autoencoder.encoder(data, training))
+                return self.autoencoder.encode(data, training)
 
             def transition(self, latent, training=False):
-                return nn.sigmoid(self.world_model(latent, training))
+                return fsq(self.world_model(latent, training))
 
             def train_info(self, data, next_data, action, training=True):
-                logits = self.autoencoder.encoder(data, training)
-                rounded_latents = round_through_gradient(nn.sigmoid(logits))
-                decoded = self.decode(rounded_latents, training)
+                raw = self.autoencoder.encoder(data, training)
+                latents = fsq(raw)
+                decoded = self.decode(latents, training)
 
-                next_logits = self.autoencoder.encoder(next_data, training)
-                rounded_next_latents = round_through_gradient(nn.sigmoid(next_logits))
-                next_decoded = self.decode(rounded_next_latents, training)
+                next_raw = self.autoencoder.encoder(next_data, training)
+                next_latents = fsq(next_raw)
+                next_decoded = self.decode(next_latents, training)
 
-                next_logits_preds = self.world_model(rounded_latents, training)
-                action = jnp.reshape(
-                    action, (-1,) + (1,) * (next_logits_preds.ndim - 1)
-                )
-                next_logits = jnp.take_along_axis(next_logits_preds, action, axis=1)
-                next_logits_pred = next_logits.squeeze(axis=1)
-                rounded_next_latents_pred = round_through_gradient(
-                    nn.sigmoid(next_logits_pred)
+                next_preds = self.world_model(latents, training)
+                action = jnp.reshape(action, (-1,) + (1,) * (next_preds.ndim - 1))
+                next_pred = jnp.take_along_axis(next_preds, action, axis=1).squeeze(
+                    axis=1
                 )
                 return (
-                    logits,
-                    rounded_latents,
+                    fsq.bound(raw),
+                    latents,
                     decoded,
-                    next_logits,
-                    rounded_next_latents,
+                    fsq.bound(next_raw),
+                    next_latents,
                     next_decoded,
-                    next_logits_pred,
-                    rounded_next_latents_pred,
+                    fsq.bound(next_pred),
+                    fsq(next_pred),
                 )
 
         def build_model(quant_mode):
@@ -249,6 +256,7 @@ class WorldModelPuzzleBase(Puzzle):
                 autoencoder=AE(
                     data_shape=data_shape,
                     latent_shape=latent_shape,
+                    fsq_levels=fsq_levels,
                     **model_kwargs,
                 ),
                 world_model=WM(
@@ -295,11 +303,18 @@ class WorldModelPuzzleBase(Puzzle):
                 download_model(self.path)
             params, metadata = load_params_with_metadata(resolve_model_path(self.path))
             if params is None:
-                print(
-                    f"Warning: Loaded parameters from {self.path} are invalid or old. "
-                    "Initializing new parameters."
+                raise ValueError(
+                    "Checkpoint parameters are invalid; retrain with --reset."
                 )
-                return self.get_new_params()
+            if (
+                metadata.get("quantizer") != "fsq"
+                or metadata.get("fsq_levels") != self.fsq.levels
+            ):
+                raise ValueError(
+                    "Checkpoint quantizer is incompatible with this FSQ model "
+                    f"({self.fsq.levels} levels). Binary AE checkpoints cannot be reused; "
+                    "retrain with --reset."
+                )
             self.metadata = metadata
             params = align_params_dtype(params)
             assert params is not None
@@ -317,12 +332,14 @@ class WorldModelPuzzleBase(Puzzle):
     def save_model(self, metadata: dict | None = None):
         if self.path is None:
             raise ValueError("A model path is required to save parameters.")
-        metadata = {} if metadata is None else metadata
+        metadata = dict(self.metadata if metadata is None else metadata)
         metadata.update(
             data_path=self.data_path,
             data_shape=self.data_shape,
             latent_shape=self.latent_shape,
             action_size=self.action_size,
+            quantizer="fsq",
+            fsq_levels=self.fsq.levels,
         )
         save_params_with_metadata(self.path, self.params, metadata)
 
@@ -357,7 +374,7 @@ class WorldModelPuzzleBase(Puzzle):
         def decode(latent):
             data = self.model.apply(
                 self.params,
-                jnp.expand_dims(latent, axis=0),
+                self.fsq.from_codes(jnp.expand_dims(latent, axis=0)),
                 training=False,
                 method=self.model.decode,
             )
@@ -414,9 +431,7 @@ class WorldModelPuzzleBase(Puzzle):
         latent = latent.squeeze(0)
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(),
-            GoalSpec=self.State.from_unpacked(
-                latent=jnp.round(latent).astype(jnp.bool_)
-            ),
+            GoalSpec=self.State.from_unpacked(latent=self.fsq.to_codes(latent)),
         )
 
     def get_initial_state(self, solve_config, key=None, data=None):
@@ -428,7 +443,7 @@ class WorldModelPuzzleBase(Puzzle):
         if not isinstance(latent, (jax.Array, np.ndarray)):
             raise TypeError("The world model encoder must return an array.")
         latent = latent.squeeze(0)
-        return self.State.from_unpacked(latent=jnp.round(latent).astype(jnp.bool_))
+        return self.State.from_unpacked(latent=self.fsq.to_codes(latent))
 
     def batched_get_actions(
         self, solve_configs, states, actions, filleds=True, multi_solve_config=False
@@ -451,13 +466,13 @@ class WorldModelPuzzleBase(Puzzle):
     ):
         next_latent = self.model.apply(
             self.params,
-            states.latent_unpacked,
+            self.fsq.from_codes(states.latent_unpacked),
             training=False,
             method=self.model.transition,
         )
         if not isinstance(next_latent, (jax.Array, np.ndarray)):
             raise TypeError("The world model transition must return an array.")
-        next_latent = jnp.swapaxes(jnp.round(next_latent).astype(jnp.bool_), 0, 1)
+        next_latent = jnp.swapaxes(self.fsq.to_codes(next_latent), 0, 1)
         next_states = jax.vmap(jax.vmap(self.State.from_unpacked))(latent=next_latent)
         costs = jnp.where(
             filleds,

@@ -12,7 +12,7 @@ from .world_model_puzzle_base import WorldModelPuzzleBase
 
 def accuracy_fn(preds: chex.Array, labels: chex.Array) -> chex.Array:
     axes = tuple(range(1, preds.ndim))
-    return jnp.mean(jnp.sum(jnp.logical_xor(preds, labels), axis=axes) == 0)
+    return jnp.mean(jnp.all(preds == labels, axis=axes))
 
 
 def world_model_train_builder(
@@ -27,11 +27,11 @@ def world_model_train_builder(
                 _,
                 _,
                 decoded,
-                next_logits,
-                rounded_next_latents,
+                next_values,
+                next_latents,
                 next_decoded,
-                next_logits_pred,
-                rounded_next_latents_pred,
+                next_values_pred,
+                next_latents_pred,
             ),
             variable_updates,
         ) = train_info_fn(params, data, next_data, action, training=True)
@@ -43,21 +43,15 @@ def world_model_train_builder(
             + 0.5 * optax.l2_loss(next_data_scaled, next_decoded)
         )
         wm_loss = jnp.mean(
-            0.5
-            * optax.sigmoid_binary_cross_entropy(
-                next_logits, jax.lax.stop_gradient(rounded_next_latents_pred)
-            )
-            + 0.5
-            * optax.sigmoid_binary_cross_entropy(
-                next_logits_pred, jax.lax.stop_gradient(rounded_next_latents)
-            )
+            0.5 * optax.l2_loss(next_values, jax.lax.stop_gradient(next_latents_pred))
+            + 0.5 * optax.l2_loss(next_values_pred, jax.lax.stop_gradient(next_latents))
         )
         total_loss = (1 - loss_weight) * ae_loss + loss_weight * wm_loss
         return total_loss, (
             new_params,
             ae_loss,
             wm_loss,
-            accuracy_fn(rounded_next_latents, rounded_next_latents_pred),
+            accuracy_fn(next_latents, next_latents_pred),
         )
 
     def train_fn(
@@ -130,7 +124,7 @@ def world_model_eval_builder(train_info_fn: Callable, minibatch_size: int):
             data, next_data, action, batch_valid = batch
             result = train_info_fn(params, data, next_data, action, training=False)
             axes = tuple(range(1, result[4].ndim))
-            correct = jnp.sum(jnp.logical_xor(result[4], result[7]), axis=axes) == 0
+            correct = jnp.all(result[4] == result[7], axis=axes)
             return (
                 counts[0] + jnp.sum(jnp.where(batch_valid, correct, False)),
                 counts[1] + jnp.sum(batch_valid),

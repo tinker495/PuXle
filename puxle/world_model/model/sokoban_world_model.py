@@ -14,6 +14,7 @@ from .._utils import (
     build_aqt_conv_general_dilated,
     get_norm_fn,
 )
+from ..world_model_puzzle_base import AutoEncoder as FSQAutoEncoder
 from ..world_model_puzzle_base import WorldModelPuzzleBase
 
 
@@ -83,13 +84,7 @@ class Decoder(nn.Module):
         )(x)
 
 
-class AutoEncoder(nn.Module):
-    data_shape: tuple[int, ...]
-    latent_shape: tuple[int, ...]
-    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
-    aqt_cfg: object = None
-    quant_mode: object = None
-
+class AutoEncoder(FSQAutoEncoder):
     def setup(self):
         self.encoder = Encoder(
             self.latent_shape,
@@ -103,10 +98,6 @@ class AutoEncoder(nn.Module):
             aqt_cfg=self.aqt_cfg,
             quant_mode=self.quant_mode,
         )
-
-    def __call__(self, x0, training=False):
-        latent = self.encoder(x0, training)
-        return latent, self.decoder(latent, training)
 
 
 class WorldModel(nn.Module):
@@ -178,7 +169,7 @@ class SokobanWorldModel(_SokobanMixin, WorldModelPuzzleBase):
 
 
 class EncoderOptimized(nn.Module):
-    latent_shape: tuple[int, int, int]
+    latent_shape: tuple[int, ...]
     norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
@@ -217,7 +208,7 @@ class EncoderOptimized(nn.Module):
 
 
 class DecoderOptimized(nn.Module):
-    data_shape: tuple[int, int, int]
+    data_shape: tuple[int, ...]
     norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
     aqt_cfg: object = None
     quant_mode: object = None
@@ -263,13 +254,7 @@ class DecoderOptimized(nn.Module):
         )(x)
 
 
-class AutoEncoderOptimized(nn.Module):
-    data_shape: tuple[int, int, int]
-    latent_shape: tuple[int, int, int]
-    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
-    aqt_cfg: object = None
-    quant_mode: object = None
-
+class AutoEncoderOptimized(FSQAutoEncoder):
     def setup(self):
         self.encoder = EncoderOptimized(
             self.latent_shape,
@@ -283,10 +268,6 @@ class AutoEncoderOptimized(nn.Module):
             aqt_cfg=self.aqt_cfg,
             quant_mode=self.quant_mode,
         )
-
-    def __call__(self, x0, training=False):
-        latent = self.encoder(x0, training)
-        return latent, self.decoder(latent, training)
 
 
 class SokobanWorldModelOptimized(_SokobanMixin, WorldModelPuzzleBase):

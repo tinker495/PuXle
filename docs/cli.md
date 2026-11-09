@@ -37,3 +37,10 @@ puxle world-model-train train \
 
 Available model names are the attributes exposed by
 `puxle.world_model.trained_world_model_registry`.
+
+World models use finite scalar quantization (FSQ) with 8 levels per scalar by
+default. Start a new FSQ training run with `--reset`; Binary AE checkpoints are
+incompatible and are rejected on load. Back up an existing checkpoint before
+resetting: training saves to the same registered checkpoint path. The published
+Binary AE weights must be replaced with retrained FSQ weights before using the
+serving registry. No retrained weights are bundled with this change.
