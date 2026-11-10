@@ -7,7 +7,7 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.utils.util import IMG_SIZE, colored_str
@@ -45,8 +45,7 @@ class TowerOfHanoi(Puzzle):
         str_parser = self.get_string_parser()
         count, peg_count = self.num_disks, self.num_pegs
 
-        @xtructure_dataclass
-        class State:
+        class State(Xtructurable):
             disk_pegs: Annotated[
                 chex.Array,
                 FieldDescriptor.packed_tensor(

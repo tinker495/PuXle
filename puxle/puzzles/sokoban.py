@@ -9,7 +9,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.utils.util import IMG_SIZE, colored_str
@@ -61,8 +61,7 @@ class Sokoban(Puzzle):
         str_parser = self.get_string_parser()
         size = self.size
 
-        @xtructure_dataclass
-        class State:
+        class State(Xtructurable):
             board: Annotated[
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=2),
@@ -482,12 +481,12 @@ class Sokoban(Puzzle):
         return self.State.from_unpacked(board=board)
 
     def hindsight_transform(
-        self, solve_config: "Sokoban.SolveConfig", state: "Sokoban.State"
+        self, solve_config: "Sokoban.SolveConfig", states: "Sokoban.State"
     ) -> "Sokoban.SolveConfig":
         """
         This function shoulde transformt the state to the solve config.
         """
-        board = state.board_unpacked
+        board = states.board_unpacked
         if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET:
             rm_player = jnp.where(
                 board == Sokoban.Object.PLAYER.value, Sokoban.Object.EMPTY.value, board

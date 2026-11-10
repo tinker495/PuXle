@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 from aqt.jax.v2.flax import aqt_flax
 from flax import linen as nn
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 from xtructure import numpy as xnp
 
 from puxle.core.puzzle_base import Puzzle
@@ -158,8 +158,7 @@ class WorldModelPuzzleBase(Puzzle):
         str_parser = self.get_string_parser()
         latent_shape = self.latent_shape
 
-        @xtructure_dataclass
-        class State:
+        class State(Xtructurable):
             latent: Annotated[
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=latent_shape, packed_bits=1),
@@ -442,9 +441,9 @@ class WorldModelPuzzleBase(Puzzle):
             jnp.squeeze(jnp.take_along_axis(costs, indices, axis=0), axis=0),
         )
 
-    def get_actions(self, solve_config, state, actions, filled=True):
+    def get_actions(self, solve_config, state, action, filled=True):
         neighbours, costs = self.get_neighbours(solve_config, state, filled)
-        return xnp.take(neighbours, actions, axis=0), jnp.take(costs, actions, axis=0)
+        return xnp.take(neighbours, action, axis=0), jnp.take(costs, action, axis=0)
 
     def batched_get_neighbours(
         self, solve_configs, states, filleds=True, multi_solve_config=False
