@@ -7,7 +7,6 @@ import jax
 import jax.numpy as jnp
 from xtructure import FieldDescriptor, Xtructurable
 from xtructure.core.layout import get_type_layout
-from xtructure.core.protocol import Xtructurable as XtructurableProtocol
 
 from puxle.render import attach_state_renderer
 
@@ -150,10 +149,10 @@ class Puzzle(ABC):
 
         class SolveConfig(Xtructurable):
             InstanceContext: Annotated[
-                XtructurableProtocol, FieldDescriptor.scalar(dtype=self.InstanceContext)
+                Xtructurable, FieldDescriptor.scalar(dtype=self.InstanceContext)
             ]
             GoalSpec: Annotated[
-                XtructurableProtocol, FieldDescriptor.scalar(dtype=self.GoalSpec)
+                Xtructurable, FieldDescriptor.scalar(dtype=self.GoalSpec)
             ]
 
             def __str__(solve_config, **kwargs):

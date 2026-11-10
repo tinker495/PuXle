@@ -1,13 +1,15 @@
 import jax.numpy as jnp
 import pytest
-from xtructure import FieldDescriptor, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_base import Puzzle
 
 
-@xtructure_dataclass(bitpack="off")
-class MockState:
+# Author: tinker495.
+# Migrated: xtructure removed the @xtructure_dataclass decorator; inheriting
+# Xtructurable is the only declaration form. The mock state is unchanged otherwise.
+class MockState(Xtructurable, bitpack="off"):
     val: FieldDescriptor.scalar(dtype=jnp.int32)
 
 
