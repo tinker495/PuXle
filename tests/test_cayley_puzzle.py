@@ -106,7 +106,7 @@ def test_permutation_forward_step_matches_numpy(perm_puzzle):
     for _ in range(16):
         state_np = rng.permutation(n).astype(np.int32)
         action_idx = rng.integers(0, puzzle.action_size)
-        state = puzzle.State(permutation=jnp.array(state_np, dtype=jnp.int32))
+        state = puzzle.State(permutation=jnp.array(state_np, dtype=puzzle._state_dtype))
         next_state, cost = puzzle.get_actions(
             cfg, state, jnp.array(action_idx), filled=True
         )
@@ -149,7 +149,7 @@ def test_matrix_forward_step_matches_handcomputed():
 
     for state_flat, action_idx in cases:
         state_np = np.array(state_flat, dtype=np.int32)
-        state = puzzle.State(vector=jnp.array(state_np, dtype=jnp.int32))
+        state = puzzle.State(vector=jnp.array(state_np, dtype=puzzle._state_dtype))
         next_state, cost = puzzle.get_actions(
             cfg, state, jnp.array(action_idx), filled=True
         )
@@ -181,7 +181,7 @@ def test_inverse_closure_roundtrip_permutation(perm_puzzle):
 
     for i in range(puzzle.action_size):
         state_np = rng.permutation(n).astype(np.int32)
-        state = puzzle.State(permutation=jnp.array(state_np, dtype=jnp.int32))
+        state = puzzle.State(permutation=jnp.array(state_np, dtype=puzzle._state_dtype))
         mid_state, _ = puzzle.get_actions(cfg, state, jnp.array(i), filled=True)
         back_state, _ = puzzle.get_actions(
             cfg, mid_state, jnp.array(int(inv_map[i])), filled=True
@@ -206,7 +206,7 @@ def test_inverse_closure_roundtrip_matrix(mat_puzzle):
 
     for i in range(puzzle.action_size):
         state_np = rng.integers(0, modulo, size=state_length).astype(np.int32)
-        state = puzzle.State(vector=jnp.array(state_np, dtype=jnp.int32))
+        state = puzzle.State(vector=jnp.array(state_np, dtype=puzzle._state_dtype))
         mid_state, _ = puzzle.get_actions(cfg, state, jnp.array(i), filled=True)
         back_state, _ = puzzle.get_actions(
             cfg, mid_state, jnp.array(int(inv_map[i])), filled=True
