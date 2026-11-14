@@ -9,7 +9,7 @@ This document summarizes the **recommended bitpacking patterns** in PuXle.
 Define states, instance contexts, and goal specifications by inheriting from
 `Xtructurable`, imported from the public `xtructure` package.
 Declare options in the class header, for example
-`class State(Xtructurable, validate=True, bitpack="aggregate"):`. Define each
+`class State(Xtructurable, bitpack="aggregate"):`. Define each
 structured class directly from `Xtructurable`; compose nested fields or use
 plain Python mixins instead of inheriting from an already transformed class.
 
@@ -77,22 +77,7 @@ Use this when:
 - you have many small fields and want a single compact stream,
 - you want partial decode via `unpack_field(...)` (when supported).
 
-## 3) Migration from legacy `to_uint8/from_uint8`
-
-Older puzzle implementations sometimes:
-- stored packed bytes in a `FieldDescriptor.tensor(...)`, and
-- used custom `.packed` / `.unpacked` properties that changed the *shape semantics* of the same `State` class.
-
-Recommended migration:
-- Replace the manually-packed field with `FieldDescriptor.packed_tensor(...)`.
-- Replace:
-  - `state.unpacked.<field>` → `state.<field>_unpacked`
-  - `State(<field>=logical).packed` → `State.from_unpacked(<field>=logical)`
-
-The legacy helpers (`puxle.utils.util.to_uint8` / `from_uint8`) have been removed.
-Use the xtructure field or aggregate codec rather than introducing a puzzle-local replacement.
-
-## 4) Measure physical layout and transition cost
+## 3) Measure physical layout and transition cost
 
 For `N` logical elements of width `b`, the field codec uses blocks of `lcm(b, 8)` bits.
 Its storage is `ceil(N / (lcm(b, 8) / b)) * (lcm(b, 8) / 8)` bytes, which can exceed

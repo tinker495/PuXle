@@ -52,8 +52,8 @@ def test_maze_context_controls_transition_while_goal_controls_solved_predicate()
     maze = Maze(size=5)
     open_layout = jnp.zeros(maze.size**2, dtype=jnp.bool_)
     blocked_layout = open_layout.at[1 * maze.size + 2].set(True)
-    state = maze.State(pos=jnp.array([1, 1], dtype=jnp.uint16))
-    goal = maze.State(pos=jnp.array([1, 2], dtype=jnp.uint16))
+    state = maze.State(pos=jnp.array([1, 1], dtype=maze._position_dtype))
+    goal = maze.State(pos=jnp.array([1, 2], dtype=maze._position_dtype))
     open_config = maze.SolveConfig(
         InstanceContext=maze.InstanceContext.from_unpacked(Maze=open_layout),
         GoalSpec=goal,
@@ -73,7 +73,7 @@ def test_maze_context_controls_transition_while_goal_controls_solved_predicate()
     assert maze.is_solved(blocked_config, goal)
 
     other_goal_config = open_config.replace(
-        GoalSpec=maze.State(pos=jnp.array([4, 4], dtype=jnp.uint16))
+        GoalSpec=maze.State(pos=jnp.array([4, 4], dtype=maze._position_dtype))
     )
     other_state, other_cost = maze.get_actions(other_goal_config, state, jnp.int32(1))
     assert other_state == open_state
@@ -117,17 +117,17 @@ def test_tsp_uses_distance_matrix_and_euclidean_closing_leg():
         InstanceContext=tsp.InstanceContext(
             points=points,
             distance_matrix=distance_matrix,
-            start=jnp.uint16(0),
+            start=tsp._point_dtype(0),
         ),
         GoalSpec=tsp.GoalSpec(),
     )
     first_state = tsp.State.from_unpacked(
-        mask=jnp.array([True, False, False]), point=jnp.uint16(0)
+        mask=jnp.array([True, False, False]), point=tsp._point_dtype(0)
     )
     _, move_cost = tsp.get_actions(config, first_state, jnp.int32(1))
 
     closing_state = tsp.State.from_unpacked(
-        mask=jnp.array([True, True, False]), point=jnp.uint16(1)
+        mask=jnp.array([True, True, False]), point=tsp._point_dtype(1)
     )
     _, closing_cost = tsp.get_actions(config, closing_state, jnp.int32(2))
 
