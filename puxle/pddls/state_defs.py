@@ -8,14 +8,13 @@ from typing import TYPE_CHECKING, Annotated, Callable
 
 import chex
 import jax.numpy as jnp
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 
 def build_state_class(
     env, num_atoms: int, init_state: jnp.ndarray, string_parser: Callable
 ) -> type[Xtructurable]:
-    @xtructure_dataclass
-    class State:
+    class State(Xtructurable):
         atoms: Annotated[
             chex.Array, FieldDescriptor.packed_tensor(shape=(num_atoms,), packed_bits=1)
         ]
@@ -36,8 +35,7 @@ def build_state_class(
 
 
 def build_instance_context_class(env) -> type[Xtructurable]:
-    @xtructure_dataclass
-    class InstanceContext:
+    class InstanceContext(Xtructurable):
         pre_mask: Annotated[
             chex.Array,
             FieldDescriptor.tensor(
@@ -67,8 +65,7 @@ def build_instance_context_class(env) -> type[Xtructurable]:
 
 
 def build_goal_spec_class(env) -> type[Xtructurable]:
-    @xtructure_dataclass
-    class GoalSpec:
+    class GoalSpec(Xtructurable):
         GoalMask: Annotated[
             chex.Array, FieldDescriptor.tensor(dtype=jnp.bool_, shape=(env.num_atoms,))
         ]

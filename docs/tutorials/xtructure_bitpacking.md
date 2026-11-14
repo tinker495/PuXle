@@ -6,6 +6,14 @@ For many puzzles, the *logical* state (e.g. a boolean board) can be stored more 
 
 This document summarizes the **recommended bitpacking patterns** in PuXle.
 
+Define states, instance contexts, and goal specifications by inheriting from
+`Xtructurable`, imported from the public `xtructure` package. The legacy
+`@xtructure_dataclass` decorator is deprecated and emits a `FutureWarning`.
+Declare options in the class header, for example
+`class State(Xtructurable, validate=True, bitpack="aggregate"):`. Define each
+structured class directly from `Xtructurable`; compose nested fields or use
+plain Python mixins instead of inheriting from an already transformed class.
+
 ## 1) Field-level in-memory packing: `FieldDescriptor.packed_tensor`
 
 Use `FieldDescriptor.packed_tensor(...)` when you want **a specific logical field** stored as
@@ -22,11 +30,10 @@ packed bytes in-memory.
 
 ```python
 import jax.numpy as jnp
-from xtructure import FieldDescriptor, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 
-@xtructure_dataclass
-class State:
+class State(Xtructurable):
     board: FieldDescriptor.packed_tensor(shape=(49,), packed_bits=1)
 
 
@@ -45,11 +52,10 @@ state2 = state.set_unpacked(board=jnp.logical_not(board_view))
 
 ```python
 import jax.numpy as jnp
-from xtructure import FieldDescriptor, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 
-@xtructure_dataclass
-class CubeState:
+class CubeState(Xtructurable):
     # 6 faces x (size*size) stickers, each in [0..5] => 3 bits
     faces: FieldDescriptor.packed_tensor(shape=(6, 9), packed_bits=3)
 

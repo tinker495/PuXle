@@ -12,7 +12,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
 
@@ -313,8 +313,7 @@ class CayleyPuzzle(Puzzle):
 
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
 
-            @xtructure_dataclass
-            class State:
+            class State(Xtructurable):
                 permutation: Annotated[
                     chex.Array,
                     FieldDescriptor.tensor(
@@ -327,8 +326,7 @@ class CayleyPuzzle(Puzzle):
 
             return State
 
-        @xtructure_dataclass
-        class State:
+        class State(Xtructurable):
             vector: Annotated[
                 chex.Array,
                 FieldDescriptor.tensor(dtype=self._state_dtype, shape=(state_length,)),

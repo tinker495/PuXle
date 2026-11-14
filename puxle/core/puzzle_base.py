@@ -5,9 +5,8 @@ from typing import Annotated, Any, Optional
 import chex
 import jax
 import jax.numpy as jnp
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 from xtructure.core.layout import get_type_layout
-from xtructure.core.protocol import Xtructurable as XtructurableProtocol
 
 from puxle.render import attach_state_renderer
 
@@ -18,7 +17,7 @@ class Puzzle(ABC):
     Every concrete puzzle subclass must:
 
     1. Set ``action_size`` (number of possible actions).
-    2. Implement :meth:`define_state_class` to return a ``@xtructure_dataclass``-decorated class.
+    2. Implement :meth:`define_state_class` to return a ``Xtructurable`` subclass.
     3. Implement :meth:`_apply`, :meth:`get_solve_config`,
        :meth:`get_initial_state`, :meth:`get_string_parser`, and :meth:`get_img_parser`.
        Override :meth:`is_solved` when the goal is not one complete state.
@@ -30,12 +29,12 @@ class Puzzle(ABC):
 
     Attributes:
         action_size: Number of discrete actions available in this puzzle.
-        State: The ``@xtructure_dataclass`` class representing states (set during ``__init__``).
-        InstanceContext: The ``@xtructure_dataclass`` class for action validity,
+        State: The ``Xtructurable`` subclass representing states (set during ``__init__``).
+        InstanceContext: The ``Xtructurable`` subclass for action validity,
             transitions, and edge costs.
-        GoalSpec: The ``@xtructure_dataclass`` class for solved predicates, rewards,
+        GoalSpec: The ``Xtructurable`` subclass for solved predicates, rewards,
             and objectives.
-        SolveConfig: The fixed two-child ``@xtructure_dataclass`` configuration class.
+        SolveConfig: The fixed two-child ``Xtructurable`` configuration class.
     """
 
     action_size: int = None
@@ -75,8 +74,7 @@ class Puzzle(ABC):
         rules in their class and state.
         """
 
-        @xtructure_dataclass
-        class InstanceContext:
+        class InstanceContext(Xtructurable):
             pass
 
         return InstanceContext
@@ -90,13 +88,13 @@ class Puzzle(ABC):
 
     @abstractmethod
     def define_state_class(self) -> type[Xtructurable]:
-        """Return the ``@xtructure_dataclass`` class used for puzzle states.
+        """Return the ``Xtructurable`` subclass used for puzzle states.
 
         Subclasses **must** implement this method.  The returned class should
         use :class:`FieldDescriptor` to declare its fields.
 
         Returns:
-            A ``@xtructure_dataclass`` class describing the puzzle state.
+            A ``Xtructurable`` subclass describing the puzzle state.
         """
         pass
 
@@ -143,13 +141,12 @@ class Puzzle(ABC):
         self.GoalSpec = self.define_goal_spec_class()
         string_parser = self.get_solve_config_string_parser()
 
-        @xtructure_dataclass
-        class SolveConfig:
+        class SolveConfig(Xtructurable):
             InstanceContext: Annotated[
-                XtructurableProtocol, FieldDescriptor.scalar(dtype=self.InstanceContext)
+                Xtructurable, FieldDescriptor.scalar(dtype=self.InstanceContext)
             ]
             GoalSpec: Annotated[
-                XtructurableProtocol, FieldDescriptor.scalar(dtype=self.GoalSpec)
+                Xtructurable, FieldDescriptor.scalar(dtype=self.GoalSpec)
             ]
 
             def __str__(solve_config, **kwargs):

@@ -8,7 +8,7 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.utils.util import IMG_SIZE, coloring_str
@@ -237,8 +237,7 @@ class RubiksCube(Puzzle):
         raw_shape = (6, self.size * self.size)
         active_bits = self._active_bits
 
-        @xtructure_dataclass
-        class State:
+        class State(Xtructurable):
             faces: Annotated[
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=raw_shape, packed_bits=active_bits),

@@ -4,6 +4,7 @@ from functools import partial
 import chex
 import jax
 import jax.numpy as jnp
+from xtructure import Xtructurable
 from xtructure import numpy as xnp
 
 from puxle.core.puzzle_base import Puzzle
@@ -12,7 +13,7 @@ from puxle.core.trajectory import PuzzleTrajectory
 
 def trajectory_to_transition_dataset(
     trajectory: PuzzleTrajectory, limit: int
-) -> tuple[chex.ArrayTree, chex.Array, chex.ArrayTree]:
+) -> tuple[Xtructurable, chex.Array, Xtructurable]:
     return (
         trajectory.states[:-1].flatten()[:limit],
         trajectory.actions.reshape(-1)[:limit],
@@ -22,7 +23,7 @@ def trajectory_to_transition_dataset(
 
 def trajectory_to_eval_trajectory(
     trajectory: PuzzleTrajectory,
-) -> tuple[chex.ArrayTree, chex.Array]:
+) -> tuple[Xtructurable, chex.Array]:
     return trajectory.states.flatten(), trajectory.actions.reshape(-1)
 
 
@@ -84,7 +85,7 @@ def get_sample_data_builder(puzzle: Puzzle, dataset_size: int, shuffle_parallel:
         flattened = jax.tree_util.tree_map(
             lambda *xs: xnp.concatenate(xs)[:dataset_size], *datasets
         )
-        assert flattened[0].shape[0] == dataset_size
+        assert flattened[0].batch_shape == (dataset_size,)
         return flattened
 
     return get_datasets

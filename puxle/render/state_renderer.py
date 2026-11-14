@@ -29,7 +29,7 @@ def attach_state_renderer(cls: Type[T], imgfunc: Callable) -> Type[T]:
     consuming a silently wrong image.
 
     Args:
-        cls: The xtructure-decorated ``State`` (or ``SolveConfig``) class to
+        cls: The ``Xtructurable`` subclass for ``State`` (or ``SolveConfig``) to
             extend.
         imgfunc: A callable ``(state, **kwargs) -> np.ndarray`` that renders
             one unbatched state as an ``(H, W, 3)`` RGB array.

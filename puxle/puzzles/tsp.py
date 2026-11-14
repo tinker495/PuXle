@@ -6,7 +6,7 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.utils.util import IMG_SIZE
@@ -40,8 +40,7 @@ class TSP(Puzzle):
         str_parser = self.get_string_parser()
         size = self.size
 
-        @xtructure_dataclass
-        class State:
+        class State(Xtructurable):
             mask: Annotated[
                 chex.Array, FieldDescriptor.packed_tensor(shape=(size,), packed_bits=1)
             ]
@@ -55,8 +54,7 @@ class TSP(Puzzle):
         return State
 
     def define_instance_context_class(self) -> type[Xtructurable]:
-        @xtructure_dataclass
-        class InstanceContext:
+        class InstanceContext(Xtructurable):
             points: Annotated[
                 chex.Array,
                 FieldDescriptor.tensor(dtype=jnp.float32, shape=(self.size, 2)),
@@ -72,8 +70,7 @@ class TSP(Puzzle):
         return InstanceContext
 
     def define_goal_spec_class(self) -> type[Xtructurable]:
-        @xtructure_dataclass
-        class GoalSpec:
+        class GoalSpec(Xtructurable):
             pass
 
         return GoalSpec
