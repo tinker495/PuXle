@@ -240,15 +240,14 @@ outer `SolveConfig` does not expose compatibility aliases.
 import jax
 import jax.numpy as jnp
 from puxle import Puzzle
-from xtructure import FieldDescriptor, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 
 class CustomPuzzle(Puzzle):
     action_size = 4  # Number of possible actions
 
     def define_state_class(self):
-        @xtructure_dataclass
-        class State:
+        class State(Xtructurable):
             position: FieldDescriptor.tensor(dtype=jnp.int32, shape=(2,))  # Current position
 
         return State

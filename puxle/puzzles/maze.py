@@ -6,7 +6,7 @@ import cv2
 import jax
 import jax.numpy as jnp
 import numpy as np
-from xtructure import FieldDescriptor, Xtructurable, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
 from puxle.utils.util import IMG_SIZE, colored_str
@@ -39,8 +39,7 @@ class Maze(Puzzle):
     def define_instance_context_class(self) -> type[Xtructurable]:
         size = self.size
 
-        @xtructure_dataclass
-        class InstanceContext:
+        class InstanceContext(Xtructurable):
             Maze: Annotated[
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1),
@@ -51,8 +50,7 @@ class Maze(Puzzle):
     def define_state_class(self) -> type[Xtructurable]:
         str_parser = self.get_string_parser()
 
-        @xtructure_dataclass
-        class State:
+        class State(Xtructurable):
             pos: Annotated[
                 chex.Array,
                 FieldDescriptor.tensor(dtype=self._position_dtype, shape=(2,)),
