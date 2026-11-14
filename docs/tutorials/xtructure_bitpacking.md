@@ -7,8 +7,7 @@ For many puzzles, the *logical* state (e.g. a boolean board) can be stored more 
 This document summarizes the **recommended bitpacking patterns** in PuXle.
 
 Define states, instance contexts, and goal specifications by inheriting from
-`Xtructurable`, imported from the public `xtructure` package. The legacy
-`@xtructure_dataclass` decorator is deprecated and emits a `FutureWarning`.
+`Xtructurable`, imported from the public `xtructure` package.
 Declare options in the class header, for example
 `class State(Xtructurable, validate=True, bitpack="aggregate"):`. Define each
 structured class directly from `Xtructurable`; compose nested fields or use
