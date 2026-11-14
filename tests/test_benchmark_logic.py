@@ -1,13 +1,12 @@
 import jax.numpy as jnp
 import pytest
-from xtructure import FieldDescriptor, xtructure_dataclass
+from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.benchmark.benchmark import Benchmark, BenchmarkSample
 from puxle.core.puzzle_base import Puzzle
 
 
-@xtructure_dataclass(bitpack="off")
-class MockState:
+class MockState(Xtructurable, bitpack="off"):
     val: FieldDescriptor.scalar(dtype=jnp.int32)
 
 
