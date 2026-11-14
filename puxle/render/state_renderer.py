@@ -45,7 +45,7 @@ def attach_state_renderer(cls: Type[T], imgfunc: Callable) -> Type[T]:
         if structured_type == StructuredType.SINGLE:
             return imgfunc(self, **kwargs)
         elif structured_type == StructuredType.BATCHED:
-            batch_shape = self.batch_shape
+            batch_shape = self.shape
             batch_len = prod(batch_shape)
             results = []
             for i in range(batch_len):
@@ -56,7 +56,7 @@ def attach_state_renderer(cls: Type[T], imgfunc: Callable) -> Type[T]:
             return results
         else:
             raise ValueError(
-                f"State is not structured: {self.shape} != {self.default_shape}"
+                f"State is not structured: {self.layout.shape_tuple} != {self.default_shape}"
             )
 
     setattr(cls, "img", get_img)
