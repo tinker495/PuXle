@@ -142,10 +142,10 @@ def test_tsp_empty_goal_spec_is_batch_neutral_under_jit_and_vmap():
     goal_spec = tsp.GoalSpec.default((2,))
 
     assert goal_spec.structured_type == StructuredType.SINGLE
-    assert goal_spec.batch_shape == ()
+    assert goal_spec.shape == ()
     assert goal_spec[1].structured_type == StructuredType.SINGLE
     assert goal_spec.replace().structured_type == StructuredType.SINGLE
-    assert jax.jit(lambda goal: goal.replace())(goal_spec).batch_shape == ()
+    assert jax.jit(lambda goal: goal.replace())(goal_spec).shape == ()
 
     config, state = tsp.get_inits(jax.random.PRNGKey(0))
     configs = xnp.stack([config, config], axis=0)
@@ -154,9 +154,9 @@ def test_tsp_empty_goal_spec_is_batch_neutral_under_jit_and_vmap():
         configs, states, jnp.ones(2, dtype=jnp.int32)
     )
 
-    assert configs.batch_shape == (2,)
+    assert configs.shape == (2,)
     assert configs.GoalSpec.structured_type == StructuredType.SINGLE
-    assert next_states.batch_shape == (2,)
+    assert next_states.shape == (2,)
     assert costs.shape == (2,)
 
 
@@ -169,7 +169,7 @@ def test_dotknot_all_leafless_config_stays_single_and_is_static_under_vmap():
     assert not get_type_layout(puzzle.SolveConfig).leaves
     assert config.structured_type == StructuredType.SINGLE
     assert default_config.structured_type == StructuredType.SINGLE
-    assert default_config.batch_shape == ()
+    assert default_config.shape == ()
     assert default_config[1].structured_type == StructuredType.SINGLE
 
     states = xnp.stack([state, state], axis=0)
