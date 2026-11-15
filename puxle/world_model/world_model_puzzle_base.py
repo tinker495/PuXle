@@ -198,8 +198,8 @@ class WorldModelPuzzleBase(Puzzle):
 
             @nn.compact
             def __call__(self, x, training=False):
-                latent, decoded = self.autoencoder(x, training)
-                return self.world_model(latent, training), decoded
+                latent = round_through_gradient(self.encode(x, training))
+                return self.world_model(latent, training), self.decode(latent, training)
 
             def decode(self, latent, training=False):
                 return self.autoencoder.decoder(latent, training)
@@ -223,8 +223,9 @@ class WorldModelPuzzleBase(Puzzle):
                 action = jnp.reshape(
                     action, (-1,) + (1,) * (next_logits_preds.ndim - 1)
                 )
-                next_logits = jnp.take_along_axis(next_logits_preds, action, axis=1)
-                next_logits_pred = next_logits.squeeze(axis=1)
+                next_logits_pred = jnp.take_along_axis(
+                    next_logits_preds, action, axis=1
+                ).squeeze(axis=1)
                 rounded_next_latents_pred = round_through_gradient(
                     nn.sigmoid(next_logits_pred)
                 )
@@ -441,9 +442,9 @@ class WorldModelPuzzleBase(Puzzle):
             jnp.squeeze(jnp.take_along_axis(costs, indices, axis=0), axis=0),
         )
 
-    def get_actions(self, solve_config, state, actions, filled=True):
+    def get_actions(self, solve_config, state, action, filled=True):
         neighbours, costs = self.get_neighbours(solve_config, state, filled)
-        return xnp.take(neighbours, actions, axis=0), jnp.take(costs, actions, axis=0)
+        return xnp.take(neighbours, action, axis=0), jnp.take(costs, action, axis=0)
 
     def batched_get_neighbours(
         self, solve_configs, states, filleds=True, multi_solve_config=False
