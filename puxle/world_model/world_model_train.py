@@ -4,10 +4,10 @@ from typing import Any, Callable
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 
 from ._utils import build_new_params_from_updates
-from .world_model_puzzle_base import WorldModelPuzzleBase
 
 
 def accuracy_fn(preds: chex.Array, labels: chex.Array) -> chex.Array:
@@ -20,7 +20,11 @@ def world_model_train_builder(
     train_info_fn: Callable,
     optimizer: optax.GradientTransformation = optax.adam(1e-4),
     loss_ratio: float = 0.5,
+    progress: Callable[[int, np.ndarray], None] | None = None,
 ):
+    if minibatch_size <= 0:
+        raise ValueError("minibatch_size must be positive")
+
     def loss_fn(params, data, next_data, action, loss_weight=0.5):
         (
             (
@@ -60,85 +64,111 @@ def world_model_train_builder(
             accuracy_fn(rounded_next_latents, rounded_next_latents_pred),
         )
 
+    @jax.jit
+    def train_batches(
+        params, opt_state, metric_sums, dataset, batch_indices, loss_weight
+    ):
+        states, next_states, actions = dataset
+
+        def train_loop(carry, indices):
+            params, opt_state, metric_sums = carry
+            (metrics, grads) = jax.value_and_grad(loss_fn, has_aux=True)(
+                params,
+                states[indices],
+                next_states[indices],
+                actions[indices],
+                loss_weight,
+            )
+            loss, (params, ae_loss, wm_loss, accuracy) = metrics
+            updates, opt_state = optimizer.update(grads, opt_state, params=params)
+            params = optax.apply_updates(params, updates)
+            metrics = jnp.stack((loss, ae_loss, wm_loss, accuracy))
+            return (params, opt_state, metric_sums + metrics), metrics
+
+        (params, opt_state, metric_sums), metrics = jax.lax.scan(
+            train_loop, (params, opt_state, metric_sums), batch_indices
+        )
+        return params, opt_state, metric_sums, metrics[-1]
+
     def train_fn(
         key: chex.PRNGKey,
-        dataset: tuple[
-            WorldModelPuzzleBase.State, WorldModelPuzzleBase.State, chex.Array
-        ],
+        dataset: tuple[jax.Array, jax.Array, jax.Array],
         params: Any,
         opt_state: optax.OptState,
         epoch: int,
     ):
-        states, next_states, actions = dataset
-        data_size = actions.shape[0]
+        data_size = dataset[2].shape[0]
+        if data_size == 0:
+            raise ValueError("training dataset must contain at least one action")
         batch_count = math.ceil(data_size / minibatch_size)
         key, subkey = jax.random.split(key)
         indices = jnp.concatenate(
             [
                 jax.random.permutation(key, jnp.arange(data_size)),
                 jax.random.randint(
-                    subkey, (batch_count * minibatch_size - data_size,), 0, data_size
+                    subkey,
+                    (batch_count * minibatch_size - data_size,),
+                    0,
+                    data_size,
                 ),
             ]
         ).reshape(batch_count, minibatch_size)
-        batches = (
-            jnp.take(states, indices, axis=0),
-            jnp.take(next_states, indices, axis=0),
-            jnp.take(actions, indices, axis=0),
-        )
         loss_weight = jnp.clip((epoch - 100) / 1000.0, 0.0001, 1.0) * loss_ratio
 
-        def train_loop(carry, batch):
-            params, opt_state = carry
-            (metrics, grads) = jax.value_and_grad(loss_fn, has_aux=True)(
-                params, *batch, loss_weight
+        metric_sums = jnp.zeros(4)
+        batches_per_group = math.ceil(batch_count / 50)
+        for start in range(0, batch_count, batches_per_group):
+            completed = min(start + batches_per_group, batch_count)
+            params, opt_state, metric_sums, metrics = train_batches(
+                params,
+                opt_state,
+                metric_sums,
+                dataset,
+                indices[start:completed],
+                loss_weight,
             )
-            loss, (params, ae_loss, wm_loss, accuracy) = metrics
-            updates, opt_state = optimizer.update(grads, opt_state, params=params)
-            params = optax.apply_updates(params, updates)
-            return (params, opt_state), (loss, ae_loss, wm_loss, accuracy)
+            # Synchronize groups for progress without a host round trip per batch.
+            jax.block_until_ready(metrics)
+            if progress is not None:
+                progress(completed, np.asarray(metrics))
+        return params, opt_state, *(metric_sums / batch_count)
 
-        (params, opt_state), metrics = jax.lax.scan(
-            train_loop, (params, opt_state), batches
-        )
-        return params, opt_state, *(jnp.mean(metric) for metric in metrics)
-
-    return jax.jit(train_fn)
+    return train_fn
 
 
 def world_model_eval_builder(train_info_fn: Callable, minibatch_size: int):
-    def eval_fn(params: Any, trajectory: tuple[chex.Array, chex.Array]):
+    if minibatch_size <= 0:
+        raise ValueError("minibatch_size must be positive")
+
+    @jax.jit
+    def eval_step(params, counts, data, next_data, action, batch_valid):
+        result = train_info_fn(params, data, next_data, action, training=False)
+        axes = tuple(range(1, result[4].ndim))
+        correct = jnp.sum(jnp.logical_xor(result[4], result[7]), axis=axes) == 0
+        return counts + jnp.stack(
+            (jnp.sum(jnp.where(batch_valid, correct, False)), jnp.sum(batch_valid))
+        )
+
+    def eval_fn(
+        params: Any, trajectory: tuple[np.ndarray | jax.Array, np.ndarray | jax.Array]
+    ):
         states_all, actions = trajectory
-        states_all = jnp.asarray(states_all)
         data_size = actions.shape[0]
         if data_size == 0:
             raise ValueError("evaluation trajectory must contain at least one action")
-        batch_count = math.ceil(data_size / minibatch_size)
-        flat_indices = jnp.arange(batch_count * minibatch_size)
-        valid = (flat_indices < data_size).reshape(batch_count, minibatch_size)
-        indices = jnp.minimum(flat_indices, data_size - 1).reshape(
-            batch_count, minibatch_size
-        )
-        batches = (
-            jnp.take(states_all[:-1], indices, axis=0),
-            jnp.take(states_all[1:], indices, axis=0),
-            jnp.take(actions, indices, axis=0),
-            valid,
-        )
+        counts = jnp.zeros(2, dtype=jnp.int32)
+        for start in range(0, data_size, minibatch_size):
+            flat_indices = np.arange(start, start + minibatch_size)
+            indices = np.minimum(flat_indices, data_size - 1)
+            counts = eval_step(
+                params,
+                counts,
+                jnp.asarray(states_all[indices]),
+                jnp.asarray(states_all[indices + 1]),
+                jnp.asarray(actions[indices]),
+                jnp.asarray(flat_indices < data_size),
+            )
+            jax.block_until_ready(counts)
+        return counts[0] / counts[1]
 
-        def eval_loop(counts, batch):
-            data, next_data, action, batch_valid = batch
-            result = train_info_fn(params, data, next_data, action, training=False)
-            axes = tuple(range(1, result[4].ndim))
-            correct = jnp.sum(jnp.logical_xor(result[4], result[7]), axis=axes) == 0
-            return (
-                counts[0] + jnp.sum(jnp.where(batch_valid, correct, False)),
-                counts[1] + jnp.sum(batch_valid),
-            ), None
-
-        (correct, count), _ = jax.lax.scan(
-            eval_loop, (jnp.array(0), jnp.array(0)), batches
-        )
-        return correct / count
-
-    return jax.jit(eval_fn)
+    return eval_fn

@@ -1684,6 +1684,7 @@ dependencies = [
     { name = "numpy" },
     { name = "opencv-python-headless" },
     { name = "pddl" },
+    { name = "tqdm" },
     { name = "tyro" },
     { name = "xtructure" },
 ]
@@ -1753,6 +1754,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.0" },
     { name = "sphinx-autodoc-typehints", marker = "extra == 'docs'" },
+    { name = "tqdm", specifier = ">=4.66" },
     { name = "tyro", specifier = ">=1.0.16,<2" },
     { name = "xtructure", git = "https://github.com/tinker495/xtructure.git" },
 ]
