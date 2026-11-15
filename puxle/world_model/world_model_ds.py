@@ -1,5 +1,6 @@
 import math
 from functools import partial
+from typing import Callable
 
 import chex
 import jax
@@ -33,6 +34,7 @@ def get_world_model_dataset_builder(
     shuffle_parallel: int,
     shuffle_length: int,
     dataset_minibatch_size: int,
+    progress: Callable[[int], object] | None = None,
 ):
     if min(dataset_size, shuffle_parallel, shuffle_length, dataset_minibatch_size) <= 0:
         raise ValueError("dataset sizes and shuffle dimensions must be positive")
@@ -48,9 +50,13 @@ def get_world_model_dataset_builder(
 
     def get_datasets(key: chex.PRNGKey):
         datasets = []
-        for _ in range(steps):
+        for step in range(steps):
             key, subkey = jax.random.split(key)
-            datasets.append(create_path(subkey))
+            batch = create_path(subkey)
+            datasets.append(batch)
+            if progress is not None:
+                jax.block_until_ready(batch)
+                progress(min(samples_per_step, dataset_size - step * samples_per_step))
         flattened = jax.tree_util.tree_map(
             lambda *xs: jnp.concatenate(xs)[:dataset_size], *datasets
         )

@@ -9,10 +9,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import tyro
+from tqdm.auto import tqdm
 
 from puxle.world_model._resources import world_model_data_path
 
 from ._puzzles import PuzzleName, create_puzzle, data_name_for_puzzle
+from ._world_model_render import render_states, save_transition_samples
 
 
 @dataclass
@@ -53,24 +55,30 @@ TrainOptionsArg = Annotated[TrainOptions, tyro.conf.OmitArgPrefixes]
 
 
 def _dataset_context(options: DatasetOptions):
-    puzzle = create_puzzle(options.puzzle, options.puzzle_args)
+    with tqdm(
+        total=1,
+        desc=f"Initializing {options.puzzle}",
+        unit="puzzle",
+        dynamic_ncols=True,
+    ) as progress:
+        puzzle = create_puzzle(options.puzzle, options.puzzle_args)
+        progress.update()
     data_name = options.data_name or data_name_for_puzzle(puzzle)
     root = options.output_dir or world_model_data_path(data_name)
     root.mkdir(parents=True, exist_ok=True)
     return puzzle, root
 
 
-def _render_states(states, image_size: tuple[int, int]) -> np.ndarray:
-    import cv2
-
-    return np.stack(
-        [
-            cv2.resize(
-                np.asarray(state.img()), image_size, interpolation=cv2.INTER_AREA
-            )
-            for state in states
-        ]
-    )
+def _save_array(path: Path, array: np.ndarray) -> None:
+    with tqdm(
+        total=array.nbytes,
+        desc=f"Saving {path.name}",
+        unit="B",
+        unit_scale=True,
+        dynamic_ncols=True,
+    ) as progress:
+        np.save(path, array)
+        progress.update(array.nbytes)
 
 
 def make_transition_dataset(options: DatasetOptionsArg) -> int:
@@ -83,17 +91,44 @@ def make_transition_dataset(options: DatasetOptionsArg) -> int:
     shuffle_parallel = math.ceil(
         options.dataset_minibatch_size / options.shuffle_length
     )
-    build_dataset = get_world_model_dataset_builder(
-        puzzle,
-        options.dataset_size,
-        shuffle_parallel,
-        options.shuffle_length,
-        options.dataset_minibatch_size,
+    with tqdm(
+        total=options.dataset_size,
+        desc="Generating transitions",
+        unit="transition",
+        dynamic_ncols=True,
+    ) as progress:
+        progress.set_postfix(
+            shuffle=options.shuffle_length,
+            batch=options.dataset_minibatch_size,
+            phase="compile/execute",
+        )
+        build_dataset = get_world_model_dataset_builder(
+            puzzle,
+            options.dataset_size,
+            shuffle_parallel,
+            options.shuffle_length,
+            options.dataset_minibatch_size,
+            progress=progress.update,
+        )
+        states, actions, next_states = jax.block_until_ready(
+            build_dataset(jax.random.PRNGKey(options.seed))
+        )
+    _save_array(output / "actions.npy", np.asarray(actions))
+    _save_array(
+        output / "images.npy",
+        render_states(puzzle, states, options.image_size, "Rendering current states"),
     )
-    states, actions, next_states = build_dataset(jax.random.PRNGKey(options.seed))
-    np.save(output / "actions.npy", np.asarray(actions))
-    np.save(output / "images.npy", _render_states(states, options.image_size))
-    np.save(output / "next_images.npy", _render_states(next_states, options.image_size))
+    _save_array(
+        output / "next_images.npy",
+        render_states(puzzle, next_states, options.image_size, "Rendering next states"),
+    )
+    save_transition_samples(
+        output / "transition_samples.png",
+        np.load(output / "images.npy", mmap_mode="r"),
+        np.load(output / "next_images.npy", mmap_mode="r"),
+        np.load(output / "actions.npy", mmap_mode="r"),
+        options.seed,
+    )
     print(output)
     return 0
 
@@ -107,8 +142,14 @@ def make_sample_data(options: DatasetOptionsArg) -> int:
         puzzle, options.dataset_size, options.dataset_minibatch_size
     )
     targets, initials = build_dataset(jax.random.PRNGKey(options.seed))
-    np.save(output / "targets.npy", _render_states(targets, options.image_size))
-    np.save(output / "inits.npy", _render_states(initials, options.image_size))
+    _save_array(
+        output / "targets.npy",
+        render_states(puzzle, targets, options.image_size, "Rendering targets"),
+    )
+    _save_array(
+        output / "inits.npy",
+        render_states(puzzle, initials, options.image_size, "Rendering initial states"),
+    )
     print(output)
     return 0
 
@@ -120,11 +161,34 @@ def make_eval_trajectory(options: DatasetOptionsArg) -> int:
     puzzle, root = _dataset_context(options)
     output = root / "transition"
     output.mkdir(parents=True, exist_ok=True)
-    states, actions = create_eval_trajectory(
-        puzzle, options.dataset_size, jax.random.PRNGKey(options.seed)
+    with tqdm(
+        total=options.dataset_size,
+        desc="Generating evaluation trajectory",
+        unit="move",
+        dynamic_ncols=True,
+    ) as progress:
+        progress.set_postfix_str("compiling/executing trajectory")
+        states, actions = jax.block_until_ready(
+            create_eval_trajectory(
+                puzzle, options.dataset_size, jax.random.PRNGKey(options.seed)
+            )
+        )
+        progress.update(len(actions))
+    _save_array(output / "eval_actions.npy", np.asarray(actions))
+    _save_array(
+        output / "eval_traj_images.npy",
+        render_states(
+            puzzle, states, options.image_size, "Rendering evaluation states"
+        ),
     )
-    np.save(output / "eval_actions.npy", np.asarray(actions))
-    np.save(output / "eval_traj_images.npy", _render_states(states, options.image_size))
+    images = np.load(output / "eval_traj_images.npy", mmap_mode="r")
+    save_transition_samples(
+        output / "eval_transition_samples.png",
+        images[:-1],
+        images[1:],
+        np.load(output / "eval_actions.npy", mmap_mode="r"),
+        options.seed,
+    )
     print(output)
     return 0
 
@@ -159,16 +223,44 @@ def train(options: TrainOptionsArg) -> int:
 
     data_name = options.data_name or _data_name_for_model(options.model)
     data_dir = options.data_dir or world_model_data_path(data_name) / "transition"
-    datas = jnp.asarray(np.load(data_dir / "images.npy"))
-    next_datas = jnp.asarray(np.load(data_dir / "next_images.npy"))
-    actions = jnp.asarray(np.load(data_dir / "actions.npy"))
-    eval_states = jnp.asarray(np.load(data_dir / "eval_traj_images.npy"))
-    eval_actions = jnp.asarray(np.load(data_dir / "eval_actions.npy"))
+    with tqdm(
+        (
+            "images.npy",
+            "next_images.npy",
+            "actions.npy",
+            "eval_traj_images.npy",
+            "eval_actions.npy",
+        ),
+        desc="Loading dataset",
+        unit="file",
+        dynamic_ncols=True,
+    ) as progress:
+        arrays = []
+        for filename in progress:
+            progress.set_postfix_str(filename)
+            arrays.append(np.load(data_dir / filename, mmap_mode="r"))
+    datas, next_datas, actions, eval_states, eval_actions = arrays
+    del arrays
 
-    world_model = _create_world_model_for_training(
-        options.model,
-        init_params=options.reset,
-    )
+    with tqdm(
+        total=1, desc="Initializing model", unit="model", dynamic_ncols=True
+    ) as progress:
+        progress.set_postfix(model=options.model, seed=options.seed)
+        world_model = _create_world_model_for_training(
+            options.model,
+            init_params=options.reset,
+        )
+        jax.block_until_ready(world_model.params)
+        progress.update()
+    datas, next_datas, actions = [
+        jax.block_until_ready(jnp.asarray(array))
+        for array in tqdm(
+            (datas, next_datas, actions),
+            desc=f"Transferring training data to {jax.default_backend()}",
+            unit="array",
+            dynamic_ncols=True,
+        )
+    ]
     model = world_model.model
 
     def train_info_fn(params, data, next_data, action, training):
@@ -196,31 +288,91 @@ def train(options: TrainOptionsArg) -> int:
         if options.optimizer == "adam"
         else optax.sgd(options.learning_rate)
     )
-    train_fn = world_model_train_builder(
-        options.mini_batch_size, train_info_fn, optimizer
-    )
     eval_fn = world_model_eval_builder(train_info_fn, options.mini_batch_size)
     params = world_model.params
     opt_state = optimizer.init(params)
     key = jax.random.PRNGKey(options.seed)
 
-    for epoch in range(options.epochs):
-        key, subkey = jax.random.split(key)
-        params, opt_state, loss, ae_loss, wm_loss, accuracy = train_fn(
-            subkey, (datas, next_datas, actions), params, opt_state, epoch
-        )
-        if epoch % 10 == 0 or epoch + 1 == options.epochs:
-            eval_accuracy = eval_fn(params, (eval_states, eval_actions))
-            print(
-                f"epoch={epoch} loss={float(loss):.6f} ae={float(ae_loss):.6f} "
-                f"wm={float(wm_loss):.6f} accuracy={float(accuracy):.6f} "
-                f"eval={float(eval_accuracy):.6f}"
-            )
-        if options.save_every > 0 and (epoch + 1) % options.save_every == 0:
-            world_model.params = params
-            world_model.save_model()
+    tqdm.write(
+        f"dataset={len(actions):,} transitions on {jax.default_backend()} "
+        f"({(datas.nbytes + next_datas.nbytes + actions.nbytes) / 2**30:.2f} GiB), "
+        f"mini_batch_size={options.mini_batch_size:,}; shuffling indices only"
+    )
 
-    world_model.params = params
-    world_model.save_model()
+    with (
+        tqdm(
+            total=options.epochs,
+            desc="Training epochs",
+            unit="epoch",
+            dynamic_ncols=True,
+        ) as epoch_progress,
+        tqdm(
+            total=math.ceil(len(actions) / options.mini_batch_size),
+            desc="Preparing training",
+            unit="batch",
+            position=1,
+            leave=False,
+            dynamic_ncols=True,
+        ) as batch_progress,
+    ):
+
+        def report_training(completed: int, values: np.ndarray) -> None:
+            if epoch == 0 and batch_progress.n == 0:
+                epoch_progress.set_postfix(phase="training")
+                batch_progress.set_description("Epoch 1 batches")
+            batch_progress.set_postfix(
+                loss=f"{float(values[0]):.5f}",
+                ae=f"{float(values[1]):.5f}",
+                wm=f"{float(values[2]):.5f}",
+                exact=f"{float(values[3]):.1%}",
+                refresh=False,
+            )
+            batch_progress.update(completed - batch_progress.n)
+
+        train_fn = world_model_train_builder(
+            options.mini_batch_size,
+            train_info_fn,
+            optimizer,
+            progress=report_training,
+        )
+        for epoch in range(options.epochs):
+            batch_progress.reset()
+            batch_progress.set_description(
+                "Compiling first batch" if epoch == 0 else f"Epoch {epoch + 1} batches"
+            )
+            epoch_progress.set_postfix(
+                phase="compiling first batch" if epoch == 0 else "training"
+            )
+            key, subkey = jax.random.split(key)
+            params, opt_state, loss, ae_loss, wm_loss, accuracy = train_fn(
+                subkey, (datas, next_datas, actions), params, opt_state, epoch
+            )
+            batch_progress.refresh()
+            losses = dict(
+                loss=f"{float(loss):.5f}",
+                ae=f"{float(ae_loss):.5f}",
+                wm=f"{float(wm_loss):.5f}",
+                exact=f"{float(accuracy):.1%}",
+            )
+            if epoch % 10 == 0 or epoch + 1 == options.epochs:
+                epoch_progress.set_postfix(phase="evaluation", **losses)
+                eval_accuracy = eval_fn(params, (eval_states, eval_actions))
+                losses["eval"] = f"{float(eval_accuracy):.1%}"
+                tqdm.write(
+                    f"epoch={epoch} loss={float(loss):.6f} ae={float(ae_loss):.6f} "
+                    f"wm={float(wm_loss):.6f} accuracy={float(accuracy):.6f} "
+                    f"eval={float(eval_accuracy):.6f}"
+                )
+            if options.save_every > 0 and (epoch + 1) % options.save_every == 0:
+                epoch_progress.set_postfix(phase="saving checkpoint", **losses)
+                world_model.params = params
+                world_model.save_model()
+            epoch_progress.set_postfix(phase="complete", **losses)
+            epoch_progress.update()
+
+        world_model.params = params
+        epoch_progress.set_postfix(phase="saving checkpoint", **losses)
+        world_model.save_model()
+
     print(world_model.path)
     return 0
