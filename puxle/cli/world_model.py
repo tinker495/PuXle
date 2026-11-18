@@ -42,17 +42,19 @@ class TrainOptions:
     model: str
     data_name: str | None = None
     data_dir: Path | None = None
-    epochs: int = 2_000
+    epochs: int = 200
     mini_batch_size: int = 1_000
     optimizer: Literal["adam", "sgd"] = "adam"
-    learning_rate: float = 1e-4
+    learning_rate: float = 3e-3
+    lr_schedule: Literal["constant", "cosine"] = "cosine"
+    """`cosine` decays the learning rate to zero over all training steps."""
     save_every: int = 100
     seed: int = 0
     """Seeds minibatch shuffling and, with --reset, parameter initialization."""
     reset: bool = False
     wm_loss_ratio: float = 0.5
     """Maximum world-model loss weight; the AE loss gets the remainder."""
-    wm_onset_epoch: int = 100
+    wm_onset_epoch: int = 20
     """Epoch at which the world-model loss weight starts ramping up."""
     wm_ramp_epochs: int = 1_000
     """Epochs from onset until the weight reaches --wm-loss-ratio."""
@@ -292,10 +294,18 @@ def train(options: TrainOptionsArg) -> int:
             method=model.train_info,
         )
 
+    learning_rate = (
+        optax.cosine_decay_schedule(
+            options.learning_rate,
+            options.epochs * math.ceil(len(actions) / options.mini_batch_size),
+        )
+        if options.lr_schedule == "cosine"
+        else options.learning_rate
+    )
     optimizer = (
-        optax.adam(options.learning_rate)
+        optax.adam(learning_rate)
         if options.optimizer == "adam"
-        else optax.sgd(options.learning_rate)
+        else optax.sgd(learning_rate)
     )
     eval_fn = world_model_eval_builder(train_info_fn, options.mini_batch_size)
     params = world_model.params
