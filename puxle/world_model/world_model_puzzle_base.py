@@ -281,10 +281,11 @@ class WorldModelPuzzleBase(Puzzle):
         serving_model.apply(variables, dummy_data)
         return serving_model, variables
 
-    def get_new_params(self):
-        dummy_data = jnp.zeros((1, *self.data_shape))
+    def get_new_params(self, seed: int | None = None):
+        if seed is None:
+            seed = np.random.randint(0, 2**32 - 1)
         return self.model.init(
-            jax.random.PRNGKey(np.random.randint(0, 2**32 - 1)), dummy_data
+            jax.random.PRNGKey(seed), jnp.zeros((1, *self.data_shape))
         )
 
     def load_model(self):

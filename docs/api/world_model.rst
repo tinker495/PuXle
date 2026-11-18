@@ -56,6 +56,15 @@ device memory must also hold the full training dataset and model. Optimizer
 updates run once per minibatch. This option does not accumulate gradients
 across minibatches.
 
+``--seed`` controls minibatch shuffling and, with ``--reset``, parameter
+initialization. On GPU, a reset run is bitwise reproducible from its seed only
+with ``XLA_FLAGS=--xla_gpu_deterministic_ops=true``. The world-model
+loss weight is ``clip((epoch - onset) / ramp, 1e-4, 1) * ratio`` with
+``--wm-onset-epoch`` (default: 100), ``--wm-ramp-epochs`` (default: 1,000), and
+``--wm-loss-ratio`` (default: 0.5); the AE loss receives the remaining weight.
+The defaults reach the full ratio at epoch 1,100, so shorter runs should move the
+onset and ramp. Evaluation log lines report the epoch's ``wm_weight``.
+
 Rubik color images use cached native sticker geometry and batched integer-area
 reduction. Sokoban images use cached native tile sprites. These CPU batch paths
 preserve the native renderer's pixels at integer reduction ratios (including

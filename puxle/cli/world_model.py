@@ -48,7 +48,14 @@ class TrainOptions:
     learning_rate: float = 1e-4
     save_every: int = 100
     seed: int = 0
+    """Seeds minibatch shuffling and, with --reset, parameter initialization."""
     reset: bool = False
+    wm_loss_ratio: float = 0.5
+    """Maximum world-model loss weight; the AE loss gets the remainder."""
+    wm_onset_epoch: int = 100
+    """Epoch at which the world-model loss weight starts ramping up."""
+    wm_ramp_epochs: int = 1_000
+    """Epochs from onset until the weight reaches --wm-loss-ratio."""
 
 
 TrainOptionsArg = Annotated[TrainOptions, tyro.conf.OmitArgPrefixes]
@@ -250,6 +257,8 @@ def train(options: TrainOptionsArg) -> int:
             options.model,
             init_params=options.reset,
         )
+        if options.reset:
+            world_model.params = world_model.get_new_params(options.seed)
         jax.block_until_ready(world_model.params)
         progress.update()
     datas, next_datas, actions = [
@@ -333,7 +342,10 @@ def train(options: TrainOptionsArg) -> int:
             options.mini_batch_size,
             train_info_fn,
             optimizer,
+            loss_ratio=options.wm_loss_ratio,
             progress=report_training,
+            wm_onset_epoch=options.wm_onset_epoch,
+            wm_ramp_epochs=options.wm_ramp_epochs,
         )
         for epoch in range(options.epochs):
             batch_progress.reset()
@@ -344,7 +356,7 @@ def train(options: TrainOptionsArg) -> int:
                 phase="compiling first batch" if epoch == 0 else "training"
             )
             key, subkey = jax.random.split(key)
-            params, opt_state, loss, ae_loss, wm_loss, accuracy = train_fn(
+            params, opt_state, loss, ae_loss, wm_loss, accuracy, wm_weight = train_fn(
                 subkey, (datas, next_datas, actions), params, opt_state, epoch
             )
             batch_progress.refresh()
@@ -360,8 +372,8 @@ def train(options: TrainOptionsArg) -> int:
                 losses["eval"] = f"{float(eval_accuracy):.1%}"
                 tqdm.write(
                     f"epoch={epoch} loss={float(loss):.6f} ae={float(ae_loss):.6f} "
-                    f"wm={float(wm_loss):.6f} accuracy={float(accuracy):.6f} "
-                    f"eval={float(eval_accuracy):.6f}"
+                    f"wm={float(wm_loss):.6f} wm_weight={float(wm_weight):.6f} "
+                    f"accuracy={float(accuracy):.6f} eval={float(eval_accuracy):.6f}"
                 )
             if options.save_every > 0 and (epoch + 1) % options.save_every == 0:
                 epoch_progress.set_postfix(phase="saving checkpoint", **losses)

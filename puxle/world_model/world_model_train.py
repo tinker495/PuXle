@@ -21,9 +21,13 @@ def world_model_train_builder(
     optimizer: optax.GradientTransformation = optax.adam(1e-4),
     loss_ratio: float = 0.5,
     progress: Callable[[int, np.ndarray], None] | None = None,
+    wm_onset_epoch: int = 100,
+    wm_ramp_epochs: int = 1000,
 ):
     if minibatch_size <= 0:
         raise ValueError("minibatch_size must be positive")
+    if wm_ramp_epochs <= 0:
+        raise ValueError("wm_ramp_epochs must be positive")
 
     def loss_fn(params, data, next_data, action, loss_weight=0.5):
         (
@@ -113,7 +117,10 @@ def world_model_train_builder(
                 ),
             ]
         ).reshape(batch_count, minibatch_size)
-        loss_weight = jnp.clip((epoch - 100) / 1000.0, 0.0001, 1.0) * loss_ratio
+        loss_weight = (
+            jnp.clip((epoch - wm_onset_epoch) / wm_ramp_epochs, 0.0001, 1.0)
+            * loss_ratio
+        )
 
         metric_sums = jnp.zeros(4)
         batches_per_group = math.ceil(batch_count / 50)
@@ -131,7 +138,7 @@ def world_model_train_builder(
             jax.block_until_ready(metrics)
             if progress is not None:
                 progress(completed, np.asarray(metrics))
-        return params, opt_state, *(metric_sums / batch_count)
+        return params, opt_state, *(metric_sums / batch_count), loss_weight
 
     return train_fn
 
