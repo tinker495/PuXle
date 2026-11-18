@@ -30,9 +30,7 @@ Use `--output-dir` to override a dataset command's destination.
 ```bash
 puxle world-model-train train \
   --model RubiksCubeWorldModel \
-  --reset \
-  --epochs 2000 \
-  --mini-batch-size 1000
+  --reset
 ```
 
 Available model names are the attributes exposed by
