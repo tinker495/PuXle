@@ -58,6 +58,8 @@ class TrainOptions:
     """Epoch at which the world-model loss weight starts ramping up."""
     wm_ramp_epochs: int = 1_000
     """Epochs from onset until the weight reaches --wm-loss-ratio."""
+    latent_bits: int | None = None
+    """Override the latent width of a flat-latent (Rubik's) model, in bits."""
 
 
 TrainOptionsArg = Annotated[TrainOptions, tyro.conf.OmitArgPrefixes]
@@ -258,6 +260,11 @@ def train(options: TrainOptionsArg) -> int:
         world_model = _create_world_model_for_training(
             options.model,
             init_params=options.reset,
+            **(
+                {}
+                if options.latent_bits is None
+                else {"latent_shape": (options.latent_bits,)}
+            ),
         )
         if options.reset:
             world_model.params = world_model.get_new_params(options.seed)

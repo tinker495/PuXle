@@ -6,11 +6,11 @@ class _RubiksCubeWorldModelBase(WorldModelPuzzleBase):
     data_name = "rubikscube"
     latent_shape: tuple[int, ...] = (400,)
 
-    def __init__(self, **kwargs):
+    def __init__(self, latent_shape: tuple[int, ...] | None = None, **kwargs):
         super().__init__(
             data_path=str(world_model_data_path(self.data_name)),
             data_shape=(32, 64, 3),
-            latent_shape=self.latent_shape,
+            latent_shape=latent_shape or self.latent_shape,
             action_size=12,
             **kwargs,
         )

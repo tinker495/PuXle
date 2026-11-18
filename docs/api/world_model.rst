@@ -70,6 +70,11 @@ zero over all training steps; ``constant`` keeps it fixed. The defaults
 on 300,000 transitions to zero one-step and 30-step errors on a 20,000-transition
 hold-out, in both float and int8 serving.
 
+``--latent-bits`` overrides the latent width of a flat-latent (Rubik's) model;
+checkpoints record the width in their metadata. With the default recipe, 192 and
+160 bits passed that hold-out on 2/2 seeds, 144 and 128 bits on 4/5, and 112 bits
+or fewer failed.
+
 Rubik color images use cached native sticker geometry and batched integer-area
 reduction. Sokoban images use cached native tile sprites. These CPU batch paths
 preserve the native renderer's pixels at integer reduction ratios (including

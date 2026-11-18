@@ -51,8 +51,9 @@ trained_world_model_registry = SimpleNamespace(
 )
 
 
-def _create_world_model_for_training(name: str, *, init_params: bool):
+def _create_world_model_for_training(name: str, *, init_params: bool, **model_kwargs):
     return _TRAINED_WORLD_MODEL_CONFIGS[name]._create(
         init_params=init_params,
         aqt_cfg=None,
+        **model_kwargs,
     )

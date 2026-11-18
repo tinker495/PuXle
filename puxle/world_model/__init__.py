@@ -13,13 +13,14 @@ class WorldModelPuzzleConfig:
     callable: Callable
     path: str
 
-    def _create(self, *, init_params: bool, aqt_cfg: object):
+    def _create(self, *, init_params: bool, aqt_cfg: object, **model_kwargs):
         from ._resources import world_model_checkpoint_path
 
         return self.callable(
             path=str(world_model_checkpoint_path(self.path)),
             init_params=init_params,
             aqt_cfg=aqt_cfg,
+            **model_kwargs,
         )
 
     def create(self):
