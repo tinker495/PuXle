@@ -180,9 +180,20 @@ neighbours, costs = puzzle.get_neighbours(config, state)
 Each changed search state costs one action. Blocked moves and moves from a
 won state have infinite cost. Games with random rules carry the generator
 state so a search can replay the same action sequence from the same seed.
-Search states store one bit per object and board cell. `state.board` exposes
-the boolean object layers with shape `(objects, rows, columns)`, with any
+By default, the state stores one bit per object and board cell and supports
+constructing or editing arbitrary boards. In both storage modes, `state.board`
+returns boolean object layers with shape `(objects, rows, columns)` and any
 batch dimensions first.
+
+For A* or other searches starting from the selected level, pass
+`compact=True`, for example `PuzzleJAX("Microban_I", level=87, compact=True)`.
+This mode shares fixed cells and screen bounds across all search states. For
+rules that only move objects, it uses the level's walls and starting positions
+to exclude unreachable cells. When occupied positions take fewer bytes than
+a bit per reachable object cell, it stores their sorted indices. Games with
+random rules keep their full generator key, and scrolling games keep their
+camera position. Compact states are built through `get_inits` and the
+transition methods.
 
 ### PDDL Planning Domains
 **⚠️ Experimental Feature**: PDDL support in PuXle is currently experimental and under active development. While we strive for full STRIPS subset compliance, some edge cases may not be fully supported yet.

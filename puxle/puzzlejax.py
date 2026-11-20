@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
+from xtructure import numpy as xnp
 from xtructure.core.layout import get_type_layout
 from xtructure.core.layout.bitpack import pack_field
 
@@ -50,9 +51,12 @@ class PuzzleJAX(Puzzle):
     ``game`` accepts a PuzzleJAX catalog name, a local PuzzleScript path, a
     parsed PSGameTree, or a PuzzleJaxEnv. Levels are zero-based. An existing
     single-level environment defaults to its selected level.
+    Set `compact=True` for searches from the selected level's initial states.
     """
 
-    def __init__(self, game="sokoban_basic", level: int | None = None):
+    def __init__(
+        self, game="sokoban_basic", level: int | None = None, *, compact: bool = False
+    ):
         try:
             # PuzzleJAX uses PIL.Image through the parent package at startup.
             import_module("PIL.Image")
@@ -86,11 +90,20 @@ class PuzzleJAX(Puzzle):
         self._has_random_rules = self.env.has_randomness()
         self._default_key = jax.random.PRNGKey(0)
         _, self._template = self.env.reset(self._default_key, self.params)
+        self.compact = compact
+        self._action_is_noop = False
         super().__init__()
 
     def define_state_class(self):
         template = self._template
         render = self.get_string_parser()
+        if self.compact:
+            from puxle._puzzlejax_compact import build_compact_state
+
+            state_class, self._action_is_noop = build_compact_state(
+                self.env, template, self._default_key, render
+            )
+            return state_class
         board_shape = template.multihot_level.shape
 
         def pack_board(board):
@@ -181,6 +194,8 @@ class PuzzleJAX(Puzzle):
         return self.SolveConfig.default()
 
     def _search_state(self, state, won):
+        if self.compact:
+            return self.State.from_engine(state, won)
         # Reward, heuristic and elapsed step counters do not affect the rules.
         # Deterministic boards reached by different paths must compare equal.
         return self.State(
@@ -217,6 +232,17 @@ class PuzzleJAX(Puzzle):
 
     def is_solved(self, solve_config, state):
         return state.won
+
+    def get_neighbours(self, solve_config, state, filled=True):
+        if not self._action_is_noop:
+            return super().get_neighbours(solve_config, state, filled)
+        # Every rule needs a directional force. The fifth input supplies only
+        # an action force, so its successor is the input with infinite cost.
+        moves, costs = jax.vmap(self.get_actions, in_axes=(None, None, 0, None))(
+            solve_config, state, jnp.arange(self.action_size - 1), filled
+        )
+        moves = xnp.concatenate((moves, state[None]))
+        return moves, jnp.append(costs, jnp.inf)
 
     def action_to_string(self, action: int) -> str:
         if not 0 <= action < self.action_size:
