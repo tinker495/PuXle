@@ -282,9 +282,8 @@ class CayleyPuzzle(Puzzle):
             import cayleypy  # noqa: F401  (lazy)
         except ImportError as exc:
             raise ImportError(
-                "cayleypy is required for CayleyPuzzle. Install the "
-                '[cayley] extra: uv add "puxle[cayley] @ '
-                'git+https://github.com/tinker495/PuXle.git"'
+                "cayleypy is required for CayleyPuzzle. Install puxle: "
+                'uv add "puxle @ git+https://github.com/tinker495/PuXle.git"'
             ) from exc
 
         from cayleypy import MatrixGroups, PermutationGroups, Puzzles
@@ -308,7 +307,6 @@ class CayleyPuzzle(Puzzle):
         )
 
     def define_state_class(self) -> type[Xtructurable]:
-        str_parser = self.get_string_parser()
         state_length = int(self._state_length)
 
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
@@ -321,9 +319,6 @@ class CayleyPuzzle(Puzzle):
                     ),
                 ]
 
-                def __str__(self, **kwargs):
-                    return str_parser(self, **kwargs)
-
             return State
 
         class State(Xtructurable):
@@ -331,9 +326,6 @@ class CayleyPuzzle(Puzzle):
                 chex.Array,
                 FieldDescriptor.tensor(dtype=self._state_dtype, shape=(state_length,)),
             ]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 
@@ -442,9 +434,8 @@ class CayleyPuzzle(Puzzle):
                 import cayleypy  # noqa: F401
             except ImportError as ie:
                 raise ImportError(
-                    "cayleypy is required for CayleyPuzzle. Install the "
-                    '[cayley] extra: uv add "puxle[cayley] @ '
-                    'git+https://github.com/tinker495/PuXle.git"'
+                    "cayleypy is required for CayleyPuzzle. Install puxle: "
+                    'uv add "puxle @ git+https://github.com/tinker495/PuXle.git"'
                 ) from ie
             raise TypeError(
                 "graph_def must be a cayleypy.CayleyGraphDef; got "

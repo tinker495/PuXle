@@ -11,49 +11,25 @@ states, and optionally saves image renders in ``images/visualizations/``.
 from __future__ import annotations
 
 import ast
-import inspect
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated, Dict, Type
+from typing import Annotated
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 import tyro
 from jax import tree_util
 from PIL import Image
 
+from puxle.cli._puzzles import puzzle_classes as discover_puzzles
 from puxle.core.puzzle_base import Puzzle
+from puxle.render import normalize_rgb_image
 
 
-def discover_puzzles() -> Dict[str, Type[Puzzle]]:
-    import puxle.puzzles as puzzles_module
-
-    puzzle_map: Dict[str, Type[Puzzle]] = {}
-
-    for attr_name in dir(puzzles_module):
-        attr = getattr(puzzles_module, attr_name)
-        if inspect.isclass(attr) and issubclass(attr, Puzzle) and attr is not Puzzle:
-            puzzle_map[attr.__name__] = attr
-
-    return puzzle_map
-
-
-def _ensure_uint8(image: jnp.ndarray | np.ndarray) -> np.ndarray:
-    array = np.asarray(image)
-    if array.dtype == np.float32 or array.dtype == np.float64:
-        array = np.clip(array, 0.0, 1.0)
-        array = (array * 255).astype(np.uint8)
-    elif array.dtype != np.uint8:
-        array = array.astype(np.uint8)
-    return array
-
-
-def _save_image(array: jnp.ndarray | np.ndarray, path: Path) -> Path:
+def _save_image(array: np.ndarray, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    array_uint8 = _ensure_uint8(array)
-    Image.fromarray(array_uint8).save(path)
+    Image.fromarray(array).save(path)
     return path
 
 
@@ -83,7 +59,7 @@ def visualize_puzzle(
 ) -> None:
     puzzles = discover_puzzles()
     if puzzle_name not in puzzles:
-        available = ", ".join(sorted(puzzles.keys()))
+        available = ", ".join(sorted(key for key in puzzles if not key.islower()))
         raise ValueError(
             f"Unknown puzzle '{puzzle_name}'. Available puzzles: {available}"
         )
@@ -131,14 +107,17 @@ def visualize_puzzle(
         img_parser = puzzle.get_img_parser()
         img_root = output_dir / puzzle_name
 
-        init_path = _save_image(img_parser(init_state), img_root / "initial.png")
+        init_path = _save_image(
+            normalize_rgb_image(img_parser(init_state)), img_root / "initial.png"
+        )
         print(f"Saved initial state image -> {init_path}")
 
         for idx in range(puzzle.action_size):
             action_label = action_labels[idx]
             neighbour_state = _select_state(puzzle, neighbours, idx)
             neighbour_path = _save_image(
-                img_parser(neighbour_state), img_root / f"{action_label}.png"
+                normalize_rgb_image(img_parser(neighbour_state)),
+                img_root / f"{action_label}.png",
             )
             print(f"Saved neighbour {action_label} image -> {neighbour_path}")
 

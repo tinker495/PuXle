@@ -14,7 +14,10 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
+import jax
+import jax.numpy as jnp
 import numpy as np
+import pytest
 
 _MIGRATED_PUZZLES = (
     "slidepuzzle",
@@ -81,10 +84,90 @@ def test_render_module_attach_state_renderer_attaches_img_method():
     assert hasattr(_StubCls, "img")
 
 
-def test_render_module_exposes_only_attachment_seam():
+def test_render_module_exposes_only_canonical_helpers():
+    """Author: tinker495.
+
+    Why: Locks the generalized ``puxle.render`` public surface
+    (``attach_state_renderer``, ``normalize_rgb_image``, ``img_to_colored_str``)
+    while continuing to prevent reintroduction of the deleted ``Cv2Backend``.
+    """
     render = importlib.import_module("puxle.render")
-    assert render.__all__ == ["attach_state_renderer"]
+    assert render.__all__ == [
+        "attach_state_renderer",
+        "normalize_rgb_image",
+        "img_to_colored_str",
+    ]
     assert not hasattr(render, "Cv2Backend")
+
+
+def test_normalize_rgb_image_enforces_host_uint8_and_optional_resize():
+    """Author: tinker495.
+
+    Why: Ensures ``normalize_rgb_image`` always produces a host NumPy ``uint8``
+    ``(H, W, 3)`` RGB frame (converting float ``[0, 1]`` and JAX arrays),
+    supports ``size=(width, height)`` resizing, and rejects invalid shapes or
+    non-positive target dimensions loudly.
+    """
+    from puxle.render import normalize_rgb_image
+
+    float_frame = jnp.array([[[0.0, 0.5, 1.0], [1.0, 0.0, 0.25]]], dtype=jnp.float32)
+    out = normalize_rgb_image(float_frame)
+    assert isinstance(out, np.ndarray)
+    assert out.dtype == np.uint8
+    assert out.shape == (1, 2, 3)
+    assert out[0, 0].tolist() == [0, 128, 255]
+    assert out[0, 1].tolist() == [255, 0, 64]
+
+    resized = normalize_rgb_image(out, size=(6, 4))
+    assert resized.shape == (4, 6, 3)
+    assert resized.dtype == np.uint8
+
+    with pytest.raises(ValueError, match=r"\(H, W, 3\)"):
+        normalize_rgb_image(np.zeros((2, 2, 4), dtype=np.uint8))
+    with pytest.raises(ValueError, match="positive"):
+        normalize_rgb_image(out, size=(0, 4))
+
+
+def test_img_to_colored_str_renders_24bit_ansi_rows():
+    """Author: tinker495.
+
+    Why: Verifies the shared terminal RGB preview helper promoted into
+    ``puxle.render`` formats 24-bit ANSI ``██`` rows consistently for both
+    world models and adapters.
+    """
+    from puxle.render import img_to_colored_str
+
+    img = np.array([[[255, 0, 10], [0, 128, 64]]], dtype=np.uint8)
+    rendered = img_to_colored_str(img)
+    assert rendered == ("\x1b[38;2;255;0;10m██\x1b[0m\x1b[38;2;0;128;64m██\x1b[0m")
+
+
+def test_attach_state_renderer_centralizes_str_and_img_on_single_and_batch():
+    """Author: tinker495.
+
+    Why: Verifies that ``Puzzle.__init__`` binds both ``str``/``__str__`` and
+    ``img(size=...)`` centrally through ``attach_state_renderer`` for both
+    single and batched states without per-puzzle ``__str__`` boilerplate.
+    """
+    from puxle.puzzles.slidepuzzle import SlidePuzzle
+
+    puzzle = SlidePuzzle(size=3)
+    sc, state = puzzle.get_inits(jax.random.PRNGKey(0))
+    neighbours, _ = puzzle.get_neighbours(sc, state)
+
+    assert str(state) == state.str()
+    assert isinstance(neighbours.str(solve_config=sc), str)
+    assert "Batched" in neighbours.str(solve_config=sc)
+
+    single_img = state.img(size=(32, 24))
+    assert isinstance(single_img, np.ndarray)
+    assert single_img.shape == (24, 32, 3)
+    assert single_img.dtype == np.uint8
+
+    batched_img = neighbours.img(size=(16, 16))
+    assert isinstance(batched_img, np.ndarray)
+    assert batched_img.shape == (puzzle.action_size, 16, 16, 3)
+    assert batched_img.dtype == np.uint8
 
 
 def test_migrated_puzzle_modules_do_not_import_cv2_backend():

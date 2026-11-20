@@ -11,7 +11,6 @@ import flax.linen as nn
 import huggingface_hub
 import jax
 import jax.numpy as jnp
-import numpy as np
 from aqt.jax.v2 import config as aqt_config
 from aqt.jax.v2.flax import aqt_flax
 from huggingface_hub.errors import EntryNotFoundError
@@ -242,12 +241,3 @@ def download_model(filename: str):
         except EntryNotFoundError as exc:
             last_error = exc
     raise FileNotFoundError(f"Checkpoint not found: {filename}") from last_error
-
-
-def img_to_colored_str(img: np.ndarray) -> str:
-    if img.dtype != np.uint8:
-        img = (img * 255).astype(np.uint8)
-    return "\n".join(
-        "".join(f"\x1b[38;2;{int(r)};{int(g)};{int(b)}m██\x1b[0m" for r, g, b in row)
-        for row in img
-    )

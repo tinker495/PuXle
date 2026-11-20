@@ -233,7 +233,6 @@ class RubiksCube(Puzzle):
         return 1 if self.color_embedding else len(str(self._num_tiles - 1))
 
     def define_state_class(self) -> type[Xtructurable]:
-        str_parser = self.get_string_parser()
         raw_shape = (6, self.size * self.size)
         active_bits = self._active_bits
 
@@ -242,9 +241,6 @@ class RubiksCube(Puzzle):
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=raw_shape, packed_bits=active_bits),
             ]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 

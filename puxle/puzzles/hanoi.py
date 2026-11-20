@@ -42,7 +42,6 @@ class TowerOfHanoi(Puzzle):
 
     def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for Tower of Hanoi using xtructure."""
-        str_parser = self.get_string_parser()
         count, peg_count = self.num_disks, self.num_pegs
 
         class State(Xtructurable):
@@ -69,9 +68,6 @@ class TowerOfHanoi(Puzzle):
                     ),
                     axis=-1,
                 ).astype(TYPE)
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 
