@@ -36,7 +36,12 @@ def test_string_parser_does_not_touch_the_device(puzzle_class):
     if issubclass(puzzle_class, puxle.puzzles.CayleyPuzzle):
         pytest.importorskip("cayleypy")
 
-    puzzle = puzzle_class()
+    if puzzle_class is puxle.puzzles.PDDL:
+        # Author: tinker495 — PDDL requires (domain, problem); verify host-only
+        # string parsing via a bundled preset rather than skipping coverage.
+        puzzle = puzzle_class.from_preset("blocksworld", "bw-S-01")
+    else:
+        puzzle = puzzle_class()
 
     solve_config, state = puzzle.get_inits(jax.random.PRNGKey(42))
 

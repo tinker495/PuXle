@@ -13,12 +13,15 @@ def test_named_ansi_coloring_without_termcolor(monkeypatch):
     for module_name in list(sys.modules):
         if module_name == "termcolor" or module_name.startswith("termcolor."):
             monkeypatch.delitem(sys.modules, module_name, raising=False)
-        if module_name in {"puxle.puzzles.lightsout", "puxle.pddls.formatting"}:
+        if module_name in {
+            "puxle.puzzles.lightsout",
+            "puxle.puzzles.adapters.pddl.formatting",
+        }:
             monkeypatch.delitem(sys.modules, module_name, raising=False)
 
     sys.meta_path.insert(0, _BlockTermcolor())
     try:
-        from puxle.pddls.formatting import action_to_string
+        from puxle.puzzles.adapters.pddl.formatting import action_to_string
         from puxle.puzzles.lightsout import action_to_char
         from puxle.utils.util import colored_str
 

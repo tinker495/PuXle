@@ -1,6 +1,6 @@
 import pytest
 
-from puxle.pddls.pddl import PDDL
+from puxle.puzzles.adapters.pddl import PDDL
 
 
 class TestPDDLPresets:

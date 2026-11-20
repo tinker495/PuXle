@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from puxle.pddls.pddl import PDDL
+from puxle.puzzles.adapters.pddl import PDDL
 
 
 def _bfs_with_time_budget(

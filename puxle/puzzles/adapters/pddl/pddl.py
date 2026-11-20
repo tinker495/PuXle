@@ -47,11 +47,11 @@ class PDDL(Puzzle):
 
     The class delegates heavy lifting to helper modules:
 
-    * :mod:`~puxle.pddls.type_system` — type hierarchy extraction.
-    * :mod:`~puxle.pddls.grounding` — predicate and action grounding.
-    * :mod:`~puxle.pddls.masks` — JAX mask construction.
-    * :mod:`~puxle.pddls.formatting` — pretty-printing utilities.
-    * :mod:`~puxle.pddls.state_defs` — dynamic state/solve-config classes.
+    * :mod:`~puxle.puzzles.adapters.pddl.type_system` — type hierarchy extraction.
+    * :mod:`~puxle.puzzles.adapters.pddl.grounding` — predicate and action grounding.
+    * :mod:`~puxle.puzzles.adapters.pddl.masks` — JAX mask construction.
+    * :mod:`~puxle.puzzles.adapters.pddl.formatting` — pretty-printing utilities.
+    * :mod:`~puxle.puzzles.adapters.pddl.state_defs` — dynamic state/solve-config classes.
 
     Args:
         domain: Path to a PDDL domain file **or** a ``pddl.core.Domain``
@@ -119,7 +119,7 @@ class PDDL(Puzzle):
         """
         base_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.normpath(
-            os.path.join(base_dir, "..", "data", "pddls", domain)
+            os.path.join(base_dir, "..", "..", "..", "data", "pddls", domain)
         )
 
         domain_path = os.path.abspath(os.path.join(data_dir, "domain.pddl"))

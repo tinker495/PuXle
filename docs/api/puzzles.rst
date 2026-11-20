@@ -125,3 +125,14 @@ Room
    :undoc-members:
    :show-inheritance:
    :special-members: __init__
+
+External Adapters (``puxle.puzzles.adapters``)
+----------------------------------------------
+
+For the PDDL adapter (:class:`~puxle.puzzles.adapters.pddl.pddl.PDDL`), see
+:doc:`pddls`.
+
+.. autoclass:: puxle.puzzles.adapters.cayley.CayleyPuzzle
+   :members:
+   :show-inheritance:
+   :special-members: __init__

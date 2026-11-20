@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from puxle.puzzles.cayley_puzzle import CayleyPuzzle
-from puxle.puzzles.cayley_subclasses import (
+from puxle.puzzles.adapters.cayley import CayleyPuzzle
+from puxle.puzzles.adapters.cayley_subclasses import (
     CayleyCoxeter8,
     CayleyLRX8,
     CayleyPancake7,
@@ -50,7 +50,7 @@ def test_top_level_imports_export_explicit_classes():
 
 
 def test_dynamic_factories_are_not_exported():
-    import puxle.puzzles.cayley_subclasses as module
+    import puxle.puzzles.adapters.cayley_subclasses as module
 
     assert not hasattr(module, "discover")
     assert not hasattr(module, "list_available_factories")

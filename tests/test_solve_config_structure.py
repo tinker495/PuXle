@@ -5,7 +5,7 @@ import xtructure.numpy as xnp
 from xtructure import StructuredType
 from xtructure.core.layout import get_type_layout
 
-from puxle.pddls.pddl import PDDL
+from puxle.puzzles.adapters.pddl import PDDL
 from puxle.puzzles.dotknot import DotKnot
 from puxle.puzzles.maze import Maze
 from puxle.puzzles.sokoban import Sokoban

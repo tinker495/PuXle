@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from puxle.pddls.type_system import (
+from puxle.puzzles.adapters.pddl.type_system import (
     collect_type_hierarchy,
     extract_objects_by_type,
     select_most_specific_types,

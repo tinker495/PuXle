@@ -3,7 +3,7 @@ from pathlib import Path
 import jax
 import pytest
 
-from puxle.pddls.pddl import PDDL
+from puxle.puzzles.adapters.pddl import PDDL
 
 # Simple-move defaults for non-param tests
 DATA_DIR = Path(__file__).resolve().parents[1] / "pddl_data" / "simple_move"

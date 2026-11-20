@@ -1,13 +1,13 @@
-PDDL Planning Domains (``puxle.pddls``)
-========================================
+PDDL Planning Domains (``puxle.puzzles.adapters.pddl``)
+=======================================================
 
 PuXle supports the STRIPS subset of PDDL with automatic grounding and
 JAX-optimized state representation.
 
 PDDL
------
+----
 
-.. autoclass:: puxle.pddls.pddl.PDDL
+.. autoclass:: puxle.puzzles.adapters.pddl.pddl.PDDL
    :members:
    :undoc-members:
    :show-inheritance:
@@ -16,29 +16,29 @@ PDDL
 Grounding
 ---------
 
-.. automodule:: puxle.pddls.grounding
+.. automodule:: puxle.puzzles.adapters.pddl.grounding
    :members:
 
 Masks
 -----
 
-.. automodule:: puxle.pddls.masks
+.. automodule:: puxle.puzzles.adapters.pddl.masks
    :members:
 
 Formatting
 ----------
 
-.. automodule:: puxle.pddls.formatting
+.. automodule:: puxle.puzzles.adapters.pddl.formatting
    :members:
 
 Type System
 -----------
 
-.. automodule:: puxle.pddls.type_system
+.. automodule:: puxle.puzzles.adapters.pddl.type_system
    :members:
 
 State Definitions
 -----------------
 
-.. automodule:: puxle.pddls.state_defs
+.. automodule:: puxle.puzzles.adapters.pddl.state_defs
    :members:

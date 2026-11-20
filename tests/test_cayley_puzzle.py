@@ -67,7 +67,7 @@ def _mat_graph_def(
 @pytest.fixture(scope="module")
 def perm_puzzle():
     """Small cyclic-8 style permutation puzzle (closed under inversion)."""
-    from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+    from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
     # Two generators: rotate left by 1, rotate right by 1.
     n = 8
@@ -80,7 +80,7 @@ def perm_puzzle():
 @pytest.fixture(scope="module")
 def mat_puzzle():
     """Small MATRIX puzzle over Z/5 with two 2x2 generators (closed under inversion)."""
-    from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+    from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
     # Generator A = [[1,1],[0,1]] mod 5  (det=1, invertible)
     # Generator B = [[1,0],[1,1]] mod 5  (det=1, invertible)
@@ -126,7 +126,7 @@ def test_permutation_forward_step_matches_numpy(perm_puzzle):
 
 
 def test_matrix_forward_step_matches_handcomputed():
-    from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+    from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
     # 4 hand-picked (state, action) pairs over Z/5 with 2x2 generators.
     # A=[[1,1],[0,1]] det=1; B=[[1,0],[1,1]] det=1 — both invertible mod 5.
@@ -222,7 +222,7 @@ def test_inverse_closure_roundtrip_matrix(mat_puzzle):
 
 
 def test_self_inverse_involution():
-    from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+    from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
     # Transposition swap: [1, 0, 2, 3] is self-inverse (it is its own argsort).
     n = 4
@@ -241,7 +241,7 @@ def test_self_inverse_involution():
 
 
 def test_non_closed_not_reversible_warns():
-    from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+    from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
     # Single cyclic shift [1,2,3,0]: inverse is [3,0,1,2], not in generators.
     n = 4
@@ -263,7 +263,7 @@ def test_non_closed_not_reversible_warns():
 def test_subprocess_import_without_cayleypy():
     import importlib.util
 
-    from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+    from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
     cayleypy_present = importlib.util.find_spec("cayleypy") is not None
 
@@ -294,7 +294,7 @@ for key in list(sys.modules):
     if key == 'cayleypy' or key.startswith('cayleypy.'):
         del sys.modules[key]
 
-from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+from puxle.puzzles.adapters.cayley import CayleyPuzzle
 print('import_ok')
 
 class FakeGraphDef:
@@ -333,7 +333,7 @@ except Exception as e:
 
 
 def test_state_field_name_kwarg_rejected():
-    from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+    from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
     n = 4
     rot = list(range(1, n)) + [0]
@@ -371,7 +371,7 @@ def test_state_field_per_mode(perm_puzzle, mat_puzzle):
 def test_jaxtar_astar_smoke():
     pytest.importorskip("JAxtar")
 
-    from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+    from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
     # Build a small permutation puzzle: cyclic-4.
     n = 4
@@ -430,7 +430,7 @@ def test_matrix_overflow_precondition():
     # exercises the overflow guard rather than the modulo-range check.
     import math
 
-    from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+    from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
     m = 3
     p_min = int(math.ceil(math.sqrt(2**63 / m))) + 1
@@ -459,7 +459,7 @@ def test_matrix_overflow_precondition():
 def test_cayleypy_parity():
     pytest.importorskip("cayleypy")
 
-    from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+    from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
     # --- PERMUTATION parity ---
     try:

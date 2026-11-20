@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
 __all__ = [
     "CayleyPancake7",
