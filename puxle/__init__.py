@@ -8,6 +8,7 @@ __version__ = "0.2.0"
 
 __all__ = [
     "Puzzle",
+    "PuzzleJAX",
     "DotKnot",
     "TowerOfHanoi",
     "LightsOut",
@@ -45,6 +46,7 @@ __all__ = [
 
 _EXPORTS: dict[str, tuple[str, str]] = {
     "Puzzle": (".core.puzzle_base", "Puzzle"),
+    "PuzzleJAX": (".puzzlejax", "PuzzleJAX"),
     "DotKnot": (".puzzles.dotknot", "DotKnot"),
     "TowerOfHanoi": (".puzzles.hanoi", "TowerOfHanoi"),
     "LightsOut": (".puzzles.lightsout", "LightsOut"),

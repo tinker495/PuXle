@@ -11,6 +11,13 @@ puxle human-play --puzzle SlidePuzzle --puzzle-args '{"size": 4}' --seed 0
 
 Choose actions with their displayed number or `WASD`; enter `q` to exit.
 
+After [setting up PuzzleJAX](../README.md#puzzlescript-via-puzzlejax), play a
+local PuzzleScript file or use a catalog name such as `sokoban_basic`.
+
+```bash
+puxle human-play --puzzle PuzzleJAX --puzzle-args '{"game": "my_game.txt", "level": 0}'
+```
+
 ## World-model datasets
 
 ```bash

@@ -12,3 +12,9 @@ Complete reference for all PuXle modules and classes.
    benchmark
    utils
    world_model
+
+PuzzleScript games
+------------------
+
+.. autoclass:: puxle.PuzzleJAX
+   :show-inheritance:

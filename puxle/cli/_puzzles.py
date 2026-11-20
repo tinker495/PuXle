@@ -15,6 +15,7 @@ def _normalized(name: str) -> str:
 
 def puzzle_classes() -> dict[str, type[Puzzle]]:
     import puxle.puzzles as puzzle_module
+    from puxle.puzzlejax import PuzzleJAX
 
     classes = {
         value.__name__: value
@@ -24,6 +25,7 @@ def puzzle_classes() -> dict[str, type[Puzzle]]:
         and value is not Puzzle
         and not inspect.isabstract(value)
     }
+    classes.update(PuzzleJAX=PuzzleJAX, PuzzleScript=PuzzleJAX)
     aliases = {_normalized(name): value for name, value in classes.items()}
     if "SlidePuzzle" in classes:
         aliases["npuzzle"] = classes["SlidePuzzle"]

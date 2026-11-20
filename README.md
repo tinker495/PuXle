@@ -148,6 +148,39 @@ for i, cost in enumerate(costs):
 
 `CayleyPuzzle` is a single-class adapter that turns any `cayleypy.CayleyGraphDef` (~30 permutation families like *pancake*, *LRX*, *top_spin*, *coxeter*, plus matrix groups like *heisenberg*, *special_linear_\**, plus the *mini_pyramorphix* / *pyraminx* / *globe_puzzle* Schreier graphs) into a JAX-native `Puzzle`. The bridge consumes `CayleyGraphDef` as **plain data** — no PyTorch in PuXle/JAxtar's import chain. See the dedicated tutorial below.
 
+### PuzzleScript via PuzzleJAX
+
+`puxle.PuzzleJAX` compiles a PuzzleScript file or a named PuzzleJAX game into
+a PuXle `Puzzle` for forward search. PuzzleJAX determines which PuzzleScript
+rules it can compile and provides the five input actions and win conditions.
+The default is level 0 of `sokoban_basic`.
+
+From a PuXle checkout, install the runtime dependencies and make the upstream
+engine, grammar, and game catalog available. These commands select the
+[PuzzleJAX revision used by this adapter](https://github.com/smearle/script-doctor/tree/7b46a9a6f5ce82b8e9b66f3bc722d247b37ce93e).
+
+```bash
+git clone --filter=blob:none --sparse https://github.com/smearle/script-doctor ../PuzzleJAX
+git -C ../PuzzleJAX checkout 7b46a9a6f5ce82b8e9b66f3bc722d247b37ce93e
+git -C ../PuzzleJAX sparse-checkout set puzzlescript_jax conf gymnax custom_games data/scraped_games
+export PYTHONPATH="$(cd ../PuzzleJAX && pwd)${PYTHONPATH:+:$PYTHONPATH}"
+uv run --extra puzzlejax puxle human-play --puzzle PuzzleJAX
+```
+
+```python
+import jax
+from puxle import PuzzleJAX
+
+puzzle = PuzzleJAX("sokoban_basic", level=1)  # Zero-based playable level
+# A local PuzzleScript file, PSGameTree or PuzzleJaxEnv also works as the first argument.
+config, state = puzzle.get_inits(jax.random.key(0))
+neighbours, costs = puzzle.get_neighbours(config, state)
+```
+
+Each changed search state costs one action. Blocked moves and moves from a
+won state have infinite cost. Games with random rules carry the generator
+state so a search can replay the same action sequence from the same seed.
+
 ### PDDL Planning Domains
 **⚠️ Experimental Feature**: PDDL support in PuXle is currently experimental and under active development. While we strive for full STRIPS subset compliance, some edge cases may not be fully supported yet.
 

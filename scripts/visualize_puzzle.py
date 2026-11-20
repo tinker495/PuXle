@@ -11,11 +11,10 @@ states, and optionally saves image renders in ``images/visualizations/``.
 from __future__ import annotations
 
 import ast
-import inspect
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated, Dict, Type
+from typing import Annotated
 
 import jax
 import jax.numpy as jnp
@@ -24,20 +23,8 @@ import tyro
 from jax import tree_util
 from PIL import Image
 
+from puxle.cli._puzzles import puzzle_classes as discover_puzzles
 from puxle.core.puzzle_base import Puzzle
-
-
-def discover_puzzles() -> Dict[str, Type[Puzzle]]:
-    import puxle.puzzles as puzzles_module
-
-    puzzle_map: Dict[str, Type[Puzzle]] = {}
-
-    for attr_name in dir(puzzles_module):
-        attr = getattr(puzzles_module, attr_name)
-        if inspect.isclass(attr) and issubclass(attr, Puzzle) and attr is not Puzzle:
-            puzzle_map[attr.__name__] = attr
-
-    return puzzle_map
 
 
 def _ensure_uint8(image: jnp.ndarray | np.ndarray) -> np.ndarray:
