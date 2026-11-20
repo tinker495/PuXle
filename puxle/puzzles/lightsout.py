@@ -49,7 +49,6 @@ class LightsOut(Puzzle):
 
     def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for LightsOut using xtructure."""
-        str_parser = self.get_string_parser()
         size = self.size
 
         class State(Xtructurable):
@@ -57,9 +56,6 @@ class LightsOut(Puzzle):
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=1),
             ]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 

@@ -13,6 +13,7 @@ from xtructure import FieldDescriptor, Xtructurable
 from xtructure import numpy as xnp
 
 from puxle.core.puzzle_base import Puzzle
+from puxle.render import img_to_colored_str
 from puxle.utils import IMG_SIZE
 
 from ._utils import (
@@ -24,7 +25,6 @@ from ._utils import (
     build_aqt_dot_general,
     download_model,
     get_norm_fn,
-    img_to_colored_str,
     is_model_downloaded,
     load_params_with_metadata,
     resolve_model_path,
@@ -155,7 +155,6 @@ class WorldModelPuzzleBase(Puzzle):
         return False
 
     def define_state_class(self) -> type[Xtructurable]:
-        str_parser = self.get_string_parser()
         latent_shape = self.latent_shape
 
         class State(Xtructurable):
@@ -163,9 +162,6 @@ class WorldModelPuzzleBase(Puzzle):
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=latent_shape, packed_bits=1),
             ]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 

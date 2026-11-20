@@ -37,7 +37,6 @@ class TSP(Puzzle):
 
     def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for TSP using xtructure."""
-        str_parser = self.get_string_parser()
         size = self.size
 
         class State(Xtructurable):
@@ -47,9 +46,6 @@ class TSP(Puzzle):
             point: Annotated[
                 chex.Array, FieldDescriptor.scalar(dtype=self._point_dtype)
             ]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 

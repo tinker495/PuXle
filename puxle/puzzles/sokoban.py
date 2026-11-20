@@ -58,7 +58,6 @@ class Sokoban(Puzzle):
 
     def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for Sokoban using xtructure."""
-        str_parser = self.get_string_parser()
         size = self.size
 
         class State(Xtructurable):
@@ -66,9 +65,6 @@ class Sokoban(Puzzle):
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=2),
             ]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 

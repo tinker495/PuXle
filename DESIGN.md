@@ -85,8 +85,8 @@ Every puzzle has two render surfaces:
 
 | Surface | Contract | Built by |
 | --- | --- | --- |
-| Text | `state.str(**kw)` / `str(solve_config)` returns a multi-line Python string with ANSI SGR color codes | `Puzzle.get_string_parser`, `Puzzle.get_solve_config_string_parser` (`puxle/core/puzzle_base.py`) |
-| Image | `state.img(**kw)` returns an `(H, W, 3)` RGB array | `Puzzle.get_img_parser`, bound by `attach_state_renderer` (`puxle/render/state_renderer.py`) |
+| Text | `state.str(**kw)` / `str(solve_config)` returns a multi-line Python string with ANSI SGR color codes | `Puzzle.get_string_parser`, `Puzzle.get_solve_config_string_parser`, bound centrally by `attach_state_renderer` (`puxle/render/state_renderer.py`) |
+| Image | `state.img(size=..., **kw)` returns a host `uint8` `(H, W, 3)` RGB `np.ndarray` | `Puzzle.get_img_parser`, normalized by `normalize_rgb_image` and bound by `attach_state_renderer` (`puxle/render/state_renderer.py`) |
 
 Text renders are plain strings on purpose. PuXle has no rich or termcolor dependency: termcolor
 was replaced by a local ANSI helper in `adad4a0`, and the rich tables in PDDL formatting were
@@ -103,8 +103,7 @@ Source of truth:
 | Shared frame and action labels | `puxle/core/puzzle_base.py` (`_grid_visualize_format`, `_directional_action_to_string`, `_DIRECTIONAL_LABELS`) |
 | Per-puzzle parsers | `puxle/puzzles/*.py` `get_string_parser`, `get_img_parser`, `action_to_string` |
 | PDDL text | `puxle/pddls/formatting.py` |
-| World-model text preview | `puxle/world_model/_utils.py` `img_to_colored_str`, `puxle/world_model/world_model_puzzle_base.py` |
-| Image binding | `puxle/render/state_renderer.py` `attach_state_renderer` |
+| Shared state render binding & RGB helpers | `puxle/render/state_renderer.py` (`attach_state_renderer`, `normalize_rgb_image`, `img_to_colored_str`) |
 
 ## Colors
 
@@ -135,7 +134,7 @@ Palettes that appear only in prose:
 | DotKnot dots | 24-bit red, green, yellow, blue | color index of the dot pair | `puxle/puzzles/dotknot.py` `COLOR_MAP` |
 | Size cycle | `red, green, yellow, blue, magenta, cyan` | Hanoi `(size - 1) % 6`, Pancake `size % 6` | `puxle/puzzles/hanoi.py` / `puxle/puzzles/pancake.py` `get_color` |
 | PDDL labels | `cyan, magenta, green, yellow, blue, white, red` | action/predicate names in sorted order, cycling; fallback `white` | `puxle/pddls/formatting.py` `build_label_color_maps` |
-| World-model preview | 24-bit per pixel | each image pixel drawn as `██` | `img_to_colored_str` |
+| World-model & adapter RGB preview | 24-bit per pixel | each image pixel drawn as `██` | `puxle/render/state_renderer.py` `img_to_colored_str` |
 
 ## Typography
 
@@ -207,9 +206,10 @@ Images:
 - Backgrounds: light grey `(240, 240, 240)` for Pancake, Hanoi and TopSpin; white for TSP;
   `(190, 190, 190)` for the cube; `(144, 96, 8)` for the Slide Puzzle board; dark `(30, 30, 30)`
   with a `(50, 50, 50)` grid for Lights Out; black for Sokoban.
-- `img()` takes `**kwargs`. JAxtar passes `idx`, `path` and `solve_config` when it renders solution
-  frames. A batched `img()` renders each item and stacks the results
-  (`attach_state_renderer`).
+- `img(size=None, interpolation=cv2.INTER_NEAREST, **kwargs)` normalizes every rendered frame to a
+  host `uint8` `(H, W, 3)` NumPy RGB array via `normalize_rgb_image` and optionally resizes it to
+  `size=(width, height)`. JAxtar passes `idx`, `path` and `solve_config` when it renders solution
+  frames. A batched `img()` renders each item and stacks the results (`attach_state_renderer`).
 
 ## Elevation & Depth
 
@@ -241,13 +241,13 @@ are no background colors or shading in text renders.
 | Pancake | indexed bars, `Plate` base | same parser | sentence | light grey |
 | TopSpin | `[turnstile] rest` numbers | same parser | sentence | light grey |
 | TSP | `↓` marker over `[■ ☐ ...]` | `TSP SolveConfig: N points, start at i` | two-digit ids | white canvas, polyline tour, status-colored points |
-| PDDL | atom list with `✓`/`✗` | `Goal atoms: ...` | colored `name params` | one pixel per atom |
+| PDDL | atom list with `✓`/`✗` | `Goal atoms: ...` | colored `name params` | one pixel per atom (`uint8` RGB) |
 | Cayley | `<graph>: values` | same parser | `<graph>.gen[i]` | `1 × N` grayscale strip |
 | World models | optional `██` pixel preview + `latent:` line | image-based | arrows (Sokoban) | decoded image |
 
 Shared parts: `board-frame` / `board-cell` (`_grid_visualize_format`), directional labels
 (`_directional_action_to_string`), the color helpers, `_plain_table` (cube only), and
-`attach_state_renderer` for `img()`.
+`puxle.render` (`attach_state_renderer`, `normalize_rgb_image`, `img_to_colored_str`) for both `str()` and `img()`.
 
 ## Do's and Don'ts
 
@@ -276,5 +276,6 @@ Current code that does not follow the rules above. Don't copy these patterns.
 - The size palettes are offset differently: disk 1 is red in Hanoi, pancake 1 is green in Pancake.
 - Maze and Room called without `solve_config` fall back to `Maze State: Player at position ...`
   instead of a board.
-- The PDDL image (a float32 grid with one pixel per atom) and the Cayley image (a `1 × N` strip)
-  are not `IMG_SIZE` canvases.
+- The PDDL image (one pixel per atom) and the Cayley image (a `1 × N` strip) are not `IMG_SIZE`
+  canvases by default; pass `size=(width, height)` to `state.img(...)` when a uniform output size
+  is needed.

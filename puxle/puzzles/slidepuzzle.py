@@ -31,7 +31,6 @@ class SlidePuzzle(Puzzle):
     size: int
 
     def define_state_class(self) -> type[Xtructurable]:
-        str_parser = self.get_string_parser()
         size = self.size
         max_value = self.size**2 - 1
         packed_bits = max_value.bit_length()
@@ -43,9 +42,6 @@ class SlidePuzzle(Puzzle):
                     shape=(size**2,), packed_bits=packed_bits
                 ),
             ]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 

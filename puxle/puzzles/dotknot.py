@@ -53,7 +53,6 @@ class DotKnot(Puzzle):
         return GoalSpec
 
     def define_state_class(self) -> type[Xtructurable]:
-        str_parser = self.get_string_parser()
         size = self.size
 
         class State(Xtructurable):
@@ -61,9 +60,6 @@ class DotKnot(Puzzle):
                 chex.Array,
                 FieldDescriptor.packed_tensor(shape=(size * size,), packed_bits=4),
             ]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 

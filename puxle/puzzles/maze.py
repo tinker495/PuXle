@@ -48,16 +48,12 @@ class Maze(Puzzle):
         return InstanceContext
 
     def define_state_class(self) -> type[Xtructurable]:
-        str_parser = self.get_string_parser()
 
         class State(Xtructurable):
             pos: Annotated[
                 chex.Array,
                 FieldDescriptor.tensor(dtype=self._position_dtype, shape=(2,)),
             ]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 

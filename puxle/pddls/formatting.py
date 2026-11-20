@@ -8,7 +8,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Dict, List, Tuple
 
-import jax.numpy as jnp
+import jax
+import numpy as np
 
 from puxle.utils.util import colored_str
 
@@ -65,7 +66,7 @@ def action_to_string(
 
 def build_state_string_parser(env) -> Callable:
     def parser(state, solve_config=None, **kwargs):
-        atoms = state.unpacked_atoms
+        atoms = np.asarray(jax.device_get(state).unpacked_atoms, dtype=bool)
         true_indices = [i for i in range(env.num_atoms) if bool(atoms[i])]
         true_count = len(true_indices)
         density = (true_count / max(1, env.num_atoms)) * 100.0
@@ -74,26 +75,16 @@ def build_state_string_parser(env) -> Callable:
         goal_count = 0
         goals_satisfied = 0
         if solve_config is not None:
-            goal_mask = solve_config.GoalSpec.GoalMask
-            try:
-                goal_count = int(jnp.sum(goal_mask))
-                goals_satisfied = int(jnp.sum(jnp.logical_and(goal_mask, atoms)))
-            except (TypeError, IndexError, ValueError):
-                gm = [bool(goal_mask[i]) for i in range(env.num_atoms)]
-                goal_count = sum(gm)
-                goals_satisfied = sum(
-                    1 for i in range(env.num_atoms) if gm[i] and bool(atoms[i])
-                )
+            goal_mask = np.asarray(
+                jax.device_get(solve_config).GoalSpec.GoalMask, dtype=bool
+            )
+            goal_count = int(np.sum(goal_mask))
+            goals_satisfied = int(np.sum(np.logical_and(goal_mask, atoms)))
 
         max_show = int(kwargs.get("max_show", 12))
         if goal_mask is not None:
-            try:
-                goal_true = [i for i in true_indices if bool(goal_mask[i])]
-                non_goal_true = [i for i in true_indices if not bool(goal_mask[i])]
-            except (TypeError, IndexError, ValueError):
-                gm = [bool(goal_mask[i]) for i in range(env.num_atoms)]
-                goal_true = [i for i in true_indices if gm[i]]
-                non_goal_true = [i for i in true_indices if not gm[i]]
+            goal_true = [i for i in true_indices if bool(goal_mask[i])]
+            non_goal_true = [i for i in true_indices if not bool(goal_mask[i])]
             ordered_true_indices = goal_true + non_goal_true
         else:
             ordered_true_indices = true_indices
@@ -142,7 +133,9 @@ def build_state_string_parser(env) -> Callable:
 
 def build_solve_config_string_parser(env) -> Callable:
     def parser(solve_config, **kwargs):
-        goal_mask = solve_config.GoalSpec.GoalMask
+        goal_mask = np.asarray(
+            jax.device_get(solve_config).GoalSpec.GoalMask, dtype=bool
+        )
         goal_indices = [i for i in range(env.num_atoms) if bool(goal_mask[i])]
         goal_count = len(goal_indices)
         max_show = int(kwargs.get("max_show", 12))

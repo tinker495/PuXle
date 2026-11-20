@@ -139,7 +139,6 @@ class Puzzle(ABC):
         self.State = self.define_state_class()
         self.InstanceContext = self.define_instance_context_class()
         self.GoalSpec = self.define_goal_spec_class()
-        string_parser = self.get_solve_config_string_parser()
 
         class SolveConfig(Xtructurable):
             InstanceContext: Annotated[
@@ -149,13 +148,14 @@ class Puzzle(ABC):
                 Xtructurable, FieldDescriptor.scalar(dtype=self.GoalSpec)
             ]
 
-            def __str__(solve_config, **kwargs):
-                return string_parser(solve_config, **kwargs)
-
         self.SolveConfig = SolveConfig
-        self.State = attach_state_renderer(self.State, self.get_img_parser())
+        self.State = attach_state_renderer(
+            self.State, self.get_img_parser(), self.get_string_parser()
+        )
         self.SolveConfig = attach_state_renderer(
-            self.SolveConfig, self.get_solve_config_img_parser()
+            self.SolveConfig,
+            self.get_solve_config_img_parser(),
+            self.get_solve_config_string_parser(),
         )
 
         self.get_initial_state = jax.jit(self.get_initial_state)
@@ -229,19 +229,23 @@ class Puzzle(ABC):
         """Return a callable that renders a ``SolveConfig`` as an image array.
 
         The default implementation delegates to :meth:`get_img_parser` on
-        ``solve_config.GoalSpec``. Override when the goal is not one state.
+        ``solve_config.GoalSpec`` when :attr:`has_target` is ``True``. Puzzles
+        whose goal is a predicate rather than a single state raise
+        ``NotImplementedError`` unless they override this method.
 
         Returns:
-            A function ``(solve_config: SolveConfig) -> jnp.ndarray``.
+            A function ``(solve_config: SolveConfig) -> np.ndarray``.
         """
-        assert self.has_target, (
-            "You should redefine this function, because this function is only for target state"
-            f"has_target: {self.has_target}"
-            f"GoalSpec: {get_type_layout(self.GoalSpec).field_names}"
-        )
+        if not self.has_target:
+            puzzle_name = type(self).__name__
+
+            def unsupported(solve_config: "Puzzle.SolveConfig", **kwargs):
+                raise NotImplementedError(f"{puzzle_name} has no single goal image")
+
+            return unsupported
         imgparser_state = self.get_img_parser()
 
-        def imgparser(solve_config: "Puzzle.SolveConfig", **kwargs) -> jnp.ndarray:
+        def imgparser(solve_config: "Puzzle.SolveConfig", **kwargs):
             return imgparser_state(solve_config.GoalSpec, **kwargs)
 
         return imgparser

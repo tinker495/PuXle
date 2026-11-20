@@ -1,9 +1,11 @@
+import math
 import os
 from collections.abc import Callable
 from typing import Optional, Union
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pddl
 from pddl.core import Domain, Problem
 from xtructure import Xtructurable
@@ -164,9 +166,7 @@ class PDDL(Puzzle):
 
     def define_state_class(self) -> type[Xtructurable]:
         """Define state class with packed atoms."""
-        # Delegate to builder for clarity
-        str_parser = self.get_string_parser()
-        return build_state_class(self, self.num_atoms, self.init_state, str_parser)
+        return build_state_class(self, self.num_atoms, self.init_state)
 
     def define_instance_context_class(self) -> type[Xtructurable]:
         """Define grounded action masks used by transitions."""
@@ -252,44 +252,27 @@ class PDDL(Puzzle):
 
     def get_img_parser(self) -> Callable:
         """Return image parser for states. If a solve_config is provided, annotate goal atoms."""
+        num_atoms = self.num_atoms
+        grid_size = max(1, math.ceil(math.sqrt(num_atoms)))
 
         def img_parser(
-            state: "PDDL.State", solve_config: "PDDL.SolveConfig" = None, **kwargs
-        ):
-            # Create a simple visualization: grid showing atom values
-            atoms = state.unpacked_atoms
-
-            # Optional goal context
-            goal_mask = None
-            if solve_config is not None:
-                goal_mask = solve_config.GoalSpec.GoalMask
-
-            # Create a square grid
-            grid_size = int(jnp.ceil(jnp.sqrt(self.num_atoms)))
-            img = jnp.zeros((grid_size, grid_size, 3), dtype=jnp.float32)
-
-            for i in range(self.num_atoms):
-                row = i // grid_size
-                col = i % grid_size
-                if row < grid_size and col < grid_size:
-                    if goal_mask is not None and bool(goal_mask[i]):
-                        # Goal-aware coloring
-                        color = (
-                            jnp.array([0.0, 0.0, 1.0])  # blue for goal satisfied
-                            if atoms[i]
-                            else jnp.array(
-                                [1.0, 1.0, 0.0]
-                            )  # yellow for goal not yet satisfied
-                        )
-                    else:
-                        # Green for true atoms, red for false
-                        color = (
-                            jnp.array([0.0, 1.0, 0.0])
-                            if atoms[i]
-                            else jnp.array([1.0, 0.0, 0.0])
-                        )
-                    img = img.at[row, col].set(color)
-
+            state: "PDDL.State",
+            solve_config: Optional["PDDL.SolveConfig"] = None,
+            **kwargs,
+        ) -> np.ndarray:
+            atoms = np.asarray(jax.device_get(state).unpacked_atoms, dtype=bool)
+            goal_mask = (
+                np.asarray(jax.device_get(solve_config).GoalSpec.GoalMask, dtype=bool)
+                if solve_config is not None
+                else None
+            )
+            img = np.zeros((grid_size, grid_size, 3), dtype=np.uint8)
+            for i in range(num_atoms):
+                row, col = divmod(i, grid_size)
+                if goal_mask is not None and goal_mask[i]:
+                    img[row, col] = (0, 0, 255) if atoms[i] else (255, 255, 0)
+                else:
+                    img[row, col] = (0, 255, 0) if atoms[i] else (255, 0, 0)
             return img
 
         return img_parser
@@ -315,27 +298,17 @@ class PDDL(Puzzle):
 
     def get_solve_config_img_parser(self) -> Callable:
         """Return image parser for solve config with goal mask."""
+        num_atoms = self.num_atoms
+        grid_size = max(1, math.ceil(math.sqrt(num_atoms)))
 
-        def img_parser(solve_config: "PDDL.SolveConfig", **kwargs):
-            # Create a simple visualization of goal mask
-            goal_mask = solve_config.GoalSpec.GoalMask
-
-            # Create a square grid
-            grid_size = int(jnp.ceil(jnp.sqrt(self.num_atoms)))
-            img = jnp.zeros((grid_size, grid_size, 3), dtype=jnp.float32)
-
-            for i in range(self.num_atoms):
-                row = i // grid_size
-                col = i % grid_size
-                if row < grid_size and col < grid_size:
-                    # Blue for goal atoms, gray for non-goal
-                    color = (
-                        jnp.array([0.0, 0.0, 1.0])
-                        if goal_mask[i]
-                        else jnp.array([0.5, 0.5, 0.5])
-                    )
-                    img = img.at[row, col].set(color)
-
+        def img_parser(solve_config: "PDDL.SolveConfig", **kwargs) -> np.ndarray:
+            goal_mask = np.asarray(
+                jax.device_get(solve_config).GoalSpec.GoalMask, dtype=bool
+            )
+            img = np.zeros((grid_size, grid_size, 3), dtype=np.uint8)
+            for i in range(num_atoms):
+                row, col = divmod(i, grid_size)
+                img[row, col] = (0, 0, 255) if goal_mask[i] else (128, 128, 128)
             return img
 
         return img_parser

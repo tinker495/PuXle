@@ -41,15 +41,11 @@ class TopSpin(Puzzle):
 
     def define_state_class(self) -> type[Xtructurable]:
         """Defines the state class for TopSpin using xtructure."""
-        str_parser = self.get_string_parser()
 
         class State(Xtructurable):
             permutation: Annotated[
                 chex.Array, FieldDescriptor.tensor(dtype=TYPE, shape=(self.n_discs,))
             ]
-
-            def __str__(self, **kwargs):
-                return str_parser(self, **kwargs)
 
         return State
 
