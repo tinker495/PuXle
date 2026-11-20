@@ -180,6 +180,9 @@ neighbours, costs = puzzle.get_neighbours(config, state)
 Each changed search state costs one action. Blocked moves and moves from a
 won state have infinite cost. Games with random rules carry the generator
 state so a search can replay the same action sequence from the same seed.
+Search states store one bit per object and board cell. `state.board` exposes
+the boolean object layers with shape `(objects, rows, columns)`, with any
+batch dimensions first.
 
 ### PDDL Planning Domains
 **⚠️ Experimental Feature**: PDDL support in PuXle is currently experimental and under active development. While we strive for full STRIPS subset compliance, some edge cases may not be fully supported yet.

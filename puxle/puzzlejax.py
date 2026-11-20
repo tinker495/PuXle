@@ -2,12 +2,14 @@
 
 from importlib import import_module
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
+from xtructure.core.layout import get_type_layout
+from xtructure.core.layout.bitpack import pack_field
 
 from puxle.core.puzzle_base import Puzzle
 
@@ -89,12 +91,18 @@ class PuzzleJAX(Puzzle):
     def define_state_class(self):
         template = self._template
         render = self.get_string_parser()
+        board_shape = template.multihot_level.shape
+
+        def pack_board(board):
+            return pack_field(board, board_layout, board.shape[: -len(board_shape)])
 
         class State(Xtructurable):
-            board: Annotated[
+            board_bits: Annotated[
                 jax.Array,
-                FieldDescriptor.tensor(
-                    dtype=jnp.bool_, shape=template.multihot_level.shape
+                FieldDescriptor.packed_tensor(
+                    shape=board_shape,
+                    packed_bits=1,
+                    unpacked_dtype=jnp.bool_,
                 ),
             ]
             won: Annotated[jax.Array, FieldDescriptor.scalar(dtype=jnp.bool_)]
@@ -109,9 +117,58 @@ class PuzzleJAX(Puzzle):
                 ),
             ]
 
+            def __init__(
+                self,
+                board=None,
+                won=None,
+                rng=None,
+                view_bounds=None,
+                *,
+                board_bits=None,
+            ):
+                # Xtructure constructs batches with the storage field. Callers can
+                # still construct a state with the logical board.
+                if (board is None) == (board_bits is None):
+                    raise TypeError("Provide exactly one of board and board_bits")
+                if won is None or rng is None or view_bounds is None:
+                    raise TypeError("PuzzleJAX states require won, rng and view_bounds")
+                self.board_bits = (
+                    pack_board(board) if board_bits is None else board_bits
+                )
+                self.won = won
+                self.rng = rng
+                self.view_bounds = view_bounds
+                self.__post_init__()
+
+            def replace(self, **fields):
+                if "board" in fields:
+                    board = fields.pop("board")
+                    return super().replace(board_bits=pack_board(board), **fields)
+                return super().replace(**fields)
+
+            @classmethod
+            def from_unpacked(cls, *, shape=(), **fields):
+                if "board" in fields:
+                    board = fields.pop("board")
+                    return super().from_unpacked(
+                        shape=shape, board_bits=board, **fields
+                    )
+                return super().from_unpacked(shape=shape, **fields)
+
+            if TYPE_CHECKING:
+
+                @property
+                def board_bits_unpacked(self) -> jax.Array: ...
+
+            @property
+            def board(self) -> jax.Array:
+                """Boolean object layers, including any leading batch dimensions."""
+                return self.board_bits_unpacked
+
             def __str__(self, **kwargs):
                 return render(self, **kwargs)
 
+        board_layout = get_type_layout(State).packed_field_layout_for("board_bits")
         return State
 
     def define_goal_spec_class(self):
