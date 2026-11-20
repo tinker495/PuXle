@@ -1,6 +1,7 @@
 """Convert PuzzleScript games into PuXle puzzles using the PuzzleJAX engine."""
 
 from collections.abc import Callable
+from functools import lru_cache
 from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
@@ -16,8 +17,14 @@ from xtructure.core.layout.bitpack import pack_field
 from puxle.core.puzzle_base import Puzzle
 
 
-def _load_game(game: str | Path):
+@lru_cache(maxsize=1)
+def _grammar_parser(path: str, grammar: str):
     from lark import Lark
+
+    return Lark(grammar, source_path=path, start="ps_game", maybe_placeholders=False)
+
+
+def _load_game(game: str | Path):
     from lark.exceptions import LarkError
 
     paths = import_module("puzzlescript_jax.globals")
@@ -31,9 +38,8 @@ def _load_game(game: str | Path):
                 path = candidate
                 break
     source = path.read_text(encoding="utf-8-sig")
-    parser = Lark.open(
-        paths.LARK_SYNTAX_PATH, start="ps_game", maybe_placeholders=False
-    )
+    grammar = Path(paths.LARK_SYNTAX_PATH)
+    parser = _grammar_parser(str(grammar), grammar.read_text(encoding="utf-8"))
     try:
         parsed = parser.parse(preprocessing.preprocess_ps(source))
         # The corpus preprocessor normally drops malformed rules. A search puzzle

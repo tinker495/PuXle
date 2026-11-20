@@ -153,7 +153,8 @@ for i, cost in enumerate(costs):
 `puxle.PuzzleJAX` compiles a PuzzleScript file or a named PuzzleJAX game into
 a PuXle `Puzzle` for forward search. PuzzleJAX determines which PuzzleScript
 rules it can compile and provides the five input actions and win conditions.
-The default is level 0 of `sokoban_basic`.
+The default is level 0 of `sokoban_basic`. Repeated conversions reuse the
+compiled grammar and read each game's current source.
 
 From a PuXle checkout, install the runtime dependencies and make the upstream
 engine, grammar, and game catalog available. These commands select the
@@ -186,7 +187,7 @@ returns boolean object layers with shape `(objects, rows, columns)` and any
 batch dimensions first.
 
 For A* or other searches starting from the selected level, pass
-`compact=True`, for example `PuzzleJAX("Microban_I", level=87, compact=True)`.
+`compact=True`, for example `PuzzleJAX("path/to/game.txt", level=0, compact=True)`.
 This mode shares fixed cells and screen bounds across all search states. For
 rules that only move objects, it uses the level's walls and starting positions
 to exclude unreachable cells. When occupied positions take fewer bytes than
