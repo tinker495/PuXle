@@ -202,26 +202,6 @@ def build_compact_state(env, template, default_key, render):
             @property
             def payload_unpacked(self) -> jax.Array: ...
 
-        @classmethod
-        def from_engine(cls, state, won):
-            occupied = state.multihot_level.ravel()[selection]
-            if store_positions:
-                # top_k breaks ties by ascending index, so equal boards
-                # always produce the same key for the hash table.
-                _, positions = jax.lax.top_k(occupied.astype(jnp.int32), piece_count)
-                payload = positions.astype(position_dtype)
-                payload = payload.at[-1].set(
-                    payload[-1] | (won.astype(position_dtype) * win_mask)
-                )
-            else:
-                payload = jnp.concatenate((occupied, won[None]))
-            fields = {}
-            if random_rules:
-                fields["rng_key"] = state.rng
-            if scrolling:
-                fields["origin"] = state.view_bounds[::2].astype(coord_dtype)
-            return cls.from_unpacked(payload=payload, **fields)
-
         @property
         def rng(self):
             if random_rules:
@@ -271,4 +251,23 @@ def build_compact_state(env, template, default_key, render):
         def __str__(self, **kwargs):
             return render(self, **kwargs)
 
-    return State, action_is_noop
+    def from_engine(state, won):
+        occupied = state.multihot_level.ravel()[selection]
+        if store_positions:
+            # top_k breaks ties by ascending index, so equal boards
+            # always produce the same key for the hash table.
+            _, positions = jax.lax.top_k(occupied.astype(jnp.int32), piece_count)
+            payload = positions.astype(position_dtype)
+            payload = payload.at[-1].set(
+                payload[-1] | (won.astype(position_dtype) * win_mask)
+            )
+        else:
+            payload = jnp.concatenate((occupied, won[None]))
+        fields = {}
+        if random_rules:
+            fields["rng_key"] = state.rng
+        if scrolling:
+            fields["origin"] = state.view_bounds[::2].astype(coord_dtype)
+        return State.from_unpacked(payload=payload, **fields)
+
+    return State, from_engine, action_is_noop

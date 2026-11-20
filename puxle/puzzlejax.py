@@ -1,5 +1,6 @@
 """Convert PuzzleScript games into PuXle puzzles using the PuzzleJAX engine."""
 
+from collections.abc import Callable
 from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
@@ -91,6 +92,7 @@ class PuzzleJAX(Puzzle):
         self._default_key = jax.random.PRNGKey(0)
         _, self._template = self.env.reset(self._default_key, self.params)
         self.compact = compact
+        self._encode_compact: Callable[..., Xtructurable] | None = None
         self._action_is_noop = False
         super().__init__()
 
@@ -100,8 +102,8 @@ class PuzzleJAX(Puzzle):
         if self.compact:
             from puxle._puzzlejax_compact import build_compact_state
 
-            state_class, self._action_is_noop = build_compact_state(
-                self.env, template, self._default_key, render
+            state_class, self._encode_compact, self._action_is_noop = (
+                build_compact_state(self.env, template, self._default_key, render)
             )
             return state_class
         board_shape = template.multihot_level.shape
@@ -194,8 +196,8 @@ class PuzzleJAX(Puzzle):
         return self.SolveConfig.default()
 
     def _search_state(self, state, won):
-        if self.compact:
-            return self.State.from_engine(state, won)
+        if self._encode_compact is not None:
+            return self._encode_compact(state, won)
         # Reward, heuristic and elapsed step counters do not affect the rules.
         # Deterministic boards reached by different paths must compare equal.
         return self.State(
