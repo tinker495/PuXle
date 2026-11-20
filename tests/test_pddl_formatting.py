@@ -1,12 +1,12 @@
 """Tests for PDDL formatting utilities.
 
-Tests the pretty-printing utilities in puxle.pddls.formatting without requiring
+Tests the pretty-printing utilities in puxle.puzzles.adapters.pddl.formatting without requiring
 actual PDDL parsing or JAX dependencies where possible.
 """
 
 from unittest.mock import Mock
 
-from puxle.pddls.formatting import (
+from puxle.puzzles.adapters.pddl.formatting import (
     action_to_string,
     build_label_color_maps,
     split_atom,

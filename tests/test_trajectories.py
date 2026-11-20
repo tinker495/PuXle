@@ -11,7 +11,7 @@ from puxle.core.trajectory import (
     create_hindsight_target_triangular_shuffled_path,
     create_target_shuffled_path,
 )
-from puxle.puzzles.cayley_puzzle import CayleyPuzzle
+from puxle.puzzles.adapters.cayley import CayleyPuzzle
 from puxle.puzzles.lightsout import LightsOut
 from puxle.puzzles.rubikscube import RubiksCube
 from puxle.puzzles.slidepuzzle import SlidePuzzle

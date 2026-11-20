@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from puxle.pddls.pddl import PDDL
+from puxle.puzzles.adapters.pddl import PDDL
 from tests.pddls.data_specs import DATA_SPECS
 
 

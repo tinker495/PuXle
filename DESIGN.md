@@ -101,8 +101,8 @@ Source of truth:
 | --- | --- |
 | Color helpers, canvas size | `puxle/utils/util.py` (`colored_str`, `coloring_str`, `ANSI_COLOR_CODES`, `IMG_SIZE`) |
 | Shared frame and action labels | `puxle/core/puzzle_base.py` (`_grid_visualize_format`, `_directional_action_to_string`, `_DIRECTIONAL_LABELS`) |
-| Per-puzzle parsers | `puxle/puzzles/*.py` `get_string_parser`, `get_img_parser`, `action_to_string` |
-| PDDL text | `puxle/pddls/formatting.py` |
+| Per-puzzle parsers | `puxle/puzzles/*.py`, `puxle/puzzles/adapters/` (`get_string_parser`, `get_img_parser`, `action_to_string`) |
+| PDDL text | `puxle/puzzles/adapters/pddl/formatting.py` |
 | Shared state render binding & RGB helpers | `puxle/render/state_renderer.py` (`attach_state_renderer`, `normalize_rgb_image`, `img_to_colored_str`) |
 
 ## Colors
@@ -133,7 +133,7 @@ Palettes that appear only in prose:
 | --- | --- | --- | --- |
 | DotKnot dots | 24-bit red, green, yellow, blue | color index of the dot pair | `puxle/puzzles/dotknot.py` `COLOR_MAP` |
 | Size cycle | `red, green, yellow, blue, magenta, cyan` | Hanoi `(size - 1) % 6`, Pancake `size % 6` | `puxle/puzzles/hanoi.py` / `puxle/puzzles/pancake.py` `get_color` |
-| PDDL labels | `cyan, magenta, green, yellow, blue, white, red` | action/predicate names in sorted order, cycling; fallback `white` | `puxle/pddls/formatting.py` `build_label_color_maps` |
+| PDDL labels | `cyan, magenta, green, yellow, blue, white, red` | action/predicate names in sorted order, cycling; fallback `white` | `puxle/puzzles/adapters/pddl/formatting.py` `build_label_color_maps` |
 | World-model & adapter RGB preview | 24-bit per pixel | each image pixel drawn as `██` | `puxle/render/state_renderer.py` `img_to_colored_str` |
 
 ## Typography

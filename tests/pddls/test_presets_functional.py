@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from xtructure.core.layout.bitpack import to_uint8
 
-from puxle.pddls.pddl import PDDL
+from puxle.puzzles.adapters.pddl import PDDL
 
 
 def _hash_state(state) -> bytes:

@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from puxle.pddls.pddl import PDDL
+from puxle.puzzles.adapters.pddl import PDDL
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "pddl_data" / "simple_move"
 DOMAIN = DATA_DIR / "domain.pddl"

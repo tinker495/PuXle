@@ -5,7 +5,7 @@ PuXle ships an adapter that consumes [cayleypy](https://github.com/cayleypy/cayl
 The bridge has two layers:
 
 1. The adapter class `CayleyPuzzle(Puzzle)` — wraps a single `CayleyGraphDef` instance.
-2. A small `puxle.puzzles.cayley_subclasses` module — exposes no-arg subclasses of `CayleyPuzzle` for JAxtar registry entries.
+2. A small `puxle.puzzles.adapters.cayley_subclasses` module — exposes no-arg subclasses of `CayleyPuzzle` for JAxtar registry entries.
 
 ## Installation
 
@@ -89,6 +89,6 @@ Beyond the boundaries, an informed heuristic (learned or pattern-database) is ne
 
 ## See also
 
-- Adapter source: `puxle/puzzles/cayley_puzzle.py`
-- Meta-module source: `puxle/puzzles/cayley_subclasses.py`
+- Adapter source: `puxle/puzzles/adapters/cayley.py`
+- Meta-module source: `puxle/puzzles/adapters/cayley_subclasses.py`
 - cayleypy upstream: [https://github.com/cayleypy/cayleypy](https://github.com/cayleypy/cayleypy)
