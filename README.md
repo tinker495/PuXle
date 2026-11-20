@@ -31,22 +31,19 @@ Full API documentation is automatically built and deployed to **[GitHub Pages](h
 
 ## 📦 Installation
 
-Add the latest GitHub revision to a uv project:
+Add the latest GitHub revision to a uv project (all runtime features — classic
+puzzles, PDDL, Cayley, world models, and visualization — are included by
+default):
 
 ```bash
 uv add "puxle @ git+https://github.com/tinker495/PuXle.git"
 ```
 
-Optional extras (pyproject-managed):
+Optional hardware/docs extras:
 
 ```bash
-uv add "puxle[docs,world-model] @ git+https://github.com/tinker495/PuXle.git"
-uv add "puxle[visualization] @ git+https://github.com/tinker495/PuXle.git"
 uv add "puxle[cuda] @ git+https://github.com/tinker495/PuXle.git"
-uv add "puxle[cayley] @ git+https://github.com/tinker495/PuXle.git"
-
-# Combine extras
-uv add "puxle[docs,visualization,cuda,cayley,world-model] @ git+https://github.com/tinker495/PuXle.git"
+uv add "puxle[docs] @ git+https://github.com/tinker495/PuXle.git"
 ```
 
 For development from a checkout:
@@ -54,7 +51,7 @@ For development from a checkout:
 ```bash
 git clone https://github.com/tinker495/PuXle.git
 cd PuXle
-uv sync --all-extras
+uv sync --group dev
 ```
 
 Puzzle utilities are available through the package CLI:
@@ -378,15 +375,15 @@ puzzle = CayleyTopSpin8K4(num_shuffle=20)
 Use `CayleyPuzzle.from_cayleypy_factory(...)` directly for any other cayleypy
 graph.
 
-### Optional dependency
+### Dependency
 
-Install the cayleypy extra to enable the bridge:
+`cayleypy` is included in PuXle's default dependencies:
 
 ```bash
-uv add "puxle[cayley] @ git+https://github.com/tinker495/PuXle.git"
+uv add "puxle @ git+https://github.com/tinker495/PuXle.git"
 ```
 
-The adapter module itself imports cleanly without cayleypy installed; construction raises `ImportError` naming `[cayley]`. See [`docs/tutorials/cayley_bridge.md`](docs/tutorials/cayley_bridge.md) for a longer walk-through of the adapter API, registry subclasses, and empirical JAxtar A\* benchmarks across the cayleypy catalog.
+See [`docs/tutorials/cayley_bridge.md`](docs/tutorials/cayley_bridge.md) for a longer walk-through of the adapter API, registry subclasses, and empirical JAxtar A\* benchmarks across the cayleypy catalog.
 
 ## See Also
 

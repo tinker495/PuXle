@@ -10,10 +10,10 @@ The bridge has two layers:
 ## Installation
 
 ```bash
-uv add "puxle[cayley] @ git+https://github.com/tinker495/PuXle.git"
+uv add "puxle @ git+https://github.com/tinker495/PuXle.git"
 ```
 
-The PuXle codebase imports cleanly without cayleypy installed; construction raises `ImportError` naming the extra.
+`cayleypy` is included in PuXle's default dependencies. If imported in an environment where `cayleypy` is absent, construction raises `ImportError`.
 
 ## 1. The adapter class
 

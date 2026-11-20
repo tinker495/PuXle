@@ -1,8 +1,6 @@
 World Models (``puxle.world_model``)
 =====================================
 
-Install the optional dependencies with ``puxle[world-model]``.
-
 Downloaded artifacts live below ``PUXLE_HOME/world_model``. When ``PUXLE_HOME``
 is unset, PuXle follows ``XDG_CACHE_HOME`` and then ``~/.cache/puxle``.
 
