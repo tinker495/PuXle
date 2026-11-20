@@ -153,7 +153,9 @@ class PuzzleJAX(Puzzle):
         _, result, _, _, _ = self.env.step_env(
             state.rng, self._engine_state(state), action, self.params
         )
-        successor = self._search_state(result, result.win)
+        # A restart discards the turn. PuzzleJAX can retain a win from a
+        # transient board even after restoring the initial level.
+        successor = self._search_state(result, result.win & ~result.restart)
         return successor, jnp.where((successor != state) & ~state.won, 1.0, jnp.inf)
 
     def is_solved(self, solve_config, state):
