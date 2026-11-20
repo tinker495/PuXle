@@ -517,3 +517,36 @@ def test_cayleypy_parity():
         pytest.xfail(
             reason=f"cayleypy MATRIX parity: {e}",
         )
+
+
+# ---------------------------------------------------------------------------
+# Test 13: Unified constructor, CayleyPresets, and list_sources()
+# ---------------------------------------------------------------------------
+
+
+def test_unified_constructor_presets_and_list_sources():
+    """Author: tinker495.
+
+    Why: Verifies the unified ``CayleyPuzzle(graph, *args, **kwargs)``
+    constructor contract, ``CayleyPresets`` unpacking, and live
+    ``list_sources()`` discovery after removing ``from_cayleypy_factory``
+    and the 5 legacy ``Cayley*`` subclasses.
+    """
+    pytest.importorskip("cayleypy")
+
+    from puxle import CayleyPresets, CayleyPuzzle
+
+    sources = CayleyPuzzle.list_sources()
+    assert set(sources.keys()) == {"PermutationGroups", "MatrixGroups", "Puzzles"}
+    assert "pancake" in sources["PermutationGroups"]
+    assert "top_spin" in sources["PermutationGroups"]
+
+    p_pos = CayleyPuzzle("pancake", 7, num_shuffle=4)
+    p_kw = CayleyPuzzle(**CayleyPresets.PANCAKE_7, num_shuffle=4)
+    assert p_pos.action_size == p_kw.action_size
+
+    p_topspin = CayleyPuzzle(**CayleyPresets.TOP_SPIN_8_K4)
+    assert p_topspin.action_size > 0
+
+    with pytest.raises(ValueError, match="cayleypy registry has no entry"):
+        CayleyPuzzle("definitely_nonexistent_graph_name")

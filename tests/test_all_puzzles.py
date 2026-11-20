@@ -597,13 +597,13 @@ def _make_cayley_puzzle():
     candidates = [
         ("cyclic", (8,), {}),
         ("cyclic_coxeter", (8,), {}),
-        ("top_spin", (8,), {"factory_kwargs": {"k": 4}}),
+        ("top_spin", (8,), {"k": 4}),
         ("pancake", (5,), {}),
     ]
     errors = []
     for name, args, kwargs in candidates:
         try:
-            return CayleyPuzzle.from_cayleypy_factory(name, *args, **kwargs)
+            return CayleyPuzzle(name, *args, **kwargs)
         except ValueError as exc:
             errors.append(str(exc))
     pytest.skip("No supported cayleypy registry entry available: " + "; ".join(errors))

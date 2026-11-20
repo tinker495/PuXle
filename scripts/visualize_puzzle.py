@@ -33,14 +33,6 @@ def _save_image(array: np.ndarray, path: Path) -> Path:
     return path
 
 
-def _format_state(puzzle: Puzzle, state: Puzzle.State) -> str:
-    parser = puzzle.get_string_parser()
-    try:
-        return parser(state)
-    except Exception:
-        return str(state)
-
-
 def _select_state(puzzle: Puzzle, state_tree: Puzzle.State, index: int) -> Puzzle.State:
     selected = tree_util.tree_map(lambda x: x[index], state_tree)
     if isinstance(selected, puzzle.State):
@@ -89,7 +81,7 @@ def visualize_puzzle(
     neighbours, costs = puzzle.get_neighbours(solve_config, init_state, filled=True)
 
     print("\nInitial State:")
-    print(_format_state(puzzle, init_state))
+    print(init_state.str(solve_config=solve_config))
     print("\nAction overview:")
 
     action_labels = [puzzle.action_to_string(i) for i in range(puzzle.action_size)]
@@ -100,7 +92,7 @@ def visualize_puzzle(
         cost_repr = "∞" if not finite_mask[idx] else f"{np_costs[idx]:.3f}"
         print(f"[{idx:02d}] {label:20s} cost={cost_repr}")
         neighbour_state = _select_state(puzzle, neighbours, idx)
-        print(_format_state(puzzle, neighbour_state))
+        print(neighbour_state.str(solve_config=solve_config))
         print("-")
 
     if img:

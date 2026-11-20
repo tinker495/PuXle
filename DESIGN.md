@@ -102,7 +102,9 @@ Source of truth:
 | Color helpers, canvas size | `puxle/utils/util.py` (`colored_str`, `coloring_str`, `ANSI_COLOR_CODES`, `IMG_SIZE`) |
 | Shared frame and action labels | `puxle/core/puzzle_base.py` (`_grid_visualize_format`, `_directional_action_to_string`, `_DIRECTIONAL_LABELS`) |
 | Per-puzzle parsers | `puxle/puzzles/*.py`, `puxle/puzzles/adapters/` (`get_string_parser`, `get_img_parser`, `action_to_string`) |
-| PDDL text | `puxle/puzzles/adapters/pddl/formatting.py` |
+| PDDL text and domain diagrams | `puxle/puzzles/adapters/pddl/formatting.py` |
+| Cayley family diagrams and action labels | `puxle/puzzles/adapters/cayley/formatting.py` |
+| Terminal frames, visible widths and wrapping | `puxle/render/text.py` |
 | Shared state render binding & RGB helpers | `puxle/render/state_renderer.py` (`attach_state_renderer`, `normalize_rgb_image`, `img_to_colored_str`) |
 
 ## Colors
@@ -147,13 +149,14 @@ Glyph vocabulary:
 | --- | --- | --- |
 | `■` | solid thing: wall, lit light, box, sticker, path segment, visited city | Maze, Room, Sokoban, Lights Out, Rubik's Cube, DotKnot, TSP |
 | `□` | unlit light | Lights Out |
-| `●` | agent or dot endpoint | Maze, Room, Sokoban, DotKnot |
+| `●` | agent, dot endpoint, or carrier occupant | Maze, Room, Sokoban, DotKnot, PDDL (Gripper) |
 | `x` | target cell | Maze, Room, Sokoban |
 | `ⓧ` | player standing on a box target | Sokoban |
 | `☐` / `↓` | unvisited city / current city marker | TSP |
-| `=` | disk or pancake bar, width `2·size − 1` | Hanoi, Pancake |
+| `=` / `~` | disk or pancake bar (`~` for burnt orientation), width `2·size − 1` | Hanoi, Pancake, Cayley |
 | `\|`, `-` | peg, base | Hanoi |
-| `[ ... ]` | turnstile window | TopSpin |
+| `[ ... ]` | turnstile window or stacked block | TopSpin, Cayley, PDDL (Blocksworld) |
+| `⟨ ... ⟩` | shared intersection slot on interlocking rings | Cayley (Hungarian Rings) |
 | `✓` / `✗` | goal atom true / false | PDDL |
 | `1`–`9`, `A`–`Z` | slide tiles (10 → `A`, `chr(x + 55)`); blank is a space | Slide Puzzle |
 | `0`–`9`, `a`–`z`, `A`–`Z` | action keys | Lights Out |
@@ -166,6 +169,7 @@ Action labels (`action_to_string`):
 - Others use short sentence-case phrases: `Move disk from peg 1 to peg 2`, `Flip at position 1`,
   `Shift Left (<<)`, `Reverse Turnstile (R4)`.
 - TSP uses two-digit city ids (`03`).
+- Cayley uses the graph's `generator_names` (appending `'` for synthesized inverses, or `Shift Left (<<)` / `Shift Right (>>)` / `Reverse Turnstile (Rk)` for ring-window permutations), falling back to `<graph>.gen[i]` only when generators are anonymous.
 - PDDL uses `name params`, with the name colored; `colored=False` gives `(name params)`.
 - The base-class fallback is `action {i}`.
 
@@ -190,12 +194,9 @@ Numbers are fixed-width where they line up: TopSpin `{:2d}`, Pancake rows `NN:SS
     and `Peg i` labels.
   - Pancake draws one line per pancake with its bar centered in `2·size` columns, above
     `Plate ┗━…━┛`.
-- Goal context: parsers that accept `solve_config=` overlay goal information on the state.
-  Sokoban marks targets and the goal player cell, Maze and Room mark the target, PDDL annotates
-  goal atoms with `✓`/`✗` and lists them first. Rubik's Cube has `use_color_overlay` for numbered
-  (non-color-embedded) cubes.
-- PDDL text is a list, not a board: comma-separated true atoms, at most `max_show` (12) of them,
-  plus optional `header`, `raw`, `show_summary` and `show_more` lines.
+- Parsers that accept `solve_config=` can show progress. Sokoban marks targets and the goal
+  player cell. Maze and Room mark the target. PDDL checks each displayed goal and Cayley
+  highlights matching positions. Rubik's Cube has `use_color_overlay` for numbered cubes.
 - Parsers render on the host: `jax.device_get(state)` once, then loop over NumPy. Reading a
   device array cell by cell syncs once per character.
 
@@ -211,6 +212,149 @@ Images:
   `size=(width, height)`. JAxtar passes `idx`, `path` and `solve_config` when it renders solution
   frames. A batched `img()` renders each item and stacks the results (`attach_state_renderer`).
 
+## External adapter text
+
+External adapters (`CayleyPuzzle`, `PDDL`) follow two rendering rules:
+
+1. **Structural isomorphism with manual native puzzles**: When an adapted problem belongs to a
+   puzzle family that has a manually authored PuXle renderer (such as Pancake Sorting, TopSpin,
+   Rubik's Cube, Slide Puzzle tile grids, or Hanoi/Blocksworld towers), the adapter renders the
+   same physical diagram rather than a generic array or fact dump.
+2. **Single-cell geometry and domain-aware synthesis**: When an adapted group or planning domain
+   has custom mechanics, the renderer synthesizes a diagram from the problem's structure
+   (generator orbits in Cayley, fluent vs. static predicates in PDDL) while preserving PuXle's
+   heavy box-drawing frames and monochrome readability.
+
+The same rules apply to catalog presets and user-supplied inputs. Both `puxle human-play` and
+`scripts/visualize_puzzle.py` pass the current solve config to the bound state renderer.
+The examples below show the terminal text with color removed.
+
+### Cayley
+
+`CayleyPuzzle` inspects the generators and central state at construction time and dispatches to
+the matching native puzzle diagram:
+
+- **Pancake and prefix-reversal graphs** (`pancake`, `cubic_pancake`, or any permutation graph
+  generated by prefix reversals) render centered `=` bars above `Plate ┗━…━┛` using the
+  `PancakeSorting` size palette. **Burnt / signed pancake graphs** (`burnt_pancake`,
+  `signed_reversals`) render `+` (`=`) for unburnt and `-` (`~`) for burnt pancakes on the plate:
+
+```text
+01:04 -   =========
+02:01 -      ===
+03:00 -       =
+04:03 -    =======
+05:05 -  ===========
+06:02 -     =====
+07:06 - =============
+Plate ┗━━━━━━━━━━━━━━━┛
+3/7 in place
+```
+
+- **TopSpin and ring-window graphs** (`top_spin`, `lrx`, `lx`, or cyclic ring shifts combined with
+  a prefix window operation) render `[turnstile] rest` on a single line like `TopSpin`:
+
+```text
+[ 6  3  5  2]  4  7  0  1
+```
+
+- **Rubik's Cube graphs** (`rubik_cube`) render the 6-face unfolded net (`up`, `left`, `front`,
+  `right`, `back`, `down`) and 24-bit color legend identical to `RubiksCube` (using `■` for 6-color
+  states and colored sticker IDs for unique-tile states).
+- **Polyhedral and ring puzzles**: `mini_pyramorphix` (24 stickers) and `pyraminx` (36 stickers)
+  render a 2×2 grid of tetrahedral face/tip panels; `hungarian_rings` renders `Left` and `Right`
+  ring rows with shared intersections marked `⟨v⟩`; `globe_puzzle` renders a framed
+  `(a + 1) × 2b` latitude/meridian grid (`r0..r_a` by `f0..f_{2b-1}`).
+- **General permutation graphs** (`coxeter`, `all_transpositions`, `stars`, etc.) render a
+  `SlidePuzzle`-style heavy box-drawing tile grid (`┏━━━┳━━━…┓`), up to 8 tiles per row:
+
+```text
+coxeter-8
+┏━━━┳━━━┳━━━┳━━━┳━━━┳━━━┳━━━┳━━━┓
+┃ 4 ┃ 5 ┃ 6 ┃ 0 ┃ 3 ┃ 7 ┃ 1 ┃ 2 ┃
+┗━━━┻━━━┻━━━┻━━━┻━━━┻━━━┻━━━┻━━━┛
+0/8 in place
+```
+
+- **Matrix groups** (`heisenberg`, `special_linear_*`) render the `m × n` state in row-major order
+  inside a titled frame `┏━ <graph> · mod <p> ━┓`:
+
+```text
+┏━ heisenberg-3%5-ic · mod 5 ━┓
+┃ 1  0  4                     ┃
+┃ 0  1  4                     ┃
+┃ 0  0  1                     ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+7/9 in place
+```
+
+State and target use the same layout. With a solve config, green entries match their target,
+yellow entries differ, and the footer reports `k/N in place`.
+
+### PDDL
+
+`PDDL` inspects the domain's predicate vocabulary and action effects to choose between a physical
+domain diagram and a fluent-prioritized relational board:
+
+- **Blocksworld (`ontable` + `on`)**: Reconstructs the gripper hand (`Hand   [empty]` or
+  `Hand   [a]`) and vertical block towers `[a]` stacked on `┗━┛━━━┗━┛  Table` (analogous to
+  `TowerOfHanoi` and `PancakeSorting`). With a solve config, blocks whose `(on x y)` goal support
+  is satisfied are green and pending goal blocks are yellow. Printing the solve config alone draws
+  the target `Goal Towers` above the goal list:
+
+```text
+┏━━━━ Blocksworld · 9 facts ━━━━┓
+┃ Hand   [empty]                ┃
+┃                               ┃
+┃  [a]   [b]   [c]   [d]        ┃
+┃  ┗━┛━━━┗━┛━━━┗━┛━━━┗━┛  Table ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┏━ Goals · 0/1 ━┓
+┃ on  ✗ (a, b)  ┃
+┗━━━━━━━━━━━━━━━┛
+```
+
+- **Gripper (`at-robby` + `at` + `free` + `carry`)**: Displays the robot's grippers
+  (`[left: empty]  [right: ball1]`) and one row per room showing `● robby` and balls annotated
+  with their goal room (`● ball1 → room2`) or completion mark (`● ball1 ✓`):
+
+```text
+┏━━━━━━━━━━━━━━━━ Gripper · 5 facts ━━━━━━━━━━━━━━━━━┓
+┃ Grippers  [left: empty]  [right: empty]            ┃
+┃ room1  ● robby   ● ball1 → room2   ● ball2 → room2 ┃
+┃ room2  ·                                           ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┏━━━━━━━━━━━━━━ Goals · 0/2 ━━━━━━━━━━━━━━┓
+┃ at  ✗ ball1 → room2  ·  ✗ ball2 → room2 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+- **General planning domains (`logistics`, `rovers`, `satellite`, etc.)**: Separates dynamic
+  fluents (predicates added or deleted by actions) from static world predicates, formats binary
+  location/orientation relations with `→` (`pkg1 → l2`, `r1 → w1`, `s1 → d1`), lists dynamic
+  predicates at the top of the panel, fills any remaining `max_show` slots (default 12) with
+  compact static predicates first, and summarizes bulky static graph topology (`Static  air ×8  ·  road ×4`)
+  in a footer line so moving objects are never crowded out:
+
+```text
+┏━━━━━━━━━━━━━━━━━ Facts · 22 ━━━━━━━━━━━━━━━━━━┓
+┃ at-pkg   pkg1 → l2  ·  pkg2 → l1              ┃
+┃ at-veh   p1 → a1  ·  t1 → l1                  ┃
+┃ in-city  (a1, c1)  ·  (a2, c2)  ·  (l1, c1)   ┃
+┃          (l2, c2)                             ┃
+┃ is-plane p1                                   ┃
+┃ is-truck t1                                   ┃
+┃ Static   air ×8  ·  road ×4                   ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┏━━━━━━━━━━━━ Goals · 0/2 ━━━━━━━━━━━━┓
+┃ at-pkg  ✗ pkg1 → a2  ·  ✗ pkg2 → a1 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+The second panel checks each displayed goal (`✓` / `✗`) and counts progress across the full goal
+mask, giving unsatisfied conditions priority when truncated. The `header`, `raw`, `show_summary`,
+and `show_more` parser options retain their diagnostic details.
+
 ## Elevation & Depth
 
 Flat. The frame is the only container. Emphasis comes only from the color of the pieces. There
@@ -224,8 +368,7 @@ are no background colors or shading in text renders.
   visually distinct.
 - Titles sit in the top border, centered and padded with `━`
   (`"Board".center(w, "━")`, `┏━━up━━━┓`).
-- Text-only renders have no frame: TopSpin, TSP, PDDL, Cayley puzzles (`<graph>: v0 v1 ...`) and
-  the world-model latent line (`latent: 0x...[N bytes]`).
+- TopSpin, TSP and the world-model latent line (`latent: 0x...[N bytes]`) use unframed text.
 
 ## Components
 
@@ -241,8 +384,8 @@ are no background colors or shading in text renders.
 | Pancake | indexed bars, `Plate` base | same parser | sentence | light grey |
 | TopSpin | `[turnstile] rest` numbers | same parser | sentence | light grey |
 | TSP | `↓` marker over `[■ ☐ ...]` | `TSP SolveConfig: N points, start at i` | two-digit ids | white canvas, polyline tour, status-colored points |
-| PDDL | atom list with `✓`/`✗` | `Goal atoms: ...` | colored `name params` | one pixel per atom (`uint8` RGB) |
-| Cayley | `<graph>: values` | same parser | `<graph>.gen[i]` | `1 × N` grayscale strip |
+| PDDL | Blocksworld towers, Gripper rooms, or fluent/static relational board + goal checklist | target towers or grouped required facts | colored `name params` | one pixel per atom (`uint8` RGB) |
+| Cayley | native family diagram (Pancake stack, TopSpin ring, Rubik net, tetrahedral/ring/globe panels, boxed tile grid, or modular matrix) | same layout | generator name (`R1`, `L`, `U`, `Shift Left (<<)`, `<graph>.gen[i]`) | `1 × N` grayscale strip |
 | World models | optional `██` pixel preview + `latent:` line | image-based | arrows (Sokoban) | decoded image |
 
 Shared parts: `board-frame` / `board-cell` (`_grid_visualize_format`), directional labels
@@ -251,13 +394,16 @@ Shared parts: `board-frame` / `board-cell` (`_grid_visualize_format`), direction
 
 ## Do's and Don'ts
 
-- Do build grid boards with `Puzzle._grid_visualize_format`, one glyph plus a space per cell.
-- Do color only with `colored_str` / `coloring_str`, one glyph at a time, so every glyph resets.
+- Use `Puzzle._grid_visualize_format` for fixed square grids and `text_frame` for rectangular
+  viewports, variable-width tiles and labeled adapter panels.
+- Use `colored_str` or `coloring_str` for each piece, number or predicate label so its color
+  resets before the next column.
 - Don't emit anything but SGR color codes. Cursor movement, clears and background colors break
   JAxtar's `Text.from_ansi` layout and its log capture.
 - Don't import rich or termcolor. The text surface stays dependency-free.
 - Do render the goal with the state parser (the default `get_solve_config_string_parser` reads
-  `GoalSpec`). Override it only when the goal is not a state (DotKnot, TSP, PDDL).
+  `GoalSpec`). Puzzles with a goal predicate supply their own descriptions, including DotKnot, TSP
+  and PDDL.
 - Do call `jax.device_get(...)` once before any per-cell loop.
 - Do use `_directional_action_to_string` for four-way moves.
 - Do reuse the roles for a new grid puzzle: red for pending, green for done, yellow for movable,
@@ -276,6 +422,6 @@ Current code that does not follow the rules above. Don't copy these patterns.
 - The size palettes are offset differently: disk 1 is red in Hanoi, pancake 1 is green in Pancake.
 - Maze and Room called without `solve_config` fall back to `Maze State: Player at position ...`
   instead of a board.
-- The PDDL image (one pixel per atom) and the Cayley image (a `1 × N` strip) are not `IMG_SIZE`
-  canvases by default; pass `size=(width, height)` to `state.img(...)` when a uniform output size
-  is needed.
+- The PDDL image (one pixel per atom) and Cayley image (a `1 × N` strip)
+  are not `IMG_SIZE` canvases by default; pass `size=(width, height)` to `state.img(...)` when a
+  uniform output size is needed.

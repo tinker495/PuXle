@@ -4,8 +4,8 @@ PuXle ships an adapter that consumes [cayleypy](https://github.com/cayleypy/cayl
 
 The bridge has two layers:
 
-1. The adapter class `CayleyPuzzle(Puzzle)` — wraps a single `CayleyGraphDef` instance.
-2. A small `puxle.puzzles.adapters.cayley_subclasses` module — exposes no-arg subclasses of `CayleyPuzzle` for JAxtar registry entries.
+1. The adapter class `CayleyPuzzle(Puzzle)` — accepts a cayleypy factory name (e.g. `"top_spin"`) or a `CayleyGraphDef` instance directly.
+2. Curated constructor kwargs in `CayleyPresets` (`puxle.puzzles.adapters.cayley.presets`) and live discovery via `CayleyPuzzle.list_sources()`.
 
 ## Installation
 
@@ -40,31 +40,17 @@ neighbours, costs = puzzle.get_neighbours(solve_config, initial_state)
 - `num_shuffle: int = 100` — number of random actions applied in `get_initial_state` (the scrambler walks from the goal).
 - `ensure_inverse_closed: bool = True` — when `True`, the adapter mirrors cayleypy's `with_inverted_generators` so the puzzle is fully reversible (and JAxtar's `bi_*` algorithms work). Setting `False` keeps the original generator set; if it is not naturally closed under inversion the puzzle becomes non-reversible, `inverse_action_map` returns `None`, and a `RuntimeWarning` is emitted naming `bi_astar`/`bi_qstar` as unusable.
 
-### Convenience factory
+### Direct factory lookup & curated presets
 
-The classmethod `CayleyPuzzle.from_cayleypy_factory(name, *args, **kwargs)` looks up `name` in `PermutationGroups → MatrixGroups → Puzzles` (first-wins) and forwards args:
-
-```python
-puzzle = CayleyPuzzle.from_cayleypy_factory("top_spin", 8, k=4)
-```
-
-## 2. Registry subclasses
-
-Some downstream registries (e.g. JAxtar's `config/puzzle_registry.py`) expect no-arg `Puzzle` classes. PuXle exposes only the registry subclasses it actually uses:
+Passing a string as `graph` looks up the name in `PermutationGroups → MatrixGroups → Puzzles` (first-wins) and forwards positional/keyword factory arguments:
 
 ```python
-from puxle import (
-    CayleyPancake7,            # PermutationGroups.pancake(7)
-    CayleyPancake8,            # PermutationGroups.pancake(8)
-    CayleyLRX8,                # PermutationGroups.lrx(8)
-    CayleyTopSpin8K4,          # PermutationGroups.top_spin(8, k=4)
-    CayleyCoxeter8,            # PermutationGroups.coxeter(8)
-)
+from puxle import CayleyPresets, CayleyPuzzle
 
-puzzle = CayleyTopSpin8K4(num_shuffle=20)
+puzzle = CayleyPuzzle("top_spin", 8, k=4, num_shuffle=20)
+puzzle = CayleyPuzzle(**CayleyPresets.TOP_SPIN_8_K4, num_shuffle=20)
+sources = CayleyPuzzle.list_sources()
 ```
-
-Use `CayleyPuzzle.from_cayleypy_factory(...)` directly for any other cayleypy graph.
 
 ## Using the bridge with JAxtar
 
@@ -89,6 +75,6 @@ Beyond the boundaries, an informed heuristic (learned or pattern-database) is ne
 
 ## See also
 
-- Adapter source: `puxle/puzzles/adapters/cayley.py`
-- Meta-module source: `puxle/puzzles/adapters/cayley_subclasses.py`
+- Adapter source: `puxle/puzzles/adapters/cayley/cayley.py`
+- Presets source: `puxle/puzzles/adapters/cayley/presets.py`
 - cayleypy upstream: [https://github.com/cayleypy/cayleypy](https://github.com/cayleypy/cayleypy)

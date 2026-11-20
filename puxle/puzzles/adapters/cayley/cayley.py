@@ -6,7 +6,7 @@ and the convenience factory; nothing at module top level touches torch.
 
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Annotated, Optional
+from typing import TYPE_CHECKING, Annotated, Any, Optional, Union
 
 import chex
 import jax
@@ -15,6 +15,11 @@ import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
+from puxle.puzzles.adapters.cayley.formatting import (
+    build_action_names,
+    build_cayley_string_parser,
+    infer_cayley_graph_name,
+)
 
 if TYPE_CHECKING:
     # Type-only import — never executed at runtime.
@@ -112,9 +117,9 @@ class CayleyPuzzle(Puzzle):
     * ``PERMUTATION``: state is an int permutation vector of length
       ``n = len(graph_def.central_state)``. A move is
       ``new_state = jnp.take(state, perms[action])``.
-    * ``MATRIX``: state is a flattened int vector of length ``n*m``. A move
-      is ``new_vec = (M[action] @ state.reshape(n, m)) % modulo`` followed
-      by a flatten back to ``(n*m,)``.
+    * ``MATRIX``: an ``m × m`` generator acts on each column of an ``m × n``
+      state. A move computes ``(M[action] @ state.reshape(m, n)) % modulo``
+      and flattens the result in row-major order.
 
     All moves cost ``1.0``. Inverse closure is performed at construction
     time (numpy, not JIT) to populate ``inverse_action_map``.
@@ -137,29 +142,50 @@ class CayleyPuzzle(Puzzle):
 
     def __init__(
         self,
-        graph_def: "CayleyGraphDef",
-        *,
+        graph: Union[str, "CayleyGraphDef"],
+        *factory_args: Any,
         ensure_inverse_closed: bool = True,
         num_shuffle: int = 100,
-        **kwargs,
+        **factory_kwargs: Any,
     ) -> None:
-        if "state_field_name" in kwargs:
-            raise TypeError(
-                "CayleyPuzzle does not accept `state_field_name`; the field "
-                "name is mode-resolved (PERMUTATION→'permutation', "
-                "MATRIX→'vector')."
+        if isinstance(graph, str):
+            graph_def = self._resolve_cayleypy_graph(
+                graph, factory_args, factory_kwargs
             )
+        else:
+            if factory_args or factory_kwargs:
+                extra = ", ".join(
+                    [*(repr(a) for a in factory_args), *factory_kwargs.keys()]
+                )
+                raise TypeError(
+                    f"CayleyPuzzle does not accept extra factory arguments ({extra}) "
+                    "when given a CayleyGraphDef instance."
+                )
+            graph_def = graph
 
         # 1. Read plain data fields from graph_def (no cayleypy methods).
         self._read_graph_def(graph_def)
+        try:
+            graph_name = str(graph_def.name or "")
+        except AttributeError:
+            graph_name = ""
+        try:
+            raw_gen_names = tuple(str(x) for x in (graph_def.generator_names or ()))
+        except AttributeError:
+            raw_gen_names = ()
+        fallback_name = graph_name or (graph if isinstance(graph, str) else "")
 
         # 2. Build raw generator arrays and (optionally) close under
         #    inversion. All numpy work — runs before super().__init__.
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
             raw_perms = self._build_permutation_generators(graph_def)
-            augmented, inverse_map_np, naturally_closed = (
-                self._close_under_inversion_permutations(raw_perms)
-            )
+            (
+                augmented,
+                inverse_map_np,
+                naturally_closed,
+                deduped_indices,
+                synthesized_from,
+            ) = self._close_under_inversion_permutations(raw_perms)
             if ensure_inverse_closed:
                 self._perms_np = augmented
                 self._inverse_action_map_jax = jnp.asarray(
@@ -167,6 +193,8 @@ class CayleyPuzzle(Puzzle):
                 )
             else:
                 self._perms_np = raw_perms
+                deduped_indices = list(range(raw_perms.shape[0]))
+                synthesized_from = []
                 if naturally_closed:
                     self._inverse_action_map_jax = jnp.asarray(
                         inverse_map_np[: raw_perms.shape[0]], dtype=jnp.int32
@@ -181,6 +209,20 @@ class CayleyPuzzle(Puzzle):
                     )
             self._perms_jax = jnp.asarray(self._perms_np, dtype=jnp.int32)
             self.action_size = int(self._perms_np.shape[0])
+            self._graph_name = infer_cayley_graph_name(
+                fallback_name,
+                self._generators_type,
+                self._central_state_np,
+                self._perms_np,
+                raw_gen_names,
+            )
+            self._action_names = build_action_names(
+                self._graph_name,
+                raw_gen_names,
+                deduped_indices,
+                synthesized_from,
+                self._perms_np,
+            )
 
         elif self._generators_type == _GENERATORS_TYPE_MATRIX:
             # Construction-time matmul overflow precondition. JAX silently
@@ -202,9 +244,13 @@ class CayleyPuzzle(Puzzle):
                 )
 
             raw_mats = self._build_matrix_generators(graph_def)
-            augmented, inverse_map_np, naturally_closed = (
-                self._close_under_inversion_matrices(raw_mats)
-            )
+            (
+                augmented,
+                inverse_map_np,
+                naturally_closed,
+                deduped_indices,
+                synthesized_from,
+            ) = self._close_under_inversion_matrices(raw_mats)
             if ensure_inverse_closed:
                 self._mats_np = augmented
                 self._inverse_action_map_jax = jnp.asarray(
@@ -212,6 +258,8 @@ class CayleyPuzzle(Puzzle):
                 )
             else:
                 self._mats_np = raw_mats
+                deduped_indices = list(range(raw_mats.shape[0]))
+                synthesized_from = []
                 if naturally_closed:
                     self._inverse_action_map_jax = jnp.asarray(
                         inverse_map_np[: raw_mats.shape[0]], dtype=jnp.int32
@@ -226,6 +274,20 @@ class CayleyPuzzle(Puzzle):
                     )
             self._mats_jax = jnp.asarray(self._mats_np, dtype=jnp.int32)
             self.action_size = int(self._mats_np.shape[0])
+            self._graph_name = infer_cayley_graph_name(
+                fallback_name,
+                self._generators_type,
+                self._central_state_np,
+                None,
+                raw_gen_names,
+            )
+            self._action_names = build_action_names(
+                self._graph_name,
+                raw_gen_names,
+                deduped_indices,
+                synthesized_from,
+                None,
+            )
 
         else:  # pragma: no cover - validated in _read_graph_def
             raise ValueError(f"Unsupported generators_type: {self._generators_type!r}")
@@ -260,51 +322,44 @@ class CayleyPuzzle(Puzzle):
         )
 
         # 6. Let the base class build State/SolveConfig and JIT methods.
-        super().__init__(**kwargs)
+        super().__init__()
 
-    @classmethod
-    def from_cayleypy_factory(
-        cls,
-        name: str,
-        *factory_args,
-        ensure_inverse_closed: bool = True,
-        num_shuffle: int = 100,
-        **kwargs,
-    ) -> "CayleyPuzzle":
-        """Build a ``CayleyPuzzle`` from a named cayleypy registry entry.
-
-        Lookup order: ``PermutationGroups`` → ``MatrixGroups`` → ``Puzzles``.
-        First match wins; on name collision, construct the
-        ``CayleyGraphDef`` directly and pass it to ``cls(graph_def, ...)``
-        to disambiguate.
-        """
+    @staticmethod
+    def _import_cayleypy_registries():
         try:
-            import cayleypy  # noqa: F401  (lazy)
+            from cayleypy import MatrixGroups, PermutationGroups, Puzzles
         except ImportError as exc:
             raise ImportError(
                 "cayleypy is required for CayleyPuzzle. Install puxle: "
                 'uv add "puxle @ git+https://github.com/tinker495/PuXle.git"'
             ) from exc
+        return (PermutationGroups, MatrixGroups, Puzzles)
 
-        from cayleypy import MatrixGroups, PermutationGroups, Puzzles
-
-        for registry in (PermutationGroups, MatrixGroups, Puzzles):
+    @classmethod
+    def _resolve_cayleypy_graph(
+        cls, name: str, factory_args: tuple[Any, ...], factory_kwargs: dict[str, Any]
+    ) -> "CayleyGraphDef":
+        for registry in cls._import_cayleypy_registries():
             entry = getattr(registry, name, None)
-            if entry is None:
-                continue
-            if not callable(entry):
-                continue
-            graph_def = entry(*factory_args, **kwargs.pop("factory_kwargs", {}))
-            return cls(
-                graph_def,
-                ensure_inverse_closed=ensure_inverse_closed,
-                num_shuffle=num_shuffle,
-                **kwargs,
-            )
+            if callable(entry):
+                return entry(*factory_args, **factory_kwargs)
         raise ValueError(
             f"cayleypy registry has no entry named {name!r} in "
             "PermutationGroups, MatrixGroups, or Puzzles."
         )
+
+    @classmethod
+    def list_sources(cls) -> dict[str, list[str]]:
+        """List available cayleypy factory names grouped by registry."""
+        sources: dict[str, list[str]] = {}
+        for registry in cls._import_cayleypy_registries():
+            names = sorted(
+                attr
+                for attr in dir(registry)
+                if not attr.startswith("_") and callable(getattr(registry, attr, None))
+            )
+            sources[registry.__name__] = names
+        return sources
 
     def define_state_class(self) -> type[Xtructurable]:
         state_length = int(self._state_length)
@@ -361,7 +416,7 @@ class CayleyPuzzle(Puzzle):
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
             states = self.State(permutation=state.permutation[self._perms_jax])
         else:
-            values = state.vector.reshape(self._n, self._m).astype(self._matmul_dtype)
+            values = state.vector.reshape(self._m, self._n).astype(self._matmul_dtype)
             products = self._mats_jax.astype(self._matmul_dtype) @ values
             vectors = (products % self._matmul_dtype(self._modulo)).reshape(
                 self.action_size, self._state_length
@@ -374,23 +429,16 @@ class CayleyPuzzle(Puzzle):
         return self._inverse_action_map_jax
 
     def get_string_parser(self) -> Callable:
-        graph_name = self._graph_name
-
-        if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
-
-            def parser(state: "CayleyPuzzle.State", **kwargs) -> str:
-                values = " ".join(
-                    str(int(x)) for x in jax.device_get(state.permutation)
-                )
-                return f"{graph_name}: {values}"
-
-            return parser
-
-        def parser(state: "CayleyPuzzle.State", **kwargs) -> str:
-            values = " ".join(str(int(x)) for x in jax.device_get(state.vector))
-            return f"{graph_name}: {values}"
-
-        return parser
+        is_perm = self._generators_type == _GENERATORS_TYPE_PERMUTATION
+        return build_cayley_string_parser(
+            graph_name=self._graph_name,
+            generators_type=self._generators_type,
+            central_state=self._central_state_np,
+            perms=self._perms_np if is_perm else None,
+            m=0 if is_perm else self._m,
+            n=0 if is_perm else self._n,
+            modulo=0 if is_perm else self._modulo,
+        )
 
     def get_img_parser(self) -> Callable:
         state_length = int(self._state_length)
@@ -413,7 +461,10 @@ class CayleyPuzzle(Puzzle):
         return img_func
 
     def action_to_string(self, action: int) -> str:
-        return f"{self._graph_name}.gen[{int(action)}]"
+        idx = int(action)
+        if 0 <= idx < len(self._action_names):
+            return self._action_names[idx]
+        return f"{self._graph_name}.gen[{idx}]"
 
     # ----- Internal helpers -----
 
@@ -443,7 +494,6 @@ class CayleyPuzzle(Puzzle):
             ) from exc
 
         self._generators_type = _coerce_generators_type(generators_type_raw)
-        self._graph_name = str(getattr(graph_def, "name", "cayley"))
 
         central_state = np.asarray(graph_def.central_state, dtype=np.int64)
         if central_state.ndim != 1:
@@ -505,29 +555,33 @@ class CayleyPuzzle(Puzzle):
 
     def _close_under_inversion_permutations(
         self, perms_np: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, bool]:
+    ) -> tuple[np.ndarray, np.ndarray, bool, list[int], list[int]]:
         """Augment with ``argsort`` inverses; dedupe; return mapping.
 
         Returns:
-            (augmented_perms, inverse_action_map_np, naturally_closed)
+            (augmented_perms, inverse_action_map_np, naturally_closed, deduped_indices, synthesized_from)
         """
         # Dedupe inputs first while preserving order.
         seen: dict[bytes, int] = {}
         deduped: list[np.ndarray] = []
-        for row in perms_np:
+        deduped_indices: list[int] = []
+        for idx, row in enumerate(perms_np):
             key = _row_key_perm(row)
             if key not in seen:
                 seen[key] = len(deduped)
                 deduped.append(row.astype(np.int32, copy=True))
+                deduped_indices.append(idx)
 
         naturally_closed = True
-        for row in list(deduped):
+        synthesized_from: list[int] = []
+        for pos, row in enumerate(list(deduped)):
             inv_row = np.argsort(row).astype(np.int32)
             key = _row_key_perm(inv_row)
             if key not in seen:
                 naturally_closed = False
                 seen[key] = len(deduped)
                 deduped.append(inv_row)
+                synthesized_from.append(pos)
 
         augmented = np.stack(deduped, axis=0)
         n_aug = augmented.shape[0]
@@ -535,11 +589,17 @@ class CayleyPuzzle(Puzzle):
         for i in range(n_aug):
             inv_row = np.argsort(augmented[i]).astype(np.int32)
             inverse_map[i] = seen[_row_key_perm(inv_row)]
-        return augmented, inverse_map, naturally_closed
+        return (
+            augmented,
+            inverse_map,
+            naturally_closed,
+            deduped_indices,
+            synthesized_from,
+        )
 
     def _close_under_inversion_matrices(
         self, mats_np: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray, bool]:
+    ) -> tuple[np.ndarray, np.ndarray, bool, list[int], list[int]]:
         if self._m > 16:
             raise NotImplementedError(
                 "Modular matrix inverse only supported for m <= 16; "
@@ -556,14 +616,17 @@ class CayleyPuzzle(Puzzle):
         modulo = int(self._modulo)
         seen: dict[bytes, int] = {}
         deduped: list[np.ndarray] = []
-        for mat in mats_np:
+        deduped_indices: list[int] = []
+        for idx, mat in enumerate(mats_np):
             key = _mat_key(mat)
             if key not in seen:
                 seen[key] = len(deduped)
                 deduped.append(mat.astype(np.int32, copy=True))
+                deduped_indices.append(idx)
 
         naturally_closed = True
-        for mat in list(deduped):
+        synthesized_from: list[int] = []
+        for pos, mat in enumerate(list(deduped)):
             inv_mat_int64 = _modular_matrix_inverse(mat, modulo)
             inv_mat = inv_mat_int64.astype(np.int32, copy=False)
             key = _mat_key(inv_mat)
@@ -571,6 +634,7 @@ class CayleyPuzzle(Puzzle):
                 naturally_closed = False
                 seen[key] = len(deduped)
                 deduped.append(inv_mat)
+                synthesized_from.append(pos)
 
         augmented = np.stack(deduped, axis=0)
         n_aug = augmented.shape[0]
@@ -579,7 +643,13 @@ class CayleyPuzzle(Puzzle):
             inv_mat_int64 = _modular_matrix_inverse(augmented[i], modulo)
             inv_mat = inv_mat_int64.astype(np.int32, copy=False)
             inverse_map[i] = seen[_mat_key(inv_mat)]
-        return augmented, inverse_map, naturally_closed
+        return (
+            augmented,
+            inverse_map,
+            naturally_closed,
+            deduped_indices,
+            synthesized_from,
+        )
 
     def _make_permutation_kernel(self) -> Callable:
         perms_jax = self._perms_jax  # shape (A, n) int32
@@ -594,12 +664,11 @@ class CayleyPuzzle(Puzzle):
         mats_jax = self._mats_jax  # shape (A, m, m) int32
         matmul_dtype = self._matmul_dtype
         modulo = matmul_dtype(self._modulo)
-        n_rows = int(self._n)
-        m = int(self._m)
+        matrix_shape = (self._m, self._n)
         state_length = int(self._state_length)
 
         def kernel(state, action):
-            vec2d = state.vector.reshape(n_rows, m).astype(matmul_dtype)
+            vec2d = state.vector.reshape(matrix_shape).astype(matmul_dtype)
             M = mats_jax[action].astype(matmul_dtype)
             new2d = (M @ vec2d) % modulo
             new_vec = new2d.reshape(state_length).astype(state.vector.dtype)

@@ -1,6 +1,6 @@
 import math
-import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Optional, Union
 
 import jax
@@ -62,32 +62,51 @@ class PDDL(Puzzle):
 
     def __init__(
         self,
-        domain: Union[str, Domain],
-        problem: Union[str, Problem],
+        domain: Union[str, Path, Domain],
+        problem: Union[str, Path, Problem],
         **kwargs,
     ):
-        """
-        Initialize PDDL puzzle from domain and problem (files or objects).
+        """Initialize PDDL puzzle from preset names, file paths, or parsed objects.
 
         Args:
-            domain: Path to PDDL domain file OR pddl.core.Domain object.
-            problem: Path to PDDL problem file OR pddl.core.Problem object.
+            domain: Bundled preset domain name (e.g. ``"blocksworld"``), path to
+                a PDDL domain file, or a ``pddl.core.Domain`` object.
+            problem: Bundled preset problem name (e.g. ``"bw-S-01"``), path to
+                a PDDL problem file, or a ``pddl.core.Problem`` object.
         """
-        # Parse PDDL files if paths are provided
-        if isinstance(domain, str):
-            self.domain_file = domain
+        preset_dir: Path | None = None
+        if isinstance(domain, (str, Path)):
+            domain_path = Path(domain)
+            if (
+                not domain_path.is_file()
+                and domain_path.name == str(domain)
+                and not str(domain).endswith(".pddl")
+            ):
+                candidate_dir = self._bundled_pddls_dir() / str(domain)
+                if (candidate_dir / "domain.pddl").is_file():
+                    preset_dir = candidate_dir
+                    domain_path = candidate_dir / "domain.pddl"
+            self.domain_file = str(domain_path)
             try:
-                self.domain = pddl.parse_domain(domain)
+                self.domain = pddl.parse_domain(self.domain_file)
             except Exception as e:
                 raise ValueError(f"Failed to parse PDDL domain file: {e}") from e
         else:
             self.domain_file = None
             self.domain = domain
 
-        if isinstance(problem, str):
-            self.problem_file = problem
+        if isinstance(problem, (str, Path)):
+            problem_path = Path(problem)
+            if preset_dir is not None and not problem_path.is_file():
+                problem_name = (
+                    str(problem)
+                    if str(problem).endswith(".pddl")
+                    else f"{problem}.pddl"
+                )
+                problem_path = preset_dir / "problems" / problem_name
+            self.problem_file = str(problem_path)
             try:
-                self.problem = pddl.parse_problem(problem)
+                self.problem = pddl.parse_problem(self.problem_file)
             except Exception as e:
                 raise ValueError(f"Failed to parse PDDL problem file: {e}") from e
         else:
@@ -96,47 +115,28 @@ class PDDL(Puzzle):
 
         super().__init__(**kwargs)
 
+    @staticmethod
+    def _bundled_pddls_dir() -> Path:
+        return Path(__file__).resolve().parents[3] / "data" / "pddls"
+
     @classmethod
-    def from_preset(
-        cls,
-        domain: str,
-        problem: Optional[str] = None,
-        *,
-        problem_basename: Optional[str] = None,
-        **kwargs,
-    ) -> "PDDL":
-        """Create a PDDL instance by resolving absolute paths to data under `puxle/data/pddls/`.
-
-        This mirrors the absolute-path loading style used by puzzles like Sokoban.
-
-        Args:
-            domain: Domain folder name under `puxle/data/pddls/` (e.g., "blocksworld").
-            problem: Problem filename within `problems/` (with or without .pddl extension).
-            problem_basename: Alternative to `problem`; basename without extension in `problems/`.
-
-        Returns:
-            PDDL: Initialized PDDL environment.
-        """
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        data_dir = os.path.normpath(
-            os.path.join(base_dir, "..", "..", "..", "data", "pddls", domain)
-        )
-
-        domain_path = os.path.abspath(os.path.join(data_dir, "domain.pddl"))
-
-        if problem is None:
-            if problem_basename is None:
-                raise ValueError(
-                    "Provide `problem` or `problem_basename` to locate a problem file."
-                )
-            problem = f"{problem_basename}.pddl"
-
-        if not problem.endswith(".pddl"):
-            problem = f"{problem}.pddl"
-
-        problem_path = os.path.abspath(os.path.join(data_dir, "problems", problem))
-
-        return cls(domain=domain_path, problem=problem_path, **kwargs)
+    def list_sources(cls) -> dict[str, list[str]]:
+        """List bundled PDDL domains and their problem names."""
+        root = cls._bundled_pddls_dir()
+        if not root.is_dir():
+            return {}
+        sources: dict[str, list[str]] = {}
+        for domain_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+            if not (domain_dir / "domain.pddl").is_file():
+                continue
+            problems_dir = domain_dir / "problems"
+            problems = (
+                sorted(p.stem for p in problems_dir.glob("*.pddl"))
+                if problems_dir.is_dir()
+                else []
+            )
+            sources[domain_dir.name] = problems
+        return sources
 
     def data_init(self) -> None:
         """Initialize PDDL data: ground atoms and actions, build masks."""
