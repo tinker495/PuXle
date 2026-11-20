@@ -1679,32 +1679,25 @@ name = "puxle"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aqtp" },
+    { name = "cayleypy" },
     { name = "chex" },
+    { name = "flax" },
+    { name = "huggingface-hub" },
     { name = "jax" },
     { name = "numpy" },
     { name = "opencv-python-headless" },
+    { name = "optax" },
     { name = "pddl" },
+    { name = "pillow" },
     { name = "tqdm" },
     { name = "tyro" },
     { name = "xtructure" },
 ]
 
 [package.optional-dependencies]
-cayley = [
-    { name = "cayleypy" },
-]
 cuda = [
     { name = "jax", extra = ["cuda"] },
-]
-dev = [
-    { name = "aqtp" },
-    { name = "flax" },
-    { name = "huggingface-hub" },
-    { name = "optax" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
 ]
 docs = [
     { name = "furo" },
@@ -1712,58 +1705,47 @@ docs = [
     { name = "sphinx" },
     { name = "sphinx-autodoc-typehints" },
 ]
-visualization = [
-    { name = "pillow" },
-]
-world-model = [
-    { name = "aqtp" },
-    { name = "flax" },
-    { name = "huggingface-hub" },
-    { name = "optax" },
-]
 
 [package.dev-dependencies]
 dev = [
-    { name = "puxle", extra = ["dev", "visualization"] },
+    { name = "pre-commit" },
     { name = "pyrefly" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "aqtp", marker = "extra == 'dev'", specifier = ">=0.9.0" },
-    { name = "aqtp", marker = "extra == 'world-model'", specifier = ">=0.9.0" },
-    { name = "cayleypy", marker = "extra == 'cayley'", specifier = "==0.1.0" },
+    { name = "aqtp", specifier = ">=0.9.0" },
+    { name = "cayleypy", specifier = "==0.1.0" },
     { name = "chex", specifier = ">=0.1.0" },
-    { name = "flax", marker = "extra == 'dev'", specifier = ">=0.10.0" },
-    { name = "flax", marker = "extra == 'world-model'", specifier = ">=0.10.0" },
+    { name = "flax", specifier = ">=0.11.2" },
     { name = "furo", marker = "extra == 'docs'" },
-    { name = "huggingface-hub", marker = "extra == 'dev'", specifier = ">=0.20.0" },
-    { name = "huggingface-hub", marker = "extra == 'world-model'", specifier = ">=0.20.0" },
+    { name = "huggingface-hub", specifier = ">=0.20.0" },
     { name = "jax", specifier = ">=0.11.2" },
     { name = "jax", extras = ["cuda"], marker = "extra == 'cuda'", specifier = ">=0.11.2" },
     { name = "myst-parser", marker = "extra == 'docs'" },
     { name = "numpy", specifier = ">=2.2.0" },
     { name = "opencv-python-headless", specifier = ">=4.10.0" },
-    { name = "optax", marker = "extra == 'dev'", specifier = ">=0.2.0" },
-    { name = "optax", marker = "extra == 'world-model'", specifier = ">=0.2.0" },
+    { name = "optax", specifier = ">=0.2.0" },
     { name = "pddl", specifier = ">=0.4.3" },
-    { name = "pillow", marker = "extra == 'visualization'", specifier = ">=9.0.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.0" },
+    { name = "pillow", specifier = ">=9.0.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.0" },
     { name = "sphinx-autodoc-typehints", marker = "extra == 'docs'" },
     { name = "tqdm", specifier = ">=4.66" },
     { name = "tyro", specifier = ">=1.0.16,<2" },
     { name = "xtructure", git = "https://github.com/tinker495/xtructure.git" },
 ]
-provides-extras = ["dev", "docs", "visualization", "cuda", "cayley", "world-model"]
+provides-extras = ["cuda", "docs"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "puxle", extras = ["dev", "visualization"] },
+    { name = "pre-commit", specifier = ">=3.0.0" },
     { name = "pyrefly", specifier = "==1.4.0" },
+    { name = "pytest", specifier = ">=7.0.0" },
+    { name = "pytest-cov", specifier = ">=4.0.0" },
+    { name = "ruff", specifier = ">=0.15.0" },
 ]
 
 [[package]]

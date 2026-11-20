@@ -33,7 +33,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Install dependencies
-        run: uv sync --extra docs --extra world-model
+        run: uv sync --extra docs
 
       - name: Build Sphinx documentation
         run: uv run make -C docs html
