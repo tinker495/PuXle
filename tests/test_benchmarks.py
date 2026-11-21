@@ -9,7 +9,6 @@ from puxle.benchmark import Benchmark
 
 
 def discover_benchmark_classes() -> list[Type[Benchmark]]:
-    """Return all benchmark implementations exported by puxle.benchmark."""
     import puxle.benchmark as benchmark_module
 
     benchmark_classes: list[Type[Benchmark]] = []

@@ -29,7 +29,6 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
         if queue[0][1] >= max_depth:
             return False
 
-        # 1. Collect a batch of states
         batch_states = []
         batch_depths = []
 
@@ -43,21 +42,16 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
         if not batch_states:
             return False
 
-        # Stack states (List[State] -> State(Batch...))
         stacked_state = jax.tree_util.tree_map(lambda *xs: jnp.stack(xs), *batch_states)
 
-        # Prepare filleds mask (required by batched_get_neighbours)
-        # We need to pass a boolean array of shape (batch_size,) because batched_get_neighbours vmaps over it
+        # batched_get_neighbours vmaps over filleds, so pass a (batch_size,) bool mask.
         filleds_batch = jnp.full((len(batch_states),), True)
 
-        # 2. Get neighbors in batch
         # env.batched_get_neighbours is pre-jitted in Puzzle.__init__
         neighbors, costs = env.batched_get_neighbours(
             solve_config, stacked_state, filleds=filleds_batch
         )
 
-        # 3. Check for solutions in batch
-        # Flatten neighbors to (Batch*Actions, ...) for solved check
         flat_neighbors = jax.tree_util.tree_map(
             lambda x: x.reshape((-1,) + x.shape[2:]), neighbors
         )
@@ -68,22 +62,18 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
         if jnp.any(solved_mask):
             return True
 
-        # 4. Filter and process new states on CPU
         # Bulk convert to numpy to avoid repeated device-host transfers
         neighbors_atoms_np = np.array(flat_neighbors.atoms)
         costs_np = np.array(costs).flatten()
 
-        # Filter valid transitions (finite cost)
         applicable_indices = np.where(np.isfinite(costs_np))[0]
 
         if len(applicable_indices) == 0:
             continue
 
-        # Calculate depths for new states
         parent_indices = applicable_indices // env.action_size
         new_depths = np.array(batch_depths)[parent_indices] + 1
 
-        # Filter by max_depth
         valid_mask = new_depths < max_depth
         final_indices = applicable_indices[valid_mask]
         final_depths = new_depths[valid_mask]
@@ -93,12 +83,10 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
 
         final_atoms = neighbors_atoms_np[final_indices]
 
-        # Add to queue
         for i, atom_row in enumerate(final_atoms):
             key = atom_row.tobytes()
             if key not in visited:
                 visited.add(key)
-                # Store as State object
                 ns = env.State(atoms=atom_row)
                 queue.append((ns, int(final_depths[i])))
 
@@ -151,7 +139,6 @@ def test_presets_jit_and_batch(domain, problem):
     rng = jax.random.PRNGKey(42)
     solve_config, initial_state = env.get_inits(rng)
 
-    # JIT single
     jitted_get_neighbours = jax.jit(env.get_neighbours)
     neighbors, costs = jitted_get_neighbours(solve_config, initial_state, filled=True)
     assert neighbors is not None and costs is not None
@@ -163,7 +150,6 @@ def test_presets_jit_and_batch(domain, problem):
         hasattr(solved, "dtype") and solved.dtype == jnp.bool_
     )
 
-    # Batched
     keys = jax.random.split(rng, 4)
     solve_configs = jax.vmap(lambda k: env.get_solve_config(k))(keys)
     initial_states = jax.vmap(lambda sc, k: env.get_initial_state(sc, k))(
@@ -232,12 +218,10 @@ def test_random_states_not_mostly_solved(domain, problem):
     env = PDDL(domain, problem)
     solve_config = env.get_solve_config()
 
-    # Goals should be non-empty; otherwise any state would be trivially solved
     assert int(jnp.sum(solve_config.GoalSpec.GoalMask)) > 0, (
         f"Preset {domain}/{problem} has empty goal mask; any state would be solved"
     )
 
-    # Sample random boolean states and ensure the majority are NOT solved
     rng = jax.random.PRNGKey(123)
     batch_size = 64
     rand_bits = jax.random.bernoulli(rng, p=0.5, shape=(batch_size, env.num_atoms))
@@ -249,7 +233,6 @@ def test_random_states_not_mostly_solved(domain, problem):
     solved_mask = jax.vmap(lambda st: env.is_solved(solve_config, st))(states)
     proportion_solved = jnp.mean(solved_mask.astype(jnp.float32))
 
-    # Guardrail: not more than 95% of random states should be solved
     assert float(proportion_solved) < 0.95, (
         f"Preset {domain}/{problem} appears trivially solved for most random states: "
         f"{float(proportion_solved):.2%} solved"

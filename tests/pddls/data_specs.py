@@ -4,8 +4,6 @@ from pathlib import Path
 
 @dataclass
 class PDDLSpec:
-    """Specification for a PDDL test fixture."""
-
     name: str
     domain: str
     problem: str
@@ -15,7 +13,6 @@ class PDDLSpec:
     max_solution_steps: int = 10
 
 
-# Comprehensive test data specifications
 BASE = Path(__file__).resolve().parents[1] / "pddl_data"
 
 DATA_SPECS = [

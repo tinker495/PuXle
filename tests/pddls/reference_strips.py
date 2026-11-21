@@ -9,11 +9,9 @@ class ReferenceSTRIPS:
     """Reference implementation of STRIPS semantics for cross-validation."""
 
     def __init__(self, domain_file: str, problem_file: str):
-        """Initialize from PDDL domain and problem files."""
         self.domain = pddl.parse_domain(domain_file)
         self.problem = pddl.parse_problem(problem_file)
 
-        # Enumerate all typed objects
         self.objects = {}
         for obj in self.problem.objects:
             # Handle different ways type_tags might be represented
@@ -31,28 +29,23 @@ class ReferenceSTRIPS:
                 self.objects[obj_type] = []
             self.objects[obj_type].append(str(obj.name))
 
-        # Ground all predicates
         self.grounded_atoms = set()
         for predicate in self.domain.predicates:
             self._ground_predicate(predicate)
 
-        # Ground all actions
         self.grounded_actions = []
         for action in self.domain.actions:
             self._ground_action(action)
 
-        # Extract goal atoms
         self.goal_atoms = set()
         self._extract_goal_atoms(self.problem.goal)
 
-        # Extract initial state atoms
         self.initial_atoms = set()
         for atom in self.problem.init:
             if isinstance(atom, pddl.logic.base.Atomic):
                 self.initial_atoms.add(self._atom_to_string(atom))
 
     def _ground_predicate(self, predicate):
-        """Ground a predicate schema."""
         param_types = []
         for term in predicate.terms:
             if hasattr(term, "type_tags") and term.type_tags:
@@ -66,7 +59,6 @@ class ReferenceSTRIPS:
                 param_type = "object"
             param_types.append(param_type)
 
-        # Generate all valid parameter combinations
         param_combinations = self._generate_param_combinations(param_types)
 
         for params in param_combinations:
@@ -74,7 +66,6 @@ class ReferenceSTRIPS:
             self.grounded_atoms.add(atom_str)
 
     def _ground_action(self, action):
-        """Ground an action schema."""
         param_types = []
         for param in action.parameters:
             if hasattr(param, "type_tags") and param.type_tags:
@@ -88,21 +79,17 @@ class ReferenceSTRIPS:
                 param_type = "object"
             param_types.append(param_type)
 
-        # Generate all valid parameter combinations
         param_combinations = self._generate_param_combinations(param_types)
 
         for params in param_combinations:
-            # Create parameter substitution
             param_map = {
                 param.name: value for param, value in zip(action.parameters, params)
             }
 
-            # Ground preconditions
             preconditions = set()
             if action.precondition:
                 self._ground_formula(action.precondition, param_map, preconditions)
 
-            # Ground effects
             add_effects = set()
             delete_effects = set()
             if action.effect:
@@ -120,7 +107,6 @@ class ReferenceSTRIPS:
             self.grounded_actions.append(grounded_action)
 
     def _generate_param_combinations(self, param_types):
-        """Generate all valid parameter combinations for given types."""
         if not param_types:
             return [[]]
 
@@ -135,13 +121,11 @@ class ReferenceSTRIPS:
                     all_objects.extend(obj_list)
                 type_objects.append(all_objects)
 
-        # Generate cartesian product
         import itertools
 
         return list(itertools.product(*type_objects))
 
     def _ground_formula(self, formula, param_map, result_set):
-        """Ground a formula (precondition) with parameter substitution."""
         if isinstance(formula, pddl.logic.base.Atomic):
             atom_str = self._atom_to_string(formula, param_map)
             result_set.add(atom_str)
@@ -155,7 +139,6 @@ class ReferenceSTRIPS:
                 self._ground_formula(arg, param_map, result_set)
 
     def _ground_effect(self, effect, param_map, add_effects, delete_effects):
-        """Ground an effect with parameter substitution."""
         if isinstance(effect, pddl.logic.base.Atomic):
             atom_str = self._atom_to_string(effect, param_map)
             add_effects.add(atom_str)
@@ -168,17 +151,13 @@ class ReferenceSTRIPS:
                 self._ground_effect(arg, param_map, add_effects, delete_effects)
 
     def _atom_to_string(self, atom, param_map=None):
-        """Convert an atom to string representation."""
         if param_map:
-            # Substitute parameters
             args = [param_map.get(arg.name, str(arg)) for arg in atom.terms]
         else:
-            # Use original names
             args = [str(arg) for arg in atom.terms]
         return f"({atom.name} {' '.join(args)})"
 
     def _extract_goal_atoms(self, goal):
-        """Extract goal atoms from goal formula."""
         if isinstance(goal, pddl.logic.base.Atomic):
             self.goal_atoms.add(self._atom_to_string(goal))
         elif isinstance(goal, pddl.logic.base.And):
@@ -186,11 +165,9 @@ class ReferenceSTRIPS:
                 self._extract_goal_atoms(arg)
 
     def is_applicable(self, action, state: Set[str]) -> bool:
-        """Check if action is applicable in given state."""
         return set(action["preconditions"]).issubset(state)
 
     def apply_action(self, action, state: Set[str]) -> Set[str]:
-        """Apply action to state, returning successor state."""
         if not self.is_applicable(action, state):
             raise ValueError("Action not applicable in state")
 
@@ -200,11 +177,9 @@ class ReferenceSTRIPS:
         return successor
 
     def is_goal_satisfied(self, state: Set[str]) -> bool:
-        """Check if goal is satisfied in given state."""
         return self.goal_atoms.issubset(state)
 
     def get_applicable_actions(self, state: Set[str]) -> List[Dict]:
-        """Get all applicable actions in given state."""
         return [
             action
             for action in self.grounded_actions
@@ -212,11 +187,10 @@ class ReferenceSTRIPS:
         ]
 
     def bfs_search(self, max_depth: int = 6) -> Optional[List[Dict]]:
-        """Breadth-first search for a plan."""
         if self.is_goal_satisfied(self.initial_atoms):
             return []
 
-        queue = [(self.initial_atoms, [])]  # (state, plan)
+        queue = [(self.initial_atoms, [])]
         visited = {frozenset(self.initial_atoms)}
 
         for depth in range(max_depth):
@@ -242,4 +216,4 @@ class ReferenceSTRIPS:
             if not queue:
                 break
 
-        return None  # No plan found within max_depth
+        return None

@@ -13,7 +13,6 @@ class DeepCubeAUnpickler(pickle.Unpickler):
 
     def find_class(self, module: str, name: str) -> Any:
         if module.startswith("environments."):
-            # Recreate the placeholder class once per (module, name) pair and reuse it.
             cache_key = f"{module}.{name}"
             return globals().setdefault(cache_key, type(name, (), {}))
         return super().find_class(module, name)

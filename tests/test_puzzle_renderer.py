@@ -1,12 +1,10 @@
-"""Architecture + behaviour guard for the Puzzle Renderer Module.
+"""Architecture and behaviour guard for the Puzzle Renderer Module.
 
 Locks the contracts documented in CONTEXT.md "Puzzle Renderer":
 
 - ``puxle.core.puzzle_base`` consumes ``attach_state_renderer`` from
-  ``puxle.render``, not the removed ``add_img_parser`` alias from
-  ``puxle.utils.util``.
-- Migrated puzzle modules render directly with cv2 and no longer depend on
-  the deleted ``Cv2Backend`` wrapper.
+  ``puxle.render``, never an ``add_img_parser`` alias in ``puxle.utils.util``.
+- Puzzle modules render directly with cv2 without a ``Cv2Backend`` wrapper.
 """
 
 from __future__ import annotations
@@ -87,9 +85,9 @@ def test_render_module_attach_state_renderer_attaches_img_method():
 def test_render_module_exposes_only_canonical_helpers():
     """Author: tinker495.
 
-    Why: Locks the generalized ``puxle.render`` public surface
+    Why: Locks the canonical ``puxle.render`` public surface
     (``attach_state_renderer``, ``normalize_rgb_image``, ``img_to_colored_str``)
-    while continuing to prevent reintroduction of the deleted ``Cv2Backend``.
+    and forbids exposing ``Cv2Backend``.
     """
     render = importlib.import_module("puxle.render")
     assert render.__all__ == [
@@ -131,9 +129,9 @@ def test_normalize_rgb_image_enforces_host_uint8_and_optional_resize():
 def test_img_to_colored_str_renders_24bit_ansi_rows():
     """Author: tinker495.
 
-    Why: Verifies the shared terminal RGB preview helper promoted into
-    ``puxle.render`` formats 24-bit ANSI ``██`` rows consistently for both
-    world models and adapters.
+    Why: Verifies the shared ``puxle.render`` terminal RGB preview helper
+    formats 24-bit ANSI ``██`` rows consistently for both world models and
+    adapters.
     """
     from puxle.render import img_to_colored_str
 
@@ -171,7 +169,7 @@ def test_attach_state_renderer_centralizes_str_and_img_on_single_and_batch():
 
 
 def test_migrated_puzzle_modules_do_not_import_cv2_backend():
-    """Migrated puzzles must not depend on the deleted Cv2Backend wrapper."""
+    """Puzzle modules must render directly with cv2 without importing Cv2Backend."""
     for name in _MIGRATED_PUZZLES:
         source = _puzzle_module_source(name)
         assert "Cv2Backend" not in source
@@ -179,7 +177,7 @@ def test_migrated_puzzle_modules_do_not_import_cv2_backend():
 
 
 def test_migrated_puzzle_imgfuncs_produce_valid_images():
-    """End-to-end smoke for the migrated puzzles' ``get_img_parser`` results."""
+    """Verify each cv2-rendered puzzle's ``get_img_parser`` returns a valid uint8 RGB image."""
     import jax
 
     from puxle.puzzles.dotknot import DotKnot

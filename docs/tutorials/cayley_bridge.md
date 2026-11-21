@@ -52,27 +52,6 @@ puzzle = CayleyPuzzle(**CayleyPresets.TOP_SPIN_8_K4, num_shuffle=20)
 sources = CayleyPuzzle.list_sources()
 ```
 
-## Using the bridge with JAxtar
-
-The bridge's primary motivation is enabling JAxtar to search cayleypy graphs. JAxtar ships pre-registered entries for five graphs (`cayley-pancake-7`, `cayley-pancake-8`, `cayley-lrx-8`, `cayley-top-spin-8-k4`, `cayley-coxeter-8`) — invoke them via the JAxtar CLI:
-
-```bash
-uv run --project ../JAxtar astar -p cayley-pancake-7
-```
-
-Empirically (autoresearch sweep, py312 CPU, `EmptyHeuristic`):
-
-| Family | Comfortable range | First boundary |
-|---|---|---|
-| `pancake(n)` | n ≤ 10, scramble 25, ≤ 1.3 M nodes | n = 12 OOMs at 4 M nodes |
-| `lrx(n)` | n ≤ 10, scramble 30, ≤ 9 k nodes | n = 12 OOMs at 2 M nodes |
-| `top_spin(n, k=4)` | n ≤ 10 | not yet probed beyond n = 10 |
-| `heisenberg(n=3, modulo ≤ 7)` | all solved < 1 s | not yet probed |
-| `SL_*(n=2, modulo ≤ 5)` | all solved < 1 s | not yet probed |
-| `mini_pyramorphix`, `pyraminx`, `globe_puzzle(2,3)` | all solved | `pyraminx` scramble 10 → 222 k nodes |
-
-Beyond the boundaries, an informed heuristic (learned or pattern-database) is needed; the current bridge plus `EmptyHeuristic` is a baseline.
-
 ## See also
 
 - Adapter source: `puxle/puzzles/adapters/cayley/cayley.py`

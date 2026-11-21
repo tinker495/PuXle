@@ -27,7 +27,6 @@ class MockPuzzle(Puzzle):
         )
 
     def get_actions(self, solve_config, state, action, filled=True):
-        # Action 0 adds 1, action 1 adds 2
         add_val = jnp.where(action == 0, 1, 2)
         return MockState(val=state.val + add_val), jnp.where(filled, 1.0, jnp.inf)
 
@@ -100,21 +99,18 @@ def test_benchmark_path_normalization_and_cached_helper(tmp_path):
 def test_verify_solution_valid_optimal():
     bm = MockBenchmark()
     sample = bm.get_sample("test1")
-    # Exact optimal
     assert bm.verify_solution(sample, action_sequence=["add2"] * 5) is True
 
 
 def test_verify_solution_valid_suboptimal():
     bm = MockBenchmark()
     sample = bm.get_sample("test1")
-    # Suboptimal taking 10 steps (optimal is 5)
     assert bm.verify_solution(sample, action_sequence=["add1"] * 10) is False
 
 
 def test_verify_solution_invalid_unsolved():
     bm = MockBenchmark()
     sample = bm.get_sample("test1")
-    # Only adds to 8, not 10
     assert bm.verify_solution(sample, action_sequence=["add2"] * 4) is False
 
 
@@ -128,15 +124,13 @@ def test_verify_solution_unknown_action():
 def test_verify_solution_with_states_instead_of_actions():
     bm = MockBenchmark()
     sample = bm.get_sample("test1")
-    # Construct sequence of states
-    states = [MockState(val=i * 2) for i in range(6)]  # 0, 2, 4, 6, 8, 10
+    states = [MockState(val=i * 2) for i in range(6)]
     assert bm.verify_solution(sample, states=states) is True
 
 
 def test_verify_solution_no_optimal_info():
     bm = MockBenchmark()
     sample = bm.get_sample("test1")
-    # Create sample without optimal info
     sample_no_opt = BenchmarkSample(
         state=sample.state,
         solve_config=sample.solve_config,

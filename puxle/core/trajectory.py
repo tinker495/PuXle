@@ -1,15 +1,4 @@
-"""Puzzle Trajectory Module.
-
-Owns the algorithms that turn a Puzzle's batched (inverse) trajectory generator
-into a flat ``PuzzleTrajectory`` record. Consumed directly by PuXle tests and
-indirectly by JAxtar's neural training builders through the JAxtar-owned
-``trajectory_to_dataset_dict`` adapter.
-
-The Module consumes only the public ``Puzzle`` Interface
-(``batched_get_random_trajectory``, ``batched_get_random_inverse_trajectory``,
-``batched_hindsight_transform``); it does not reach into ``_get_shuffled_state``
-or other private helpers.
-"""
+"""Flat trajectory builders built strictly on the public ``Puzzle`` interface."""
 
 from __future__ import annotations
 

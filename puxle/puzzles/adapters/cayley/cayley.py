@@ -1,8 +1,4 @@
-"""CayleyPuzzle: PuXle adapter for cayleypy's CayleyGraphDef.
-
-This module is **JAX-only**. It imports cayleypy lazily inside ``__init__``
-and the convenience factory; nothing at module top level touches torch.
-"""
+"""cayleypy is imported lazily so importing this module does not pull in torch."""
 
 import warnings
 from collections.abc import Callable
@@ -21,7 +17,6 @@ from puxle.puzzles.adapters.cayley.formatting import (
 )
 
 if TYPE_CHECKING:
-    # Type-only import — never executed at runtime.
     from cayleypy.cayley_graph_def import CayleyGraphDef
 
 
@@ -30,8 +25,6 @@ _GENERATORS_TYPE_MATRIX = "MATRIX"
 
 
 def _coerce_generators_type(raw) -> str:
-    """Reduce cayleypy's ``GeneratorType`` enum (or a string) to one of the
-    two supported tags."""
     name = getattr(raw, "name", None)
     if isinstance(name, str):
         token = name.upper()
@@ -63,7 +56,6 @@ def _modular_matrix_inverse(mat: np.ndarray, modulo: int) -> np.ndarray:
     det = _det_int(A) % int(modulo)
     det_inv = pow(det, -1, int(modulo))
 
-    # Adjugate via cofactor expansion.
     adj = [[0] * m for _ in range(m)]
     for i in range(m):
         for j in range(m):
@@ -162,7 +154,6 @@ class CayleyPuzzle(Puzzle):
                 )
             graph_def = graph
 
-        # 1. Read plain data fields from graph_def (no cayleypy methods).
         self._read_graph_def(graph_def)
         try:
             graph_name = str(graph_def.name or "")
@@ -176,8 +167,6 @@ class CayleyPuzzle(Puzzle):
             graph_name or (graph if isinstance(graph, str) else "") or "cayley"
         )
 
-        # 2. Build raw generator arrays and (optionally) close under
-        #    inversion. All numpy work — runs before super().__init__.
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
             raw_perms = self._build_permutation_generators(graph_def)
             (
@@ -282,23 +271,19 @@ class CayleyPuzzle(Puzzle):
             ):
                 self._state_dtype = jnp.uint16
 
-        # 3. Bind the per-action kernel once at construction (no
-        #    traced-time switching on generator type).
+        # Bind once at construction to avoid traced-time dispatch on generator type.
         if self._generators_type == _GENERATORS_TYPE_PERMUTATION:
             self._step_kernel = self._make_permutation_kernel()
         else:
             self._step_kernel = self._make_matrix_kernel()
 
-        # 4. Stash construction-only options.
         self._num_shuffle = int(num_shuffle)
         self._ensure_inverse_closed = bool(ensure_inverse_closed)
 
-        # 5. Pre-resolve the central state for fast SolveConfig builds.
         self._central_state_jax = jnp.asarray(
             self._central_state_np, dtype=self._state_dtype
         )
 
-        # 6. Let the base class build State/SolveConfig and JIT methods.
         super().__init__()
 
     @staticmethod
@@ -384,7 +369,6 @@ class CayleyPuzzle(Puzzle):
         state: "CayleyPuzzle.State",
         action: jax.Array,
     ) -> tuple["CayleyPuzzle.State", float]:
-        """Pure transition: every generator is valid and costs ``1.0``."""
         return self._step_kernel(state, action)
 
     def _get_neighbours(
@@ -427,9 +411,7 @@ class CayleyPuzzle(Puzzle):
             denom = max(1, max_val)
             scaled = (vec.astype(np.int64) * 255 // denom).clip(0, 255)
             scaled = scaled.astype(np.uint8)
-            strip = np.stack(
-                [scaled, scaled, scaled], axis=-1
-            )  # shape (state_length, 3)
+            strip = np.stack([scaled, scaled, scaled], axis=-1)
             img = strip.reshape(1, state_length, 3)
             return img
 
@@ -441,15 +423,7 @@ class CayleyPuzzle(Puzzle):
             return self._action_names[idx]
         return f"{self._graph_name}.gen[{idx}]"
 
-    # ----- Internal helpers -----
-
     def _read_graph_def(self, graph_def: "CayleyGraphDef") -> None:
-        """Validate and copy plain-data fields from ``graph_def``.
-
-        Lazy-imports ``cayleypy`` only to surface a friendly ``ImportError``
-        when the optional extra is missing AND the user has handed in a
-        non-cayleypy object.
-        """
         try:
             generators_type_raw = graph_def.generators_type
         except AttributeError as exc:
@@ -531,12 +505,6 @@ class CayleyPuzzle(Puzzle):
     def _close_under_inversion_permutations(
         self, perms_np: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, bool, list[int], list[int]]:
-        """Augment with ``argsort`` inverses; dedupe; return mapping.
-
-        Returns:
-            (augmented_perms, inverse_action_map_np, naturally_closed, deduped_indices, synthesized_from)
-        """
-        # Dedupe inputs first while preserving order.
         seen: dict[bytes, int] = {}
         deduped: list[np.ndarray] = []
         deduped_indices: list[int] = []

@@ -94,15 +94,12 @@ def extract_objects_by_type(
     direct_by_type: dict[str, list[str]] = {}
 
     parent, ancestors, descendants = hierarchy
-    _ = parent  # Unused directly but kept for clarity and symmetry
+    _ = parent
 
-    # Handle untyped objects
     if not hasattr(problem, "objects") or not problem.objects:
         objects_by_type["object"] = []
     else:
-        # Handle different object container types
         if isinstance(problem.objects, dict):
-            # If objects is a dict mapping type -> object list
             for obj_type, obj_list in problem.objects.items():
                 if obj_type not in direct_by_type:
                     direct_by_type[obj_type] = []
@@ -111,7 +108,6 @@ def extract_objects_by_type(
                     direct_by_type[obj_type].append(obj_name)
                     direct_by_type.setdefault("object", []).append(obj_name)
         else:
-            # If objects is a set-like container (frozenset, set, list)
             for obj in problem.objects:
                 obj_name = getattr(obj, "name", str(obj))
                 if hasattr(obj, "type_tags") and obj.type_tags:
@@ -128,7 +124,6 @@ def extract_objects_by_type(
                 else:
                     direct_by_type.setdefault("object", []).append(obj_name)
 
-    # Handle domain constants
     if domain is not None and hasattr(domain, "constants") and domain.constants:
         for obj in domain.constants:
             obj_name = getattr(obj, "name", str(obj))
@@ -146,9 +141,7 @@ def extract_objects_by_type(
             else:
                 direct_by_type.setdefault("object", []).append(obj_name)
 
-    # Expand direct to include descendants under supertypes
     if direct_by_type:
-        # Initialize with direct entries (deduped)
         for t, objs in direct_by_type.items():
             seen = set()
             deduped = []

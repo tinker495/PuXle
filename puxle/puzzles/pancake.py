@@ -15,7 +15,6 @@ TYPE = jnp.uint8
 
 
 def get_color(size):
-    """Get color based on pancake size"""
     colors = ["red", "green", "yellow", "blue", "magenta", "cyan"]
     return colors[int(size) % len(colors)]
 
@@ -40,8 +39,6 @@ class PancakeSorting(Puzzle):
     size: int
 
     def define_state_class(self) -> type[Xtructurable]:
-        """Defines the state class for PancakeSorting using xtructure."""
-
         class State(Xtructurable):
             stack: Annotated[
                 chex.Array, FieldDescriptor.tensor(dtype=TYPE, shape=(self.size,))
@@ -50,19 +47,11 @@ class PancakeSorting(Puzzle):
         return State
 
     def __init__(self, size: int = 35, **kwargs):
-        """
-        Initialize the Pancake Sorting puzzle
-
-        Args:
-            size: The number of pancakes in the stack
-        """
         self.size = size
         self.action_size = max(self.size - 1, 0)
         super().__init__(**kwargs)
 
     def get_string_parser(self):
-        """Returns a function to convert a state to a string representation"""
-
         def parser(state: "PancakeSorting.State", **kwargs):
             result = []
             # Host copy first; formatting a device array element-wise syncs per item.
@@ -80,8 +69,6 @@ class PancakeSorting(Puzzle):
         return parser
 
     def get_img_parser(self) -> Callable:
-        """Returns a function to convert a state to an image representation"""
-
         def img_func(state: "PancakeSorting.State", **kwargs):
             # IMG_SIZE is actually a tuple (width, height)
             image = np.full(
@@ -90,13 +77,11 @@ class PancakeSorting(Puzzle):
             stack = state.stack
             max_size = self.size
 
-            # Calculate parameters for visualization
-            img_height = IMG_SIZE[1]  # Height from the tuple
+            img_height = IMG_SIZE[1]
             pancake_height = img_height // (self.size + 4)
-            max_width = IMG_SIZE[0] - 40  # Width from the tuple
+            max_width = IMG_SIZE[0] - 40
 
-            # Draw a plate at the bottom - moved to the bottom of the image
-            plate_y = img_height - 50  # Position plate at the bottom with some margin
+            plate_y = img_height - 50
             plate_height = pancake_height // 2
             plate_width = int(max_width * 1.1)
             image = cv2.ellipse(
@@ -115,24 +100,18 @@ class PancakeSorting(Puzzle):
                 x_start = (IMG_SIZE[0] - width) // 2
                 x_end = x_start + width
 
-                # Generate color based on pancake size using a gradient
-                # Map the size to a position in the gradient (0 to 1)
                 gradient_pos = (size - 1) / max_size
 
-                # Create a smooth gradient from light orange to dark brown
-                r = int(255 - (95 * gradient_pos))  # 255 -> 160
-                g = int(200 - (100 * gradient_pos))  # 200 -> 100
-                b = int(100 - (100 * gradient_pos))  # 100 -> 0
+                r = int(255 - (95 * gradient_pos))
+                g = int(200 - (100 * gradient_pos))
+                b = int(100 - (100 * gradient_pos))
 
-                # Ensure values are within valid range
                 r = max(0, min(255, r))
                 g = max(0, min(255, g))
                 b = max(0, min(255, b))
 
                 color = (r, g, b)
 
-                # Draw pancake with rounded corners and gradient
-                # Create a rounded rectangle for the pancake
                 rect_points = np.array(
                     [
                         [x_start, y_pos],
@@ -142,10 +121,8 @@ class PancakeSorting(Puzzle):
                     ]
                 )
 
-                # Draw filled pancake with rounded corners
                 img = cv2.fillPoly(img, [rect_points], color)
 
-                # Add a highlight on top of the pancake
                 highlight_y = y_pos + 2
                 highlight_height = pancake_height // 4
                 img = cv2.rectangle(
@@ -160,7 +137,6 @@ class PancakeSorting(Puzzle):
                     -1,
                 )
 
-                # Add a shadow at the bottom
                 shadow_y = y_pos + pancake_height - highlight_height - 2
                 img = cv2.rectangle(
                     img,
@@ -174,7 +150,6 @@ class PancakeSorting(Puzzle):
                     -1,
                 )
 
-                # Add size text in the middle of the pancake
                 text = str(int(size))
                 (text_w, text_h), _ = cv2.getTextSize(
                     text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2
@@ -193,15 +168,12 @@ class PancakeSorting(Puzzle):
 
                 return img
 
-            # Calculate starting position for the stack (from bottom to top)
             base_y_pos = plate_y - int(pancake_height * 0.75)
 
-            # Draw each pancake from bottom to top
             for i, size in enumerate(reversed(stack)):
                 y_pos = base_y_pos - (i * pancake_height)
                 image = draw_pancake(image, y_pos, size)
 
-            # Convert to JAX array and return
             return image
 
         return img_func
@@ -209,11 +181,9 @@ class PancakeSorting(Puzzle):
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "PancakeSorting.State":
-        """Generate a random initial state for the puzzle"""
         return self._get_random_state(key)
 
     def get_solve_config(self, key=None, data=None) -> "PancakeSorting.SolveConfig":
-        """Create the solving configuration (target state)"""
         # Target is the sorted order, largest at the bottom (index size-1)
         target_stack = jnp.arange(1, self.size + 1, dtype=TYPE)
         return self.SolveConfig(
@@ -227,10 +197,6 @@ class PancakeSorting(Puzzle):
         state: "PancakeSorting.State",
         action: chex.Array,
     ) -> tuple["PancakeSorting.State", float]:
-        """Pure transition: every flip is valid with unit cost.
-
-        flip_pos = action + 1
-        """
         flip_pos = action + 1
         indices = jnp.arange(self.size)
         source = jnp.where(indices <= flip_pos, flip_pos - indices, indices)
@@ -245,7 +211,6 @@ class PancakeSorting(Puzzle):
         return self.State(stack=state.stack[source]), jnp.ones(self.action_size)
 
     def action_to_string(self, action: int) -> str:
-        """Return a string representation of the action"""
         return f"Flip at position {action + 1}"
 
     @property
@@ -257,10 +222,8 @@ class PancakeSorting(Puzzle):
         return jnp.arange(self.action_size)
 
     def _get_random_state(self, key):
-        """Generate a random initial state"""
         if key is None:
             key = jax.random.PRNGKey(0)
 
-        # Create a shuffled arrangement of pancakes
         stack = jax.random.permutation(key, jnp.arange(1, self.size + 1, dtype=TYPE))
         return self.State(stack=stack)

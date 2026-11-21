@@ -45,7 +45,7 @@ def test_rubikscube_actions_match_slice_rotation_reference(
 
 
 def _ref_state_symmetries(cube: RubiksCube, state: RubiksCube.State) -> jnp.ndarray:
-    """Reference implementation using repeated slice rotations (matches old fori_loop semantics)."""
+    """Independent reference computing all 24 cube orientations via repeated slice rotations."""
 
     def rotate_whole(axis: int) -> RubiksCube.State:
         s = state

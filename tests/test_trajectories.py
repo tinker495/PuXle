@@ -72,7 +72,7 @@ def test_random_trajectory_legacy_path():
     sp = SlidePuzzle(size=4)
     key = jax.random.PRNGKey(42)
 
-    # Legacy path: non_backtracking_steps=3
+    # General history-based path: non_backtracking_steps=3 exceeds the 1-step inverse-masking fast path.
     traj = sp.batched_get_random_trajectory(
         k_max=5, shuffle_parallel=2, key=key, non_backtracking_steps=3
     )

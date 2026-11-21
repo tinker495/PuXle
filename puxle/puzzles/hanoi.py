@@ -37,11 +37,10 @@ class TowerOfHanoi(Puzzle):
     """
 
     num_disks: int
-    num_pegs: int = 3  # Classic Tower of Hanoi has 3 pegs
+    num_pegs: int = 3
     max_disk_value: int
 
     def define_state_class(self) -> type[Xtructurable]:
-        """Defines the state class for Tower of Hanoi using xtructure."""
         count, peg_count = self.num_disks, self.num_pegs
 
         class State(Xtructurable):
@@ -72,17 +71,10 @@ class TowerOfHanoi(Puzzle):
         return State
 
     def __init__(self, size: int = 5, **kwargs):
-        """
-        Initialize the Tower of Hanoi puzzle
-
-        Args:
-            num_disks: The number of disks in the puzzle
-        """
         self.num_disks = size
         self.max_disk_value = size
         self.action_size = self.num_pegs * (self.num_pegs - 1)
-        # (from_peg, to_peg) pairs indexed by action; built once and shared by
-        # get_actions (as a jnp array) and action_to_string.
+        # (from_peg, to_peg) pairs indexed by action; reused across transitions and formatting.
         self._possible_moves = jnp.array(
             [
                 [from_peg, to_peg]
@@ -94,33 +86,24 @@ class TowerOfHanoi(Puzzle):
         super().__init__(**kwargs)
 
     def get_string_parser(self):
-        """Returns a function to convert a state to a string representation"""
-
         def parser(state: "TowerOfHanoi.State", **kwargs):
             result = []
 
-            # Get the pegs array - has shape (num_pegs, num_disks + 1)
             # Host copy first; reading a device array per disk syncs each time.
             pegs = jax.device_get(state).pegs
 
-            # Find the maximum height
             max_height = self.num_disks
 
-            # For each level from top to bottom
             for level in range(max_height):
                 row = []
 
-                # For each peg
                 for peg_idx in range(self.num_pegs):
                     peg = pegs[peg_idx]
                     num_disks_on_peg = int(peg[0])
 
-                    # Calculate position from the top
                     pos_from_top = level
 
-                    # If there's a disk at this position
                     if pos_from_top < num_disks_on_peg:
-                        # Get the disk at this position (index 1 + pos_from_top has the disk size)
                         disk_size = int(peg[1 + pos_from_top])
                         disk_str = "=" * (2 * disk_size - 1)
                         colored_disk = colored_str(
@@ -129,12 +112,10 @@ class TowerOfHanoi(Puzzle):
                         )
                         row.append(colored_disk)
                     else:
-                        # No disk, just show the peg
                         row.append("|".center(2 * self.num_disks + 1))
 
                 result.append("   ".join(row))
 
-            # Add base
             base_row = []
             for _ in range(self.num_pegs):
                 base = "-" * (2 * self.num_disks + 1)
@@ -142,7 +123,6 @@ class TowerOfHanoi(Puzzle):
 
             result.append("   ".join(base_row))
 
-            # Add peg numbers
             label_row = []
             for i in range(self.num_pegs):
                 label = f"Peg {i + 1}".center(2 * self.num_disks + 1)
@@ -155,25 +135,18 @@ class TowerOfHanoi(Puzzle):
         return parser
 
     def get_img_parser(self) -> Callable:
-        """Returns a function to convert a state to an image representation"""
-
         def img_func(state: "TowerOfHanoi.State", **kwargs):
-            # Get dimensions
             width, height = IMG_SIZE
 
-            # Create blank image with correct dimensions
             image = np.full((height, width, 3), (240, 240, 240), dtype=np.uint8)
 
-            # Parameters for visualization
             peg_width = 10
             peg_height = height * 0.6
             base_height = 20
             base_width = width * 0.8
 
-            # Bottom of pegs (y-coordinate)
             base_y = height - 80
 
-            # Draw base
             base_x = (width - base_width) / 2
             image = cv2.rectangle(
                 image,
@@ -182,17 +155,15 @@ class TowerOfHanoi(Puzzle):
                     int(base_x + base_width),
                     int(base_y + base_height),
                 ),
-                (120, 80, 40),  # Brown color
+                (120, 80, 40),
                 -1,
             )
 
-            # Calculate peg positions
             peg_xs = [
                 base_x + base_width * (i + 1) / (self.num_pegs + 1)
                 for i in range(self.num_pegs)
             ]
 
-            # Draw pegs
             for peg_x in peg_xs:
                 image = cv2.rectangle(
                     image,
@@ -201,35 +172,28 @@ class TowerOfHanoi(Puzzle):
                         int(base_y - peg_height),
                     ),
                     (int(peg_x + peg_width / 2), int(base_y)),
-                    (120, 80, 40),  # Brown color
+                    (120, 80, 40),
                     -1,
                 )
 
-            # Draw disks on pegs
             max_disk_width = base_width / (self.num_pegs + 1) * 0.9
             disk_height = 20
 
-            # Get the pegs array
             pegs = jax.device_get(state).pegs
 
-            # For each peg
             for peg_idx, peg_x in enumerate(peg_xs):
                 peg = pegs[peg_idx]
                 num_disks_on_peg = int(peg[0])
 
-                # For each disk on this peg (from bottom to top)
                 for disk_idx in range(num_disks_on_peg):
                     disk_size = int(peg[1 + disk_idx])
                     disk_width = max_disk_width * disk_size / self.max_disk_value
 
-                    # Position from bottom
                     pos_from_bottom = num_disks_on_peg - disk_idx - 1
                     disk_y = base_y - (pos_from_bottom + 1) * disk_height
 
-                    # Generate color based on disk size
                     color = get_disk_color(disk_size, self.max_disk_value)
 
-                    # Draw disk
                     image = cv2.rectangle(
                         image,
                         (
@@ -244,7 +208,6 @@ class TowerOfHanoi(Puzzle):
                         -1,
                     )
 
-                    # Add disk size text
                     text = str(disk_size)
                     (text_w, _text_h), _ = cv2.getTextSize(
                         text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
@@ -329,19 +292,16 @@ class TowerOfHanoi(Puzzle):
         return states, jnp.where(moving < top[targets], 1.0, jnp.inf)
 
     def action_to_string(self, action: int) -> str:
-        """Return a string representation of the action"""
         from_peg, to_peg = self._possible_moves[action]
         return f"Move disk from peg {int(from_peg) + 1} to peg {int(to_peg) + 1}"
 
 
 def get_color(size):
-    """Get color based on disk size"""
     colors = ["red", "green", "yellow", "blue", "magenta", "cyan"]
     return colors[(size - 1) % len(colors)]
 
 
 def get_disk_color(size, max_size):
-    """Get disk color as RGB based on size"""
     # Rainbow gradient from blue (hue 240) for small disks to red (hue 0).
     hue = 240 * (1 - size / max_size)
     r, g, b = colorsys.hsv_to_rgb(hue / 360, 0.8, 0.9)

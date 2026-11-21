@@ -210,12 +210,10 @@ class DotKnot(Puzzle):
     ) -> jax.Array:
         unpacked = state.board_unpacked
         empty = jnp.all(unpacked == 0)  # ALL empty is not solved condition
-        gr = jnp.greater_equal(unpacked, 1)  # ALL point a is solved condition
-        le = jnp.less_equal(
-            unpacked, self.color_num * 2
-        )  # ALL point b is solved condition
+        gr = jnp.greater_equal(unpacked, 1)
+        le = jnp.less_equal(unpacked, self.color_num * 2)
         points = gr & le
-        no_point = ~jnp.any(points)  # if there is no point, it is solved
+        no_point = ~jnp.any(points)
         return no_point & ~empty
 
     def action_to_string(self, action: int) -> str:
@@ -225,9 +223,6 @@ class DotKnot(Puzzle):
         return self._grid_visualize_format(self.size)
 
     def _get_random_state(self, key, num_shuffle=30):
-        """
-        This function should return a random state.
-        """
         init_board = jnp.zeros((self.size * self.size), dtype=TYPE)
 
         def _while_loop(val):
@@ -260,10 +255,6 @@ class DotKnot(Puzzle):
         return parser
 
     def get_img_parser(self) -> Callable:
-        """
-        This function is a decorator that adds an img_parser to the class.
-        """
-
         def img_func(state: "DotKnot.State", **kwargs):
             imgsize = IMG_SIZE[0]
             img = np.full(
@@ -280,7 +271,7 @@ class DotKnot(Puzzle):
                 -1,
             )
             board_flat = state.board_unpacked
-            knot_max = 2 * self.color_num  # Values <= knot_max represent knots
+            knot_max = 2 * self.color_num
             for idx, val in enumerate(board_flat):
                 if val == 0:
                     continue
@@ -294,11 +285,9 @@ class DotKnot(Puzzle):
                 center = (stx + bs // 2, sty + bs // 2)
                 color = COLOR_MAP[(int(val) - 1) % len(COLOR_MAP)]
                 if val <= knot_max:
-                    # Draw knot as a filled circle
                     radius = int(bs * 0.6)
                     img = cv2.circle(img, center, radius, color, -1)
                 else:
-                    # Draw path as a filled rectangle
                     img = cv2.rectangle(
                         img, (stx, sty), (stx + bs, sty + bs), color, -1
                     )

@@ -218,10 +218,6 @@ class SlidePuzzle(Puzzle):
         return form
 
     def _get_random_state(self, key):
-        """
-        This function should return a random state.
-        """
-
         def get_random_state(key):
             board = jax.random.permutation(key, jnp.arange(0, self.size**2, dtype=TYPE))
             return self.State.from_unpacked(board=board)
@@ -242,7 +238,6 @@ class SlidePuzzle(Puzzle):
         return state
 
     def _solvable(self, state: "SlidePuzzle.State"):
-        """Check if the state is solvable"""
         board = state.board_unpacked
         N = self.size
         inv_count = self._get_inv_count(board)
@@ -263,8 +258,6 @@ class SlidePuzzle(Puzzle):
         return self._get_blank_position(board)[0]
 
     def _get_inv_count(self, board: chex.Array):
-        # Count ordered pairs (i < j) where both tiles are non-blank and out of
-        # order. Vectorized equivalent of the O(n^4) double loop.
         flat = self.size * self.size
         a = jnp.asarray(board)
         out_of_order = a[:, None] > a[None, :]
@@ -273,9 +266,6 @@ class SlidePuzzle(Puzzle):
         return jnp.sum(out_of_order & both_nonzero & upper)
 
     def get_img_parser(self) -> Callable:
-        """
-        This function is a decorator that adds an img_parser to the class.
-        """
         size = self.size
 
         def img_func(state: "SlidePuzzle.State", **kwargs):

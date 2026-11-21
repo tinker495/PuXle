@@ -88,7 +88,6 @@ def rot90_traceable(m, k=1, axes=(0, 1)):
     return jax.lax.switch(k, [partial(jnp.rot90, m, k=i, axes=axes) for i in range(4)])
 
 
-# --- Global cube rotation symmetries (24) ---
 # We represent a global rotation as (perm, k) with:
 #   out_face[i] = rot90(in_face[perm[i]], k[i])
 # where i indexes faces in {UP, FRONT, RIGHT, BACK, LEFT, DOWN}.
@@ -145,13 +144,10 @@ def _pow_axis_cw(axis: int, k: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _build_symmetry_maps_24() -> tuple[jnp.ndarray, jnp.ndarray]:
-    """
-    Build constant (perm24, k24) arrays of shape (24, 6).
+    """Build constant (perm24, k24) arrays of shape (24, 6).
 
-    Enumeration matches the previous implementation:
-      bases = [I, x, x^2, x^3, z, z^3], and for each base we append 4 y-spins.
+    Enumerates bases [I, x, x^2, x^3, z, z^3] with 4 y-spins per base.
     """
-    # Base orientations.
     base_specs: list[tuple[int, int]] = [
         (0, 0),  # I  (axis ignored)
         (0, 1),  # x
@@ -182,10 +178,6 @@ def _build_symmetry_maps_24() -> tuple[jnp.ndarray, jnp.ndarray]:
 
 
 _SYM_PERM24, _SYM_K24 = _build_symmetry_maps_24()
-
-
-# (rolled_faces, rotate_axis_for_rolled_faces)
-# 0: x-axis(left), 1: y-axis(up), 2: z-axis(front)
 
 
 class RubiksCube(Puzzle):
@@ -319,12 +311,10 @@ class RubiksCube(Puzzle):
 
     def get_string_parser(self) -> Callable:
         def parser(state: "RubiksCube.State", *, use_color_overlay: bool = False, **_):
-            # Unpack the state faces before printing. Host copy first: the tile
-            # loop below reads one element at a time, which syncs per tile.
+            # Host copy first; per-tile reads off a device array sync per tile.
             unpacked_faces = jax.device_get(state).faces_unpacked
             as_color = self.color_embedding or use_color_overlay
 
-            # Helper function to get face string
             def get_empty_face_string():
                 return "\n".join(["  " * (self.size + 2) for _ in range(self.size + 2)])
 
@@ -352,7 +342,6 @@ class RubiksCube(Puzzle):
                 string += f"┗━{'━' * inner_width}━┛\n"
                 return string
 
-            # Create the cube string representation
             cube_str = _plain_table(
                 [
                     [color_legend(), (".\n" + get_face_string(UP))],
@@ -423,16 +412,14 @@ class RubiksCube(Puzzle):
         The result is a *batched* `State` whose leading dimension is 24.
         This is useful for symmetry-aware hashing / canonicalization or data augmentation.
         """
-        # Work in unpacked (6, n, n) to apply precomputed axis rotations.
-        shaped = state.faces_unpacked.reshape((6, self.size, self.size))  # (6, n, n)
+        shaped = state.faces_unpacked.reshape((6, self.size, self.size))
 
-        # Apply 24 global rotations via a single gather + per-face rot90.
         faces_perm = shaped[_SYM_PERM24]  # (24, 6, n, n)
         rotated = jax.vmap(
             lambda faces6, ks6: jax.vmap(lambda f, kk: rot90_traceable(f, kk))(
                 faces6, ks6
             )
-        )(faces_perm, _SYM_K24)  # (24, 6, n, n)
+        )(faces_perm, _SYM_K24)
         sym_flat = rotated.reshape((24, 6, self._tile_count))
         return self.State.from_unpacked(shape=(24,), faces=sym_flat)
 
@@ -451,7 +438,6 @@ class RubiksCube(Puzzle):
         num_actions = 3 * len(self.index_grid) * 2
         actions = jnp.arange(num_actions)
 
-        # Reshape to pair up cw/ccw actions, flip them, and flatten back
         inv_map = jnp.reshape(actions, (-1, 2))
         inv_map = jnp.flip(inv_map, axis=1)
         inv_map = jnp.reshape(inv_map, (-1,))
@@ -469,9 +455,7 @@ class RubiksCube(Puzzle):
         For cubes larger than 3x3x3, internal slice rotations are named
         with layer numbers (e.g., L2, R2 for 4x4x4 cube).
         """
-        # Decode action into components. The meshgrid in `get_neighbours` yields
-        # actions ordered as:
-        #   counterclockwise/clockwise (fastest) × axis (next) × slice index (slowest).
+        # Action layout: clockwise (fastest) x axis (next) x slice index (slowest).
         num_axes = 3
         num_indices = len(self.index_grid)
         action_limit = num_axes * num_indices * 2
@@ -484,7 +468,6 @@ class RubiksCube(Puzzle):
         axis = int((action // 2) % num_axes)
         index_idx = int(action // (2 * num_axes))
 
-        # Map (axis, index) to face using the same logic as _rotate method
         actual_index = int(self.index_grid[index_idx])
 
         is_center_slice = (
@@ -514,23 +497,17 @@ class RubiksCube(Puzzle):
                     f"Invalid edge rotation (axis={axis}, index={actual_index})"
                 ) from exc
         else:
-            # For cubes larger than 3x3x3, use layer-based naming
-            # Define face name pairs for each axis: (negative_direction, positive_direction)
             face_pairs = [("L", "R"), ("D", "U"), ("F", "B")]
             negative_face, positive_face = face_pairs[axis]
 
-            # Determine which face this slice is closer to and calculate layer number
             mid_point = (self.size - 1) / 2
             if actual_index < mid_point:
-                # Closer to negative direction face (L, D, F)
                 face_name = negative_face
                 layer_num = actual_index + 1
             else:
-                # Closer to positive direction face (R, U, B)
                 face_name = positive_face
                 layer_num = self.size - actual_index
 
-            # For layer 1, don't include the number
             face_str = face_name if layer_num == 1 else f"{face_name}{layer_num}"
 
         if face_str in {"U", "R", "F"}:
@@ -548,10 +525,6 @@ class RubiksCube(Puzzle):
     def _rotate(
         self, state: "RubiksCube.State", axis: int, index: int, clockwise: bool = True
     ):
-        # rotate the edge clockwise or counterclockwise
-        # axis is the axis of the rotation, 0 for x, 1 for y, 2 for z
-        # index is the index of the edge to rotate
-        # clockwise is a boolean, True for clockwise, False for counterclockwise
         faces = self._rotate_faces(state.faces_unpacked, axis, index, clockwise)
         return state.set_unpacked(faces=faces)
 
@@ -618,64 +591,53 @@ class RubiksCube(Puzzle):
         shaped_faces = jax.lax.switch(
             switch_num,
             [
-                lambda: shaped_faces,  # 0: None
+                lambda: shaped_faces,
                 lambda: shaped_faces.at[LEFT].set(
                     self._rotate_face(shaped_faces[LEFT], clockwise, -1)
-                ),  # 1: left
+                ),
                 lambda: shaped_faces.at[RIGHT].set(
                     self._rotate_face(shaped_faces[RIGHT], clockwise, 1)
-                ),  # 2: right
+                ),
                 lambda: shaped_faces.at[DOWN].set(
                     self._rotate_face(shaped_faces[DOWN], clockwise, -1)
-                ),  # 3: down
+                ),
                 lambda: shaped_faces.at[UP].set(
                     self._rotate_face(shaped_faces[UP], clockwise, 1)
-                ),  # 4: up
+                ),
                 lambda: shaped_faces.at[FRONT].set(
                     self._rotate_face(shaped_faces[FRONT], clockwise, 1)
-                ),  # 5: front
+                ),
                 lambda: shaped_faces.at[BACK].set(
                     self._rotate_face(shaped_faces[BACK], clockwise, -1)
-                ),  # 6: back
+                ),
             ],
         )
         return jnp.reshape(shaped_faces, (6, self._tile_count))
 
     def _compute_projection_params(self, imgsize: int):
-        """
-        Compute projection parameters for isometric cube rendering.
-
-        Returns:
-            tuple: (cos45, sin45, scale, offset_x, offset_y, margin)
-        """
         import math
 
         cos45 = math.cos(math.pi / 4)
         sin45 = math.sin(math.pi / 4)
 
-        # Orthographic projection helper
         def project(x, y, z):
             u = cos45 * x - sin45 * z
             v = cos45 * y + 0.5 * (x + z)
             return u, v
 
-        # Determine the cube's bounding box in projection to scale and center it on the image
         vertices = []
-        # Top face (UP): shifted down by adjusting y coordinates
         vertices += [
             (0, 0, 0),
             (self.size, 0, 0),
             (self.size, 0, self.size),
             (0, 0, self.size),
         ]
-        # Front face (FRONT): shifted down
         vertices += [
             (0, 0, self.size),
             (self.size, 0, self.size),
             (self.size, -self.size, self.size),
             (0, -self.size, self.size),
         ]
-        # Right face (RIGHT): shifted down
         vertices += [
             (self.size, 0, self.size),
             (self.size, -self.size, self.size),
@@ -701,16 +663,6 @@ class RubiksCube(Puzzle):
 
     @staticmethod
     def _draw_tile(img_target, pts, color_idx, value, color_embedding):
-        """
-        Draw a single cube face tile with color and optional numbering.
-
-        Args:
-            img_target: Target image array
-            pts: Corner points of the tile
-            color_idx: Color index (0-5)
-            value: Tile value for numbering
-            color_embedding: Whether using color embedding mode
-        """
         color = rgb_map[color_idx]
         cv2.fillPoly(img_target, [pts], color)
         cv2.polylines(
@@ -744,16 +696,10 @@ class RubiksCube(Puzzle):
             )
 
     def get_img_parser(self) -> Callable:
-        """
-        This function is a decorator that adds an img_parser to the class.
-        """
-
         def img_func(state: "RubiksCube.State", another_faces: bool = True, **kwargs):
             imgsize = IMG_SIZE[0]
-            # Create a blank image with a neutral background
             img = np.full((imgsize, imgsize, 3), (190, 190, 190), dtype=np.uint8)
 
-            # Set up projection parameters
             cos45, sin45, scale, offset_x, offset_y, margin = (
                 self._compute_projection_params(imgsize)
             )
@@ -768,7 +714,6 @@ class RubiksCube(Puzzle):
                 u, v = project(x, y, z)
                 return int(u * scale + offset_x), int(v * scale + offset_y)
 
-            # Obtain sticker data and colour mapping
             stickers = np.array(state.faces_unpacked, dtype=np.int32).reshape(
                 (6, self.size, self.size)
             )
@@ -788,7 +733,6 @@ class RubiksCube(Puzzle):
                 )
 
             # Draw faces in correct order for proper depth.
-            # 1. Draw the front face (FRONT)
             for i in range(self.size):
                 for j in range(self.size):
                     p0 = (j, i, self.size)
@@ -806,7 +750,6 @@ class RubiksCube(Puzzle):
                     ).reshape((-1, 1, 2))
                     draw_tile(img, pts, FRONT, i, j)
 
-            # 2. Draw the right face (RIGHT)
             for i in range(self.size):
                 for j in range(self.size):
                     p0 = (self.size, i, self.size - j)
@@ -824,7 +767,6 @@ class RubiksCube(Puzzle):
                     ).reshape((-1, 1, 2))
                     draw_tile(img, pts, RIGHT, i, j)
 
-            # 3. Draw the top face (UP) last so that it appears above the other faces
             for i in range(self.size):
                 for j in range(self.size):
                     p0 = (j, 0, self.size - i)
@@ -843,11 +785,9 @@ class RubiksCube(Puzzle):
                     # Note: for UP, flip the row order to match orientation
                     draw_tile(img, pts, UP, self.size - i - 1, j)
 
-            # If another_faces is True, draw additional faces (DOWN, BACK, LEFT) as flat squares
             if another_faces:
                 img2 = np.full((imgsize, imgsize, 3), (190, 190, 190), dtype=np.uint8)
 
-                # 4. Draw the back face (BACK)
                 for i in range(self.size):
                     for j in range(self.size):
                         p0 = (self.size - j - 1, i, 0)
@@ -865,7 +805,6 @@ class RubiksCube(Puzzle):
                         ).reshape((-1, 1, 2))
                         draw_tile(img2, pts, BACK, i, j)
 
-                # 2. Draw the down face (DOWN)
                 for i in range(self.size):
                     for j in range(self.size):
                         p0 = (i, self.size, j)
@@ -883,7 +822,6 @@ class RubiksCube(Puzzle):
                         ).reshape((-1, 1, 2))
                         draw_tile(img2, pts, DOWN, self.size - j - 1, i)
 
-                # 3. Draw the left face (LEFT) last so that it appears above the other faces
                 for i in range(self.size):
                     for j in range(self.size):
                         p0 = (0, i, j)

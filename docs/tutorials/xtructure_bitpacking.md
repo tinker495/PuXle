@@ -18,9 +18,9 @@ plain Python mixins instead of inheriting from an already transformed class.
 Use `FieldDescriptor.packed_tensor(...)` when you want **a specific logical field** stored as
 packed bytes in-memory.
 
-- `shape=` declares the logical unpacked **Intrinsic Shape** in the **Xtructure Schema**.
-- The stored field (e.g. `board`) is a packed `uint8` array (byte-stream) whose storage
-  shape is derived by **Type Layout** / **Packed Field Layout**.
+- `shape=` declares the logical unpacked array shape.
+- The stored field (e.g. `board`) is a packed `uint8` byte-stream whose storage shape is
+  derived from `shape` and `packed_bits`.
 - Access `<field>_unpacked` to get the logical array.
 - Use `from_unpacked(field=...)` to create a packed instance directly from logical arrays (most efficient).
 - Use `set_unpacked(field=...)` to update an existing instance.
@@ -70,12 +70,12 @@ If you want to minimize per-field padding by packing **multiple fields together*
 
 Pattern:
 - Define fields with `bits=...` (for primitive leaves).
-- xtructure can provide a packed representation for the entire dataclass via `.packed / .unpacked`
-  (and may generate helper classes like `YourState.Packed` depending on xtructure version/config).
+- xtructure provides a packed representation for the entire dataclass via `.packed` / `.unpacked`
+  and `YourState.Packed`.
 
 Use this when:
 - you have many small fields and want a single compact stream,
-- you want partial decode via `unpack_field(...)` (when supported).
+- you want partial decode via `unpack_field(...)`.
 
 ## 3) Measure physical layout and transition cost
 
@@ -85,5 +85,5 @@ Its storage is `ceil(N / (lcm(b, 8) / b)) * (lcm(b, 8) / 8)` bytes, which can ex
 Compare actual stored PyTree leaf bytes and GPU transitions; a narrower field can introduce
 additional gather/decode work. Packed XOR and single-bit updates can avoid whole-field decoding.
 
-The [native puzzle packing guide](../../puxle/puzzles/AGENTS.md) records per-puzzle value ranges,
-padding, shared context, transition invariants, and alternatives that need measurement.
+See `puxle/puzzles/AGENTS.md` for per-puzzle value ranges, padding, shared context, and
+transition invariants.

@@ -57,7 +57,6 @@ class Sokoban(Puzzle):
         ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET = 1
 
     def define_state_class(self) -> type[Xtructurable]:
-        """Defines the state class for Sokoban using xtructure."""
         size = self.size
 
         class State(Xtructurable):
@@ -124,27 +123,22 @@ class Sokoban(Puzzle):
         # board data (2 bits per cell, 10x10 -> 25 bytes).
         # We pass it directly to the State constructor as the underlying packed buffer.
         if data is None:
-            # When no data is provided, generate data using get_data method
             data = self.get_data(key)
         _, init_data = data
         return self.State(board=init_data)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
         if data is None:
-            # When no data is provided, generate data using get_data method
             data = self.get_data(key)
         target_data, _ = data
         if (
             self.solve_condition
             == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET
         ):
-            # If we need to modify the board (e.g. place agent randomly),
-            # we first unpack the data to work with logical values.
             board = self.State(board=target_data).board_unpacked
             board = self._place_agent_randomly(board, key)
             target_state = self.State.from_unpacked(board=board)
         else:
-            # Otherwise, use the pre-packed target data directly.
             target_state = self.State(board=target_data)
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(), GoalSpec=target_state
@@ -153,10 +147,8 @@ class Sokoban(Puzzle):
     def is_solved(
         self, solve_config: Puzzle.SolveConfig, state: "Sokoban.State"
     ) -> jax.Array:
-        # Unpack boards for comparison.
         board = state.board_unpacked
         t_board = solve_config.GoalSpec.board_unpacked
-        # Remove the player from the current board.
         if (
             self.solve_condition
             == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET_AND_PLAYER_ON_TARGET
@@ -204,9 +196,7 @@ class Sokoban(Puzzle):
         def parser(
             state: "Sokoban.State", solve_config: "Sokoban.SolveConfig" = None, **kwargs
         ):
-            # Unpack the board before visualization. The overlay below walks every
-            # cell in Python, so it has to run on a host copy — indexing a device
-            # array per cell costs a synchronisation each time.
+            # Host copy first; per-cell Python overlay reads on a device array sync per cell.
             board = np.array(jax.device_get(state).board_unpacked)
             if solve_config is not None:
                 goal = jax.device_get(solve_config).GoalSpec.board_unpacked
@@ -310,9 +300,6 @@ class Sokoban(Puzzle):
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
     def get_img_parser(self) -> Callable:
-        """
-        This function is a decorator that adds an img_parser to the class.
-        """
         import cv2
         import numpy as np
 
@@ -372,20 +359,16 @@ class Sokoban(Puzzle):
                     if (
                         goal is not None
                         and goal[i * self.size + j] == Sokoban.Object.BOX.value
-                    ):  # If this cell is marked as a target
+                    ):
                         match cell_val:
                             case Sokoban.Object.PLAYER.value:
                                 asset = assets.get(
                                     Sokoban.Object.PLAYER_ON_TARGET.value
-                                )  # agent on target
+                                )
                             case Sokoban.Object.BOX.value:
-                                asset = assets.get(
-                                    Sokoban.Object.BOX_ON_TARGET.value
-                                )  # box on target
+                                asset = assets.get(Sokoban.Object.BOX_ON_TARGET.value)
                             case Sokoban.Object.EMPTY.value:
-                                asset = assets.get(
-                                    Sokoban.Object.TARGET.value
-                                )  # target floor (box target)
+                                asset = assets.get(Sokoban.Object.TARGET.value)
                             case _:
                                 asset = assets.get(cell_val)
                     elif (
@@ -408,7 +391,6 @@ class Sokoban(Puzzle):
                             i * cell_h : (i + 1) * cell_h, j * cell_w : (j + 1) * cell_w
                         ] = asset
                     else:
-                        # Fallback: fill with a gray square if image not found
                         img[
                             i * cell_h : (i + 1) * cell_h, j * cell_w : (j + 1) * cell_w
                         ] = (
@@ -423,18 +405,12 @@ class Sokoban(Puzzle):
     def _get_box_positions(
         self, board: jax.Array, number_of_boxes: int = 4
     ) -> tuple[jax.Array, ...]:
-        """
-        Get the positions of all boxes on the board.
-        """
         flat_index = jnp.argsort(board == Sokoban.Object.BOX.value)[-number_of_boxes:]
         return jnp.unravel_index(flat_index, (self.size, self.size))
 
     def _place_agent_randomly(
         self, board: jnp.ndarray, key: chex.Array | None
     ) -> jnp.ndarray:
-        """
-        Place the agent randomly on the board.
-        """
         if key is None:
             raise ValueError("A random key is required to place the Sokoban player.")
         box_xs, box_ys = self._get_box_positions(board)
@@ -467,9 +443,7 @@ class Sokoban(Puzzle):
     def solve_config_to_state_transform(
         self, solve_config: "Sokoban.SolveConfig", key: chex.Array | None = None
     ) -> "Sokoban.State":
-        """
-        This function shoulde transformt the solve config to the state.
-        """
+        """Convert goal board to a state, placing the player next to a box when the goal omits the player."""
         board = solve_config.GoalSpec.board_unpacked
         if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET:
             board = self._place_agent_randomly(board, key)
@@ -479,9 +453,7 @@ class Sokoban(Puzzle):
     def hindsight_transform(
         self, solve_config: "Sokoban.SolveConfig", state: "Sokoban.State"
     ) -> "Sokoban.SolveConfig":
-        """
-        This function shoulde transformt the state to the solve config.
-        """
+        """Set state as the new goal, removing the player cell when solve_condition is ALL_BOXES_ON_TARGET."""
         board = state.board_unpacked
         if self.solve_condition == Sokoban.SolveCondition.ALL_BOXES_ON_TARGET:
             rm_player = jnp.where(

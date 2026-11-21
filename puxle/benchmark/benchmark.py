@@ -142,17 +142,14 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         if target_path:
             final_state = target_path[-1]
         else:
-            # Reconstruct the path from the action sequence via the shared helper.
             reconstructed = self._build_optimal_path(
                 sample.state, sample.solve_config, target_sequence
             )
             final_state = reconstructed[-1] if reconstructed else sample.state
 
-        # 1. Check validity
         if not self.puzzle.is_solved(sample.solve_config, final_state):
             return False
 
-        # 2. Check optimality
         if sample.optimal_action_sequence is None:
             return None
 
@@ -178,7 +175,6 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         return True
 
     def _ensure_solve_config(self) -> SolveConfigT:
-        """Return the puzzle solve configuration, building it once and caching it."""
         if self._solve_config_cache is None:
             self._solve_config_cache = self.puzzle.get_solve_config()
         return self._solve_config_cache
@@ -195,7 +191,6 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         return value
 
     def _build_action_lookup(self) -> dict[str, int]:
-        """Build a mapping from action notation to action index."""
         if self._notation_to_action is None:
             puzzle = self.puzzle
             self._notation_to_action = {
@@ -210,7 +205,6 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         solve_config: SolveConfigT,
         action_sequence: Sequence[str] | None,
     ) -> tuple[StateT, ...] | None:
-        """Reconstruct the sequence of states from an action sequence."""
         if not action_sequence:
             return tuple() if action_sequence is not None else None
 
@@ -234,8 +228,7 @@ class Benchmark(ABC, Generic[StateT, SolveConfigT]):
         return tuple(path)
 
     def _build_jitted_step(self):
-        """One jitted `get_actions` step: eager `get_neighbours` per move dispatched
-        every transition op separately (~1 ms per move on GPU)."""
+        """JIT-compile single-step transitions to avoid per-move eager dispatch overhead."""
         puzzle = self.puzzle
 
         def step(solve_config, state, action):

@@ -179,7 +179,6 @@ class PDDL(Puzzle):
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "PDDL.State":
-        """Return initial state."""
         return self.State.from_unpacked(atoms=self.init_state)
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
@@ -201,35 +200,24 @@ class PDDL(Puzzle):
         action: int | jax.Array,
         filled: bool | jax.Array = True,
     ) -> tuple["PDDL.State", jax.Array]:
-        """
-        Get the next state and cost for a given action using JAX.
-        """
-        # Unpack state to boolean array
         s = state.unpacked_atoms
 
-        # Get masks for this action
         context = solve_config.InstanceContext
         pre = context.pre_mask[action]
         pre_neg = context.pre_neg_mask[action]
         add = context.add_mask[action]
         dele = context.del_mask[action]
 
-        # Check applicability
-        # Positive preconditions: (~pre | s)
-        # Negative preconditions: (~pre_neg | ~s)
         applicable = jnp.all(jnp.logical_or(~pre, s)) & jnp.all(
             jnp.logical_or(~pre_neg, ~s)
         )
 
-        # Compute next state: (s & ~del) | add
         s_next = jnp.logical_or(jnp.logical_and(s, ~dele), add)
 
-        # If action is inapplicable, keep original state
         s_next = jnp.where(applicable, s_next, s)
 
         next_state = state.set_unpacked(atoms=s_next)
 
-        # Cost: 1.0 for applicable, inf otherwise
         cost = jnp.where(applicable, 1.0, jnp.inf)
         cost = jnp.where(filled, cost, jnp.inf)
 
@@ -238,11 +226,9 @@ class PDDL(Puzzle):
     def is_solved(
         self, solve_config: Puzzle.SolveConfig, state: "PDDL.State"
     ) -> jax.Array:
-        """Check if state satisfies goal conditions."""
         s = state.unpacked_atoms
         goal_mask = solve_config.GoalSpec.GoalMask
 
-        # Check if all goal atoms are true: all(~goal_mask | s)
         return jnp.all(jnp.logical_or(~goal_mask, s))
 
     def get_string_parser(self) -> Callable:
@@ -278,7 +264,6 @@ class PDDL(Puzzle):
         return img_parser
 
     def action_to_string(self, action: int, colored: bool = True) -> str:
-        """Return string representation of action (delegated)."""
         return fmt_action_to_string(
             self.grounded_actions,
             action,
