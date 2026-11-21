@@ -18,7 +18,6 @@ from puxle.core.puzzle_base import Puzzle
 from puxle.puzzles.adapters.cayley.formatting import (
     build_action_names,
     build_cayley_string_parser,
-    infer_cayley_graph_name,
 )
 
 if TYPE_CHECKING:
@@ -173,7 +172,9 @@ class CayleyPuzzle(Puzzle):
             raw_gen_names = tuple(str(x) for x in (graph_def.generator_names or ()))
         except AttributeError:
             raw_gen_names = ()
-        fallback_name = graph_name or (graph if isinstance(graph, str) else "")
+        self._graph_name = (
+            graph_name or (graph if isinstance(graph, str) else "") or "cayley"
+        )
 
         # 2. Build raw generator arrays and (optionally) close under
         #    inversion. All numpy work — runs before super().__init__.
@@ -209,20 +210,6 @@ class CayleyPuzzle(Puzzle):
                     )
             self._perms_jax = jnp.asarray(self._perms_np, dtype=jnp.int32)
             self.action_size = int(self._perms_np.shape[0])
-            self._graph_name = infer_cayley_graph_name(
-                fallback_name,
-                self._generators_type,
-                self._central_state_np,
-                self._perms_np,
-                raw_gen_names,
-            )
-            self._action_names = build_action_names(
-                self._graph_name,
-                raw_gen_names,
-                deduped_indices,
-                synthesized_from,
-                self._perms_np,
-            )
 
         elif self._generators_type == _GENERATORS_TYPE_MATRIX:
             # Construction-time matmul overflow precondition. JAX silently
@@ -274,23 +261,13 @@ class CayleyPuzzle(Puzzle):
                     )
             self._mats_jax = jnp.asarray(self._mats_np, dtype=jnp.int32)
             self.action_size = int(self._mats_np.shape[0])
-            self._graph_name = infer_cayley_graph_name(
-                fallback_name,
-                self._generators_type,
-                self._central_state_np,
-                None,
-                raw_gen_names,
-            )
-            self._action_names = build_action_names(
-                self._graph_name,
-                raw_gen_names,
-                deduped_indices,
-                synthesized_from,
-                None,
-            )
 
         else:  # pragma: no cover - validated in _read_graph_def
             raise ValueError(f"Unsupported generators_type: {self._generators_type!r}")
+
+        self._action_names = build_action_names(
+            self._graph_name, raw_gen_names, deduped_indices, synthesized_from
+        )
 
         lower = int(self._central_state_np.min(initial=0))
         upper = int(self._central_state_np.max(initial=0))
@@ -433,8 +410,6 @@ class CayleyPuzzle(Puzzle):
         return build_cayley_string_parser(
             graph_name=self._graph_name,
             generators_type=self._generators_type,
-            central_state=self._central_state_np,
-            perms=self._perms_np if is_perm else None,
             m=0 if is_perm else self._m,
             n=0 if is_perm else self._n,
             modulo=0 if is_perm else self._modulo,

@@ -86,4 +86,4 @@ print(f"True atoms in state: {true_atoms}")
 
 - Adapter source: `puxle/puzzles/adapters/pddl/pddl.py`
 - Presets source: `puxle/puzzles/adapters/pddl/presets.py`
-- Formatting and domain diagrams: `puxle/puzzles/adapters/pddl/formatting.py`
+- Formatting: `puxle/puzzles/adapters/pddl/formatting.py`
