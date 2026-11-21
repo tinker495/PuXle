@@ -131,7 +131,7 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
     ],
 )
 def test_presets_bfs_solves_within_bounds(domain, problem, max_depth):
-    env = PDDL.from_preset(domain=domain, problem_basename=problem)
+    env = PDDL(domain, problem)
     solve_config, initial_state = env.get_inits(jax.random.PRNGKey(0))
 
     assert _bfs_reaches_goal(env, solve_config, initial_state, max_depth), (
@@ -147,7 +147,7 @@ def test_presets_bfs_solves_within_bounds(domain, problem, max_depth):
     ],
 )
 def test_presets_jit_and_batch(domain, problem):
-    env = PDDL.from_preset(domain=domain, problem_basename=problem)
+    env = PDDL(domain, problem)
     rng = jax.random.PRNGKey(42)
     solve_config, initial_state = env.get_inits(rng)
 
@@ -210,7 +210,7 @@ def test_presets_jit_and_batch(domain, problem):
     ],
 )
 def test_initial_state_not_solved(domain, problem):
-    env = PDDL.from_preset(domain=domain, problem_basename=problem)
+    env = PDDL(domain, problem)
     solve_config, initial_state = env.get_inits(jax.random.PRNGKey(0))
 
     assert not bool(env.is_solved(solve_config, initial_state)), (
@@ -229,7 +229,7 @@ def test_initial_state_not_solved(domain, problem):
     ],
 )
 def test_random_states_not_mostly_solved(domain, problem):
-    env = PDDL.from_preset(domain=domain, problem_basename=problem)
+    env = PDDL(domain, problem)
     solve_config = env.get_solve_config()
 
     # Goals should be non-empty; otherwise any state would be trivially solved

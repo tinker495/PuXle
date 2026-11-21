@@ -1,4 +1,3 @@
-import re
 from collections.abc import Callable
 from functools import partial
 from typing import Annotated, Any
@@ -11,6 +10,7 @@ import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 
 from puxle.core.puzzle_base import Puzzle
+from puxle.render.text import visible_width
 from puxle.utils.util import IMG_SIZE, coloring_str
 
 TYPE = jnp.uint8
@@ -49,15 +49,8 @@ rgb_map = {
 }
 
 
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-
-
-def _visible_len(text: str) -> int:
-    return len(_ANSI_RE.sub("", text))
-
-
 def _pad_visible(text: str, width: int) -> str:
-    return text + " " * max(0, width - _visible_len(text))
+    return text + " " * max(0, width - visible_width(text))
 
 
 def _plain_table(rows: list[list[str]], sep: str = "  ") -> str:
@@ -65,7 +58,7 @@ def _plain_table(rows: list[list[str]], sep: str = "  ") -> str:
     col_count = max(len(row) for row in split_rows)
     widths = [
         max(
-            _visible_len(line)
+            visible_width(line)
             for row in split_rows
             for cell in row[col : col + 1]
             for line in cell

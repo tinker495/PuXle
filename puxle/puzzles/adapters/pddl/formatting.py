@@ -1,16 +1,14 @@
-"""Pretty-printing utilities for PDDL states, actions, and solve configs.
-
-Provides colour-coded terminal output for debugging and visualisation of grounded atoms and actions.
-"""
+"""Pretty-printing utilities for PDDL states, actions, and solve configs."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import jax
 import numpy as np
 
+from puxle.render.text import text_frame, visible_width, wrap_items
 from puxle.utils.util import colored_str
 
 
@@ -24,17 +22,26 @@ def split_atom(atom_str: str) -> tuple[str, list[str]]:
     return parts[0], parts[1:]
 
 
-def build_label_color_maps(domain) -> Tuple[Dict[str, str], Dict[str, str]]:
-    labels = set()
+def build_label_color_maps(domain: Any) -> Tuple[Dict[str, str], Dict[str, str]]:
+    labels: set[str] = set()
     try:
-        for action in getattr(domain, "actions", []) or []:
-            if hasattr(action, "name"):
+        actions = domain.actions or []
+        for action in actions:
+            try:
                 labels.add(action.name)
-        for predicate in getattr(domain, "predicates", []) or []:
-            if hasattr(predicate, "name"):
-                labels.add(predicate.name)
+            except AttributeError:
+                continue
     except (AttributeError, TypeError):
-        labels = set()
+        pass
+    try:
+        predicates = domain.predicates or []
+        for predicate in predicates:
+            try:
+                labels.add(predicate.name)
+            except AttributeError:
+                continue
+    except (AttributeError, TypeError):
+        pass
 
     ansi_palette = ["cyan", "magenta", "green", "yellow", "blue", "white", "red"]
     label_text_color_map: Dict[str, str] = {}
@@ -56,7 +63,9 @@ def action_to_string(
         name = action_data["name"]
         params = action_data["parameters"]
         if colored:
-            color = label_text_color_map.get(name, "white")
+            color = (
+                label_text_color_map[name] if name in label_text_color_map else "white"
+            )
             colored_name = colored_str(name, color)
             params_str = " ".join(params)
             return f"{colored_name} {params_str}" if params_str else colored_name
@@ -64,105 +73,207 @@ def action_to_string(
     return f"action_{index}"
 
 
-def build_state_string_parser(env) -> Callable:
-    def parser(state, solve_config=None, **kwargs):
-        atoms = np.asarray(jax.device_get(state).unpacked_atoms, dtype=bool)
-        true_indices = [i for i in range(env.num_atoms) if bool(atoms[i])]
-        true_count = len(true_indices)
-        density = (true_count / max(1, env.num_atoms)) * 100.0
+def _format_atom_args(args: list[str]) -> str:
+    if not args:
+        return "true"
+    if len(args) == 1:
+        return args[0]
+    return f"({', '.join(args)})"
 
-        goal_mask = None
-        goal_count = 0
-        goals_satisfied = 0
-        if solve_config is not None:
-            goal_mask = np.asarray(
-                jax.device_get(solve_config).GoalSpec.GoalMask, dtype=bool
+
+def _atom_panel(
+    title: str,
+    sample: list[str],
+    colors: dict[str, str],
+    *,
+    satisfied: set[str] | None = None,
+    omitted: int,
+    noun: str,
+    show_more: bool,
+    footer_rows: list[str] | None = None,
+    priority_predicates: set[str] | None = None,
+) -> str:
+    groups: dict[str, list[str]] = {}
+    for atom in sorted(sample):
+        predicate, args = split_atom(atom)
+        value = _format_atom_args(args)
+        if satisfied is not None:
+            mark = (
+                colored_str("✓", "green")
+                if atom in satisfied
+                else colored_str("✗", "red")
             )
-            goal_count = int(np.sum(goal_mask))
-            goals_satisfied = int(np.sum(np.logical_and(goal_mask, atoms)))
+            value = f"{mark} {value}".rstrip()
+        groups.setdefault(predicate, []).append(value)
 
-        max_show = int(kwargs.get("max_show", 12))
-        if goal_mask is not None:
-            goal_true = [i for i in true_indices if bool(goal_mask[i])]
-            non_goal_true = [i for i in true_indices if not bool(goal_mask[i])]
-            ordered_true_indices = goal_true + non_goal_true
+    ordered_predicates = sorted(
+        groups.keys(),
+        key=lambda pred: (
+            0 if (priority_predicates is None or pred in priority_predicates) else 1,
+            pred,
+        ),
+    )
+    extra_labels = ["Static"] if footer_rows else []
+    label_width = max(
+        map(visible_width, [*ordered_predicates, *extra_labels]), default=0
+    )
+    rows: list[str] = []
+    for predicate in ordered_predicates:
+        values = groups[predicate]
+        color = colors[predicate] if predicate in colors else colors["default"]
+        label = colored_str(predicate, color)
+        label += " " * (label_width - visible_width(predicate) + 2)
+        first, *rest = wrap_items(values, width=max(24, 56 - label_width), gap="  ·  ")
+        rows.append(label + first)
+        rows.extend(" " * (label_width + 2) + line for line in rest)
+    if footer_rows:
+        prefix = colored_str("Static", "white") + " " * (
+            label_width - visible_width("Static") + 2
+        )
+        rows.append(prefix + footer_rows[0])
+        rows.extend(" " * (label_width + 2) + line for line in footer_rows[1:])
+    if omitted > 0:
+        rows.append(f"… and {omitted} more {noun}" if show_more else f"… +{omitted}")
+    return text_frame(rows or ["None"], title=title)
+
+
+def build_state_string_parser(env: Any) -> Callable[..., str]:
+    mutable = {
+        atom
+        for action in env.grounded_actions
+        for effect in ("add", "delete")
+        for atom in action["effects"][effect]
+    }
+    mutable_predicates = {split_atom(atom)[0] for atom in mutable}
+
+    def parser(
+        state: Any,
+        solve_config: Any = None,
+        *,
+        max_show: int = 12,
+        header: bool = False,
+        raw: bool = False,
+        show_summary: bool = False,
+        show_more: bool = False,
+        **kwargs: Any,
+    ) -> str:
+        limit = max(0, int(max_show))
+        atoms = np.asarray(jax.device_get(state).unpacked_atoms, dtype=bool)
+        facts = {env.grounded_atoms[i] for i in np.flatnonzero(atoms)}
+        goals: list[str] = []
+        if solve_config is not None:
+            mask = jax.device_get(solve_config.GoalSpec.GoalMask)
+            goals = [env.grounded_atoms[i] for i in np.flatnonzero(mask)]
+        goal_set = set(goals)
+        met = facts.intersection(goal_set)
+        ordered_facts = sorted(
+            facts, key=lambda atom: (atom not in met, atom not in mutable, atom)
+        )
+        raw_sample = ordered_facts[:limit]
+        count = len(facts)
+        lines: list[str] = []
+        if header:
+            lines.append(
+                f"State: {count}/{env.num_atoms} true atoms ({100 * count / max(1, env.num_atoms):.2f}%)"
+            )
+        if raw:
+            lines.append("Raw sample atoms: " + (", ".join(raw_sample) or "<none>"))
+        if show_summary:
+            lines.append(f"Summary: true={count}, total={env.num_atoms}")
+            if solve_config is not None:
+                lines.append(f"Goals satisfied: {len(met)}/{len(goals)}")
+
+        dynamic_facts = [atom for atom in ordered_facts if atom in mutable]
+        static_facts = [atom for atom in ordered_facts if atom not in mutable]
+        if count <= limit or not dynamic_facts or not static_facts:
+            panel_sample = raw_sample
+            footer_rows = None
+            omitted = count - len(panel_sample)
         else:
-            ordered_true_indices = true_indices
-
-        sample_indices = ordered_true_indices[:max_show]
-        sample_atoms = [env.grounded_atoms[i] for i in sample_indices]
-        truncated = true_count > len(sample_atoms)
-        raw_sample_line = (
-            "Raw sample atoms: " + ", ".join(sample_atoms)
-            if sample_atoms
-            else "Raw sample atoms: <none>"
+            panel_sample = list(dynamic_facts[:limit])
+            remaining_slots = max(0, limit - len(panel_sample))
+            static_by_pred: dict[str, list[str]] = {}
+            for atom in static_facts:
+                pred, _ = split_atom(atom)
+                static_by_pred.setdefault(pred, []).append(atom)
+            summarized_static: list[tuple[str, int]] = []
+            for pred, group in sorted(
+                static_by_pred.items(), key=lambda item: (len(item[1]), item[0])
+            ):
+                if len(group) <= remaining_slots:
+                    panel_sample.extend(group)
+                    remaining_slots -= len(group)
+                else:
+                    summarized_static.append((pred, len(group)))
+            if summarized_static:
+                static_items = [
+                    f"{pred} ×{cnt}" for pred, cnt in sorted(summarized_static)
+                ]
+                footer_rows = wrap_items(static_items, width=46, gap="  ·  ")
+            else:
+                footer_rows = None
+            omitted = max(0, len(dynamic_facts) - limit)
+        lines.append(
+            _atom_panel(
+                f"Facts · {count}",
+                panel_sample,
+                env._label_text_color_map,
+                omitted=omitted,
+                noun="true atoms",
+                show_more=show_more,
+                footer_rows=footer_rows,
+                priority_predicates=mutable_predicates or None,
+            )
         )
 
-        show_summary = bool(kwargs.get("show_summary", False))
-        show_more = bool(kwargs.get("show_more", False))
-
-        pieces: list[str] = []
-        if kwargs.get("header", False):
-            pieces.append(
-                f"State: {true_count}/{env.num_atoms} true atoms ({density:.2f}%)"
+        if solve_config is not None:
+            lines.append(
+                _atom_panel(
+                    f"Goals · {len(met)}/{len(goals)}",
+                    sorted(goals, key=lambda atom: (atom in met, atom))[:limit],
+                    env._label_text_color_map,
+                    satisfied=met,
+                    omitted=max(0, len(goals) - limit),
+                    noun="goal atoms",
+                    show_more=show_more,
+                )
             )
-        if kwargs.get("raw", False):
-            pieces.append(raw_sample_line)
-        if show_summary:
-            pieces.append(f"Summary: true={true_count}, total={env.num_atoms}")
-            if goal_mask is not None:
-                pieces.append(f"Goals satisfied: {goals_satisfied}/{goal_count}")
-        annotated_atoms: list[str] = []
-        for idx, atom_str in zip(sample_indices, sample_atoms):
-            if goal_mask is not None and bool(goal_mask[idx]):
-                mark = "✓" if bool(atoms[idx]) else "✗"
-                annotated_atoms.append(f"{atom_str} - {mark}")
-            else:
-                annotated_atoms.append(atom_str)
-        pieces.append(", ".join(annotated_atoms) if annotated_atoms else "")
-        if truncated and not show_more:
-            pieces.append("...")
-        if show_more:
-            remaining = max(0, true_count - len(sample_atoms))
-            if remaining > 0:
-                pieces.append(f"... and {remaining} more true atoms")
-        return "\n".join([p for p in pieces if p])
+        return "\n".join(lines)
 
     return parser
 
 
-def build_solve_config_string_parser(env) -> Callable:
-    def parser(solve_config, **kwargs):
-        goal_mask = np.asarray(
-            jax.device_get(solve_config).GoalSpec.GoalMask, dtype=bool
-        )
-        goal_indices = [i for i in range(env.num_atoms) if bool(goal_mask[i])]
-        goal_count = len(goal_indices)
-        max_show = int(kwargs.get("max_show", 12))
-        sample_indices = goal_indices[:max_show]
-        sample_atoms = [env.grounded_atoms[i] for i in sample_indices]
-        raw_sample_line = (
-            "Raw sample goals: " + ", ".join(sample_atoms)
-            if sample_atoms
-            else "Raw sample goals: <none>"
-        )
-
-        show_summary = bool(kwargs.get("show_summary", False))
-        show_more = bool(kwargs.get("show_more", False))
-
-        pieces: list[str] = []
-        if kwargs.get("header", False):
-            pieces.append(f"Goal: {goal_count} atoms")
-        if kwargs.get("raw", False):
-            pieces.append(raw_sample_line)
+def build_solve_config_string_parser(env: Any) -> Callable[..., str]:
+    def parser(
+        solve_config: Any,
+        *,
+        max_show: int = 12,
+        header: bool = False,
+        raw: bool = False,
+        show_summary: bool = False,
+        show_more: bool = False,
+        **kwargs: Any,
+    ) -> str:
+        mask = jax.device_get(solve_config.GoalSpec.GoalMask)
+        goals = sorted(env.grounded_atoms[i] for i in np.flatnonzero(mask))
+        sample = goals[: max(0, int(max_show))]
+        lines: list[str] = []
+        if header:
+            lines.append(f"Goal: {len(goals)} atoms")
+        if raw:
+            lines.append("Raw sample goals: " + (", ".join(sample) or "<none>"))
         if show_summary:
-            pieces.append(f"Goals: {goal_count}/{env.num_atoms}")
-        sample_text = ", ".join(sample_atoms) if sample_atoms else "<none>"
-        pieces.append(f"Goal atoms: {sample_text}")
-        if show_more:
-            remaining = max(0, goal_count - len(sample_atoms))
-            if remaining > 0:
-                pieces.append(f"... and {remaining} more goal atoms")
-        return "\n".join([p for p in pieces if p])
+            lines.append(f"Goals: {len(goals)}/{env.num_atoms}")
+        lines.append(
+            _atom_panel(
+                f"Goals · {len(goals)}",
+                sample,
+                env._label_text_color_map,
+                omitted=len(goals) - len(sample),
+                noun="goal atoms",
+                show_more=show_more,
+            )
+        )
+        return "\n".join(lines)
 
     return parser

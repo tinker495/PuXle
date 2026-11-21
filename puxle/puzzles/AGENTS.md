@@ -7,9 +7,8 @@ the repository's [documentation and communication policy](../../AGENTS.md#docume
 
 This directory owns the state representations of native puzzles, their Random
 and Hard variants, Room, and external puzzle adapters under `adapters/`
-(`adapters/cayley.py`, `adapters/cayley_subclasses.py`, and `adapters/pddl/`).
-World-model representations have a separate owner. Optimize storage while
-preserving logical
+(`adapters/cayley/` and `adapters/pddl/`). World-model
+representations have a separate owner. Optimize storage while preserving logical
 puzzle values, action numbering, costs, and inverse-transition semantics. Preserve
 existing logical inputs and DeepCubeA/Santa data. Historical packed bytes and
 serialized PyTrees of internal State types are not stable external formats.
@@ -429,7 +428,7 @@ mask is complete. Compute once that, when the current visit count is
 point's distance-matrix row; add each destination's closing leg only for the
 final visit. Revisits still have infinite cost.
 
-### CayleyPuzzle and Its Five Subclasses
+### CayleyPuzzle
 
 PERMUTATION generators only rearrange positions, preserving the central
 state's value range. Use uint8 for nonnegative values up to 255, uint16 up to
@@ -447,10 +446,9 @@ after applying modulo. Matrix multiplication in the narrow storage dtype
 changes values. Preserve inverse closure, the inverse-action map, and the
 cost/warning contract of `ensure_inverse_closed=False`.
 
-CayleyPancake7/8, CayleyLRX8, CayleyTopSpin8K4, and CayleyCoxeter8 share this
-adapter. Their default permutations can use 7/8 B respectively; do not copy
-codecs into each subclass. Check both external cayleypy factories and
-hand-built graphs, and check MATRIX separately.
+Curated presets in `CayleyPresets` unpack directly into `CayleyPuzzle(**preset)`.
+Default 7/8-element permutations use 7/8 B respectively. Check both cayleypy
+factory names and hand-built graphs, and check MATRIX separately.
 
 For string output, call `jax.device_get` once to bring the array to the host
 before iterating over elements. Converting each GPU scalar with Python

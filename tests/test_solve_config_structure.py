@@ -14,7 +14,7 @@ from puxle.puzzles.tsp import TSP
 
 @pytest.fixture(scope="module")
 def pddl_env():
-    return PDDL.from_preset("blocksworld", problem_basename="bw-S-01")
+    return PDDL("blocksworld", "bw-S-01")
 
 
 @pytest.fixture

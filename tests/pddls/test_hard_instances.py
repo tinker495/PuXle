@@ -58,7 +58,7 @@ def _bfs_with_time_budget(
     ],
 )
 def test_hard_instances_run_with_timeout(domain, problem, max_depth, time_budget_s):
-    env = PDDL.from_preset(domain=domain, problem_basename=problem)
+    env = PDDL(domain, problem)
     solve_config, initial_state = env.get_inits(jax.random.PRNGKey(0))
 
     solved_in_budget = _bfs_with_time_budget(

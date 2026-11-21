@@ -32,14 +32,18 @@ def _puzzle_classes():
 )
 def test_string_parser_does_not_touch_the_device(puzzle_class):
     if puzzle_class is puxle.puzzles.CayleyPuzzle:
-        pytest.skip("CayleyPuzzle requires a graph argument")
-    if issubclass(puzzle_class, puxle.puzzles.CayleyPuzzle):
         pytest.importorskip("cayleypy")
+        # Author: tinker495 — CayleyPuzzle requires a graph target; verify host-only
+        # string parsing via CayleyPresets rather than skipping coverage.
+        from puxle import CayleyPresets
 
-    if puzzle_class is puxle.puzzles.PDDL:
+        puzzle = puzzle_class(**CayleyPresets.PANCAKE_7)
+    elif puzzle_class is puxle.puzzles.PDDL:
         # Author: tinker495 — PDDL requires (domain, problem); verify host-only
-        # string parsing via a bundled preset rather than skipping coverage.
-        puzzle = puzzle_class.from_preset("blocksworld", "bw-S-01")
+        # string parsing via PDDLPresets rather than skipping coverage.
+        from puxle import PDDLPresets
+
+        puzzle = puzzle_class(**PDDLPresets.BLOCKSWORLD_S01)
     else:
         puzzle = puzzle_class()
 

@@ -6,22 +6,16 @@ from puxle._lazy_imports import lazy_dir, load_lazy_export
 
 __all__ = [
     "CayleyPuzzle",
-    "CayleyPancake7",
-    "CayleyPancake8",
-    "CayleyLRX8",
-    "CayleyTopSpin8K4",
-    "CayleyCoxeter8",
+    "CayleyPresets",
     "PDDL",
+    "PDDLPresets",
 ]
 
 _EXPORTS = {
     "CayleyPuzzle": (".cayley", "CayleyPuzzle"),
-    "CayleyPancake7": (".cayley_subclasses", "CayleyPancake7"),
-    "CayleyPancake8": (".cayley_subclasses", "CayleyPancake8"),
-    "CayleyLRX8": (".cayley_subclasses", "CayleyLRX8"),
-    "CayleyTopSpin8K4": (".cayley_subclasses", "CayleyTopSpin8K4"),
-    "CayleyCoxeter8": (".cayley_subclasses", "CayleyCoxeter8"),
+    "CayleyPresets": (".cayley", "CayleyPresets"),
     "PDDL": (".pddl", "PDDL"),
+    "PDDLPresets": (".pddl", "PDDLPresets"),
 }
 
 
