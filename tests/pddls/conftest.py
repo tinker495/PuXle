@@ -13,11 +13,9 @@ PROBLEM = DATA_DIR / "problem.pddl"
 
 @pytest.fixture
 def puzzle():
-    """Create a PDDL puzzle instance for testing."""
     return PDDL(str(DOMAIN), str(PROBLEM))
 
 
 @pytest.fixture
 def rng_key():
-    """Provide a random key for JAX operations."""
     return jax.random.PRNGKey(42)

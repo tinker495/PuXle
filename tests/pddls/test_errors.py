@@ -6,8 +6,6 @@ from puxle.puzzles.adapters.pddl import PDDL
 
 
 class TestPDDLErrors:
-    """Error handling tests."""
-
     def test_malformed_pddl_error(self):
         """Test that malformed PDDL parse failures are wrapped as ValueError."""
         bad_domain = str(
@@ -26,7 +24,6 @@ class TestPDDLErrors:
             PDDL(bad_domain, good_problem)
 
     def test_missing_file_error(self):
-        """Test that missing files raise appropriate exceptions."""
         non_existent_domain = "/non/existent/domain.pddl"
         non_existent_problem = "/non/existent/problem.pddl"
 
@@ -35,7 +32,6 @@ class TestPDDLErrors:
         ):  # PDDL class wraps FileNotFoundError in ValueError
             PDDL(non_existent_domain, non_existent_problem)
 
-        # Test with one existing and one missing file
         good_domain = str(
             (
                 Path(__file__).resolve().parents[1]
@@ -44,7 +40,5 @@ class TestPDDLErrors:
                 / "domain.pddl"
             )
         )
-        with pytest.raises(
-            ValueError
-        ):  # PDDL class wraps FileNotFoundError in ValueError
+        with pytest.raises(ValueError):
             PDDL(good_domain, non_existent_problem)

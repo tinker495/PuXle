@@ -14,12 +14,9 @@ class TestPDDLFeatures:
         domain_file = str(BASE_DIR / "constants" / "domain.pddl")
         problem_file = str(BASE_DIR / "constants" / "problem.pddl")
 
-        # This should succeed if constants are handled, or fail if not
         puzzle = PDDL(domain_file, problem_file)
 
-        # Verify constants are in objects map or grounded atoms
-        # c1 is a constant, o1 is an object
-        # Atoms should include (has c1) and (has o1)
+        # In the constants fixture, c1 is a domain constant and o1 is a problem object.
 
         atoms = set(puzzle.grounded_atoms)
         assert "(has c1)" in atoms
@@ -39,7 +36,6 @@ class TestPDDLFeatures:
 
         neighbors, costs = puzzle.get_neighbours(solve_config, init_state, filled=True)
 
-        # Find actions
         toggle_on_idx = -1
         toggle_off_idx = -1
 
@@ -52,19 +48,12 @@ class TestPDDLFeatures:
         assert toggle_on_idx >= 0
         assert toggle_off_idx >= 0
 
-        # Check applicability
-        # If negative preconditions are NOT supported, toggle-on might have empty preconditions (always applicable)
-        # or if `not` is ignored, maybe it sees `(on ?s)` as positive precondition?
-        # If `not` is ignored recursively, it sees `(on ?s)`. Then toggle-on requires `(on ?s)`.
-        # If that's the case, toggle-on is NOT applicable in empty state.
+        # If 'not' were stripped into a positive precondition (on ?s), toggle-on would be inapplicable in the empty initial state.
 
         cost_on = costs[toggle_on_idx]
         assert jnp.isfinite(cost_on), (
             "toggle-on should be applicable in empty state (requires not on)"
         )
-
-        # Now emulate state where (on s1) is true
-        # We can construct it manually if needed, or take the step if supported
 
     def test_equality(self):
         domain_file = str(BASE_DIR / "equality" / "domain.pddl")
@@ -72,8 +61,7 @@ class TestPDDLFeatures:
 
         puzzle = PDDL(domain_file, problem_file)
 
-        # Grounded actions should NOT include move l1 l1
-        # Because (not (= ?from ?to))
+        # The equality fixture forbids self-loops via (not (= ?from ?to)).
 
         found_self_loop = False
         for action in puzzle.grounded_actions:
@@ -93,7 +81,6 @@ class TestPDDLFeatures:
 
         puzzle = PDDL(domain_file, problem_file)
 
-        # Atom should be "(light-on)", NOT "(light-on )"
         assert "(light-on)" in puzzle.grounded_atoms
         assert "(light-on )" not in puzzle.grounded_atoms
 

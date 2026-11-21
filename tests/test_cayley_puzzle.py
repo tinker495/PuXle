@@ -1,7 +1,7 @@
-"""Unit tests for CayleyPuzzle adapter (12 tests).
+"""Unit tests for the CayleyPuzzle adapter.
 
-Tests #1-#11 use hand-rolled stubs — no cayleypy import required.
-Test #12 is gated on pytest.importorskip("cayleypy").
+Core tests use hand-rolled GraphDef stubs so they run without cayleypy installed;
+oracle and preset-discovery tests skip when cayleypy is absent.
 """
 
 from __future__ import annotations
@@ -16,9 +16,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-# ---------------------------------------------------------------------------
-# Stub helpers — mirror exactly the fields _read_graph_def reads.
-# ---------------------------------------------------------------------------
+# Stubs mirror the exact attributes read by _read_graph_def.
 
 
 def _perm_graph_def(
@@ -59,17 +57,11 @@ def _mat_graph_def(
     )
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture(scope="module")
 def perm_puzzle():
     """Small cyclic-8 style permutation puzzle (closed under inversion)."""
     from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
-    # Two generators: rotate left by 1, rotate right by 1.
     n = 8
     rot_left = list(range(1, n)) + [0]
     rot_right = [n - 1] + list(range(n - 1))
@@ -82,18 +74,11 @@ def mat_puzzle():
     """Small MATRIX puzzle over Z/5 with two 2x2 generators (closed under inversion)."""
     from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
-    # Generator A = [[1,1],[0,1]] mod 5  (det=1, invertible)
-    # Generator B = [[1,0],[1,1]] mod 5  (det=1, invertible)
+    # Both generators have det=1 mod 5 so they are invertible under ensure_inverse_closed=True.
     A = [[1, 1], [0, 1]]
     B = [[1, 0], [1, 1]]
-    # central_state is the flat identity-like vector: [1, 0, 0, 1]
     gd = _mat_graph_def([A, B], modulo=5, central_state=[1, 0, 0, 1], name="mat2x2z5")
     return CayleyPuzzle(gd, ensure_inverse_closed=True, num_shuffle=2)
-
-
-# ---------------------------------------------------------------------------
-# Test 1: permutation forward step matches numpy
-# ---------------------------------------------------------------------------
 
 
 def test_permutation_forward_step_matches_numpy(perm_puzzle):
@@ -120,16 +105,10 @@ def test_permutation_forward_step_matches_numpy(perm_puzzle):
         assert float(cost) == 1.0
 
 
-# ---------------------------------------------------------------------------
-# Test 2: matrix forward step matches hand-computed
-# ---------------------------------------------------------------------------
-
-
 def test_matrix_forward_step_matches_handcomputed():
     from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
-    # 4 hand-picked (state, action) pairs over Z/5 with 2x2 generators.
-    # A=[[1,1],[0,1]] det=1; B=[[1,0],[1,1]] det=1 — both invertible mod 5.
+    # Both generators have det=1 mod 5 so they are invertible.
     A = [[1, 1], [0, 1]]
     B = [[1, 0], [1, 1]]
     gd = _mat_graph_def([A, B], modulo=5, central_state=[1, 0, 0, 1], name="hand2x2")
@@ -167,11 +146,6 @@ def test_matrix_forward_step_matches_handcomputed():
         assert float(cost) == 1.0
 
 
-# ---------------------------------------------------------------------------
-# Test 3: inverse closure round-trip — PERMUTATION
-# ---------------------------------------------------------------------------
-
-
 def test_inverse_closure_roundtrip_permutation(perm_puzzle):
     puzzle = perm_puzzle
     cfg = puzzle.get_solve_config()
@@ -189,11 +163,6 @@ def test_inverse_closure_roundtrip_permutation(perm_puzzle):
         assert jnp.array_equal(back_state.permutation, state.permutation), (
             f"Round-trip failed for action {i}"
         )
-
-
-# ---------------------------------------------------------------------------
-# Test 4: inverse closure round-trip — MATRIX
-# ---------------------------------------------------------------------------
 
 
 def test_inverse_closure_roundtrip_matrix(mat_puzzle):
@@ -216,11 +185,6 @@ def test_inverse_closure_roundtrip_matrix(mat_puzzle):
         )
 
 
-# ---------------------------------------------------------------------------
-# Test 5: self-inverse involution — inverse_action_map[i] == i
-# ---------------------------------------------------------------------------
-
-
 def test_self_inverse_involution():
     from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
@@ -230,14 +194,8 @@ def test_self_inverse_involution():
     gd = _perm_graph_def([swap01], list(range(n)), name="swap")
     puzzle = CayleyPuzzle(gd, ensure_inverse_closed=True, num_shuffle=2)
     inv_map = np.asarray(puzzle.inverse_action_map)
-    # The swap generator's inverse is itself.
     assert int(inv_map[0]) == 0, f"Expected self-inverse at index 0, got {inv_map[0]}"
     assert puzzle.is_reversible
-
-
-# ---------------------------------------------------------------------------
-# Test 6: non-closed graph with ensure_inverse_closed=False warns and sets None
-# ---------------------------------------------------------------------------
 
 
 def test_non_closed_not_reversible_warns():
@@ -253,11 +211,6 @@ def test_non_closed_not_reversible_warns():
 
     assert puzzle.inverse_action_map is None
     assert puzzle.is_reversible is False
-
-
-# ---------------------------------------------------------------------------
-# Test 7: import without cayleypy — verified in-process or via subprocess
-# ---------------------------------------------------------------------------
 
 
 def test_subprocess_import_without_cayleypy():
@@ -327,11 +280,6 @@ except Exception as e:
         )
 
 
-# ---------------------------------------------------------------------------
-# Test 8: state_field_name kwarg is rejected
-# ---------------------------------------------------------------------------
-
-
 def test_state_field_name_kwarg_rejected():
     from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
@@ -340,11 +288,6 @@ def test_state_field_name_kwarg_rejected():
     gd = _perm_graph_def([rot], list(range(n)), name="kwarg_test")
     with pytest.raises(TypeError):
         CayleyPuzzle(gd, state_field_name="foo")
-
-
-# ---------------------------------------------------------------------------
-# Test 9: state field per mode
-# ---------------------------------------------------------------------------
 
 
 def test_state_field_per_mode(perm_puzzle, mat_puzzle):
@@ -363,17 +306,11 @@ def test_state_field_per_mode(perm_puzzle, mat_puzzle):
     )
 
 
-# ---------------------------------------------------------------------------
-# Test 10: JAxtar A* smoke test
-# ---------------------------------------------------------------------------
-
-
 def test_jaxtar_astar_smoke():
     pytest.importorskip("JAxtar")
 
     from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
-    # Build a small permutation puzzle: cyclic-4.
     n = 4
     rot_left = list(range(1, n)) + [0]
     rot_right = [n - 1] + list(range(n - 1))
@@ -386,13 +323,11 @@ def test_jaxtar_astar_smoke():
     state, _ = puzzle.get_actions(cfg, state, jnp.array(0), filled=True)
     state, _ = puzzle.get_actions(cfg, state, jnp.array(0), filled=True)
 
-    # Try to use JAxtar astar if it's importable with the right interface.
     try:
         from JAxtar.stars.astar import astar
     except ImportError:
         pytest.skip("JAxtar.stars.astar not importable")
 
-    # Zero heuristic: always returns 0.
     def zero_heuristic(cfg, states):
         return jnp.zeros(jax.tree_util.tree_leaves(states)[0].shape[0])
 
@@ -405,10 +340,8 @@ def test_jaxtar_astar_smoke():
             batch_size=32,
             max_nodes=256,
         )
-        # If result has a path or cost, assert cost <= 2.
         if hasattr(result, "cost"):
             assert float(result.cost) <= 2.0
-        # If result is a sequence of states/actions, assert len <= 2.
         elif hasattr(result, "__len__"):
             assert len(result) <= 2 + 1  # +1 for start state
     except Exception as e:
@@ -416,11 +349,6 @@ def test_jaxtar_astar_smoke():
         if "ImportError" in type(e).__name__:
             raise
         pytest.skip(f"astar interface differs: {e}")
-
-
-# ---------------------------------------------------------------------------
-# Test 11: MATRIX overflow precondition
-# ---------------------------------------------------------------------------
 
 
 def test_matrix_overflow_precondition():
@@ -436,13 +364,12 @@ def test_matrix_overflow_precondition():
     p_min = int(math.ceil(math.sqrt(2**63 / m))) + 1
     modulo = p_min + 1
 
-    # Ensure modulo fits in int32 check (modulo <= 2**31-1).
     if modulo > 2**31 - 1:
         pytest.skip("Cannot construct overflow case within modulo <= 2**31-1 for m=3")
 
     # 3x3 identity matrix (det=1, invertible mod any prime).
     ident = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
-    central = [0] * (m * m)  # flat 3x3 state = 9 elements
+    central = [0] * (m * m)
     gd = _mat_graph_def(
         [ident], modulo=modulo, central_state=central, name="overflow_test"
     )
@@ -451,17 +378,11 @@ def test_matrix_overflow_precondition():
         CayleyPuzzle(gd, ensure_inverse_closed=True)
 
 
-# ---------------------------------------------------------------------------
-# Test 12: cayleypy parity (oracle test)
-# ---------------------------------------------------------------------------
-
-
 def test_cayleypy_parity():
     pytest.importorskip("cayleypy")
 
     from puxle.puzzles.adapters.cayley import CayleyPuzzle
 
-    # --- PERMUTATION parity ---
     try:
         from cayleypy import PermutationGroups
 
@@ -470,13 +391,11 @@ def test_cayleypy_parity():
         perm_cfg = perm_puzzle.get_solve_config()
         perm_state = perm_cfg.GoalSpec
 
-        # Pick action 0 and apply via adapter.
         next_perm_state, _ = perm_puzzle.get_actions(
             perm_cfg, perm_state, jnp.array(0), filled=True
         )
         adapter_perm = np.asarray(next_perm_state.permutation)
 
-        # Apply via cayleypy's raw permutation data.
         perm_np = np.asarray(perm_gd.generators_permutations, dtype=np.int32)
         central_np = np.asarray(perm_gd.central_state, dtype=np.int32)
         expected_perm = np.take(central_np, perm_np[0])
@@ -487,7 +406,6 @@ def test_cayleypy_parity():
     except (AttributeError, ValueError, ImportError) as e:
         pytest.xfail(f"cayleypy PERMUTATION parity: {e}")
 
-    # --- MATRIX parity ---
     try:
         from cayleypy import MatrixGroups
 
@@ -501,7 +419,7 @@ def test_cayleypy_parity():
         )
         adapter_vec = np.asarray(next_mat_state.vector)
 
-        # Apply via cayleypy's raw matrix data (left-multiply convention as in adapter).
+        # Adapter uses left-multiplication (M @ v) % modulo.
         mat_np = np.asarray(mat_gd.generators_matrices[0].matrix, dtype=np.int64)
         central_np = np.asarray(mat_gd.central_state, dtype=np.int64)
         m = mat_puzzle._m
@@ -519,18 +437,12 @@ def test_cayleypy_parity():
         )
 
 
-# ---------------------------------------------------------------------------
-# Test 13: Unified constructor, CayleyPresets, and list_sources()
-# ---------------------------------------------------------------------------
-
-
 def test_unified_constructor_presets_and_list_sources():
     """Author: tinker495.
 
-    Why: Verifies the unified ``CayleyPuzzle(graph, *args, **kwargs)``
+    Why: Locks the unified ``CayleyPuzzle(graph, *args, **kwargs)``
     constructor contract, ``CayleyPresets`` unpacking, and live
-    ``list_sources()`` discovery after removing ``from_cayleypy_factory``
-    and the 5 legacy ``Cayley*`` subclasses.
+    ``list_sources()`` discovery against the cayleypy registry.
     """
     pytest.importorskip("cayleypy")
 

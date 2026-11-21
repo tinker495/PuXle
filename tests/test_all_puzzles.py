@@ -13,36 +13,25 @@ _NO_DEFAULT_CTOR: frozenset[str] = frozenset({"CayleyPuzzle", "PDDL"})
 
 
 def discover_puzzle_classes() -> List[Type[Puzzle]]:
-    """
-    Dynamically discover all puzzle classes from puxle.puzzles module.
-    Returns a list of puzzle classes that inherit from Puzzle.
-    Excludes puzzles that require mandatory constructor arguments (e.g. CayleyPuzzle).
-    """
+    """Return default-constructible Puzzle subclasses from puxle.puzzles (excluding those requiring mandatory constructor arguments)."""
     import puxle.puzzles as puzzles_module
 
     puzzle_classes = []
 
-    # Get all attributes from the puzzles module
     for attr_name in dir(puzzles_module):
         if attr_name in _NO_DEFAULT_CTOR:
             continue
         attr = getattr(puzzles_module, attr_name)
 
-        # Check if it's a class and inherits from Puzzle
-        if (
-            inspect.isclass(attr) and issubclass(attr, Puzzle) and attr != Puzzle
-        ):  # Exclude the base Puzzle class itself
+        if inspect.isclass(attr) and issubclass(attr, Puzzle) and attr != Puzzle:
             puzzle_classes.append(attr)
 
     return puzzle_classes
 
 
 class TestPuzzleValidation:
-    """Comprehensive test suite for all puzzles in puxle.puzzles module"""
-
     @pytest.fixture(scope="class")
     def puzzle_configs(self):
-        """Dynamically generate configuration for all discovered puzzles"""
         puzzle_classes = discover_puzzle_classes()
         print(f"\nDiscovered {len(puzzle_classes)} puzzle classes:")
         for cls in puzzle_classes:
@@ -52,11 +41,9 @@ class TestPuzzleValidation:
 
     @pytest.fixture
     def rng_key(self):
-        """Provide a random key for JAX operations"""
         return jax.random.PRNGKey(42)
 
     def test_puzzle_instantiation(self, puzzle_configs):
-        """Test that all puzzles can be instantiated correctly"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
@@ -84,12 +71,10 @@ class TestPuzzleValidation:
                 pytest.fail(f"Failed to instantiate {puzzle_class.__name__}: {e}")
 
     def test_state_generation(self, puzzle_configs, rng_key):
-        """Test that puzzles can generate initial states and solve configurations"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
 
-                # Test solve config generation
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 assert solve_config is not None, (
                     f"{puzzle_class.__name__} should generate solve_config"
@@ -98,7 +83,6 @@ class TestPuzzleValidation:
                     "solve_config should be instance of SolveConfig"
                 )
 
-                # Test initial state generation
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
                 assert initial_state is not None, (
                     f"{puzzle_class.__name__} should generate initial_state"
@@ -107,7 +91,6 @@ class TestPuzzleValidation:
                     "initial_state should be instance of State"
                 )
 
-                # Test get_inits convenience function
                 solve_config2, initial_state2 = puzzle.get_inits(key=rng_key)
                 assert isinstance(solve_config2, puzzle.SolveConfig), (
                     "get_inits should return valid solve_config"
@@ -122,19 +105,16 @@ class TestPuzzleValidation:
                 pytest.fail(f"State generation failed for {puzzle_class.__name__}: {e}")
 
     def test_neighbor_generation(self, puzzle_configs, rng_key):
-        """Test that puzzles can generate valid neighbors"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
 
-                # Test neighbor generation
                 neighbor_states, costs = puzzle.get_neighbours(
                     solve_config, initial_state, filled=True
                 )
 
-                # Validate neighbor states structure
                 assert neighbor_states is not None, (
                     f"{puzzle_class.__name__} should generate neighbor_states"
                 )
@@ -145,15 +125,12 @@ class TestPuzzleValidation:
                     "Number of costs should match action_size"
                 )
 
-                # Check that costs are valid (either finite positive values or infinity)
                 finite_costs = jnp.isfinite(costs)
                 valid_costs = jnp.logical_or(finite_costs, jnp.isinf(costs))
                 assert jnp.all(valid_costs), "All costs should be finite or infinity"
 
-                # Check that at least some moves are possible (not all costs are infinity)
                 assert jnp.any(finite_costs), "At least some moves should be possible"
 
-                # Test with filled=False
                 neighbor_states_unfilled, costs_unfilled = puzzle.get_neighbours(
                     solve_config, initial_state, filled=False
                 )
@@ -187,7 +164,6 @@ class TestPuzzleValidation:
                 for action_idx in range(actions_to_test):
                     action = jnp.asarray(action_idx)
 
-                    # Filled=True should match neighbour generation
                     next_state, action_cost = puzzle.get_actions(
                         solve_config, initial_state, action, filled=True
                     )
@@ -202,7 +178,6 @@ class TestPuzzleValidation:
                         f"{puzzle_class.__name__} get_actions cost mismatch at action {action_idx}"
                     )
 
-                    # Filled=False should block all moves
                     blocked_state, blocked_cost = puzzle.get_actions(
                         solve_config, initial_state, action, filled=False
                     )
@@ -229,7 +204,6 @@ class TestPuzzleValidation:
                 )
 
     def test_get_neighbours_matches_get_actions(self, puzzle_configs, rng_key):
-        """Cross-check get_neighbours outputs against per-action get_actions calls"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
@@ -301,21 +275,18 @@ class TestPuzzleValidation:
                 )
 
     def test_solution_checking(self, puzzle_configs, rng_key):
-        """Test solution checking functionality"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
 
-                # Test is_solved function
                 is_solved_initial = puzzle.is_solved(solve_config, initial_state)
                 assert isinstance(is_solved_initial, (bool, jnp.bool_, np.bool_)) or (
                     hasattr(is_solved_initial, "dtype")
                     and is_solved_initial.dtype == jnp.bool_
                 ), "is_solved should return boolean"
 
-                # For puzzles with fixed targets, test that target state is actually solved
                 if puzzle.fixed_target and puzzle.has_target:
                     target_solved = puzzle.is_solved(
                         solve_config, solve_config.GoalSpec
@@ -332,12 +303,10 @@ class TestPuzzleValidation:
                 )
 
     def test_action_strings(self, puzzle_configs):
-        """Test action string conversion"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
 
-                # Test action_to_string for all valid actions
                 for action in range(puzzle.action_size):
                     action_str = puzzle.action_to_string(action)
                     assert isinstance(action_str, str), (
@@ -355,14 +324,12 @@ class TestPuzzleValidation:
                 )
 
     def test_string_parsing(self, puzzle_configs, rng_key):
-        """Test string representation of states"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
 
-                # Test state string representation
                 state_str = str(initial_state)
                 assert isinstance(state_str, str), (
                     "State string representation should be string"
@@ -381,16 +348,13 @@ class TestPuzzleValidation:
                 pytest.fail(f"String parsing failed for {puzzle_class.__name__}: {e}")
 
     def test_jax_compilation(self, puzzle_configs, rng_key):
-        """Test that puzzle methods work correctly with JAX compilation"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
 
-                # Test that core methods are JIT compiled (they should not raise errors)
                 solve_config = puzzle.get_solve_config(key=rng_key)
                 _ = puzzle.get_initial_state(solve_config, key=rng_key)
 
-                # Test compiled methods
                 solve_config_jit = puzzle.get_solve_config(key=rng_key)
                 initial_state_jit = puzzle.get_initial_state(
                     solve_config_jit, key=rng_key
@@ -400,7 +364,6 @@ class TestPuzzleValidation:
                 )
                 is_solved = puzzle.is_solved(solve_config_jit, initial_state_jit)
 
-                # Verify results are JAX arrays where expected
                 if hasattr(costs, "shape"):
                     assert isinstance(costs, jnp.ndarray), "Costs should be JAX array"
                 assert isinstance(is_solved, (bool, jnp.bool_, np.bool_)) or (
@@ -413,12 +376,10 @@ class TestPuzzleValidation:
                 pytest.fail(f"JAX compilation failed for {puzzle_class.__name__}: {e}")
 
     def test_batched_operations(self, puzzle_configs, rng_key):
-        """Test batched operations work correctly"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
 
-                # Create multiple states and configs for batching
                 keys = jax.random.split(rng_key, 3)
                 solve_configs = [puzzle.get_solve_config(key=k) for k in keys]
                 initial_states = [
@@ -426,14 +387,10 @@ class TestPuzzleValidation:
                     for sc, k in zip(solve_configs, keys)
                 ]
 
-                # Stack them for batched operations
-                # Note: This may not work for all puzzles due to different state structures
                 try:
-                    # Test batched is_solved
                     solve_config = solve_configs[0]
                     _ = puzzle.batched_is_solved(solve_config, initial_states[0])
 
-                    # Test batched neighbors (with single solve_config)
                     batched_neighbors, batched_costs = puzzle.batched_get_neighbours(
                         solve_config, initial_states[0], filled=True
                     )
@@ -452,12 +409,10 @@ class TestPuzzleValidation:
                 )
 
     def test_puzzle_properties(self, puzzle_configs):
-        """Test puzzle property flags"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
 
-                # Test boolean properties
                 assert isinstance(puzzle.has_target, bool), (
                     "has_target should be boolean"
                 )
@@ -474,13 +429,11 @@ class TestPuzzleValidation:
                 pytest.fail(f"Property test failed for {puzzle_class.__name__}: {e}")
 
     def test_inverse_actions(self, puzzle_configs, rng_key):
-        """Test inverse action functionality"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
 
                 if puzzle.is_reversible:
-                    # Test for perfectly reversible puzzles
                     solve_config = puzzle.get_solve_config(key=rng_key)
                     initial_state = puzzle.get_initial_state(solve_config, key=rng_key)
 
@@ -489,13 +442,11 @@ class TestPuzzleValidation:
                     )
 
                     for i in range(puzzle.action_size):
-                        # If a move is possible
                         if jnp.isfinite(costs[i]):
                             next_state = jax.tree_util.tree_map(
                                 lambda x: x[i], neighbors
                             )
 
-                            # Taking the inverse action from the next state should return to the initial state
                             inv_neighbors, inv_costs = puzzle.get_inverse_neighbours(
                                 solve_config, next_state, filled=True
                             )
@@ -514,8 +465,7 @@ class TestPuzzleValidation:
                     print(f"✓ {puzzle_class.__name__} inverse actions are reversible")
 
                 else:
-                    # Test for non-reversible puzzles or those without inverse map
-                    # Case 1: Custom inverse implementation (e.g., Sokoban)
+                    # Non-reversible puzzles may still override get_inverse_neighbours (e.g. Sokoban).
                     is_custom_inverse = (
                         puzzle.get_inverse_neighbours.__qualname__
                         != Puzzle.get_inverse_neighbours.__qualname__
@@ -537,7 +487,6 @@ class TestPuzzleValidation:
                                 f"Custom get_inverse_neighbours for {puzzle_class.__name__} failed: {e}"
                             )
 
-                    # Case 2: No inverse map and no custom implementation
                     else:
                         with pytest.raises(NotImplementedError):
                             solve_config = puzzle.get_solve_config(key=rng_key)
@@ -557,7 +506,6 @@ class TestPuzzleValidation:
                 )
 
     def test_state_equality(self, puzzle_configs, rng_key):
-        """Test state equality comparisons work correctly"""
         for puzzle_class in puzzle_configs:
             try:
                 puzzle = puzzle_class()
@@ -565,7 +513,6 @@ class TestPuzzleValidation:
                 state1 = puzzle.get_initial_state(solve_config, key=rng_key)
                 state2 = puzzle.get_initial_state(solve_config, key=rng_key)
 
-                # Test equality with same state
                 assert state1 == state1, "State should equal itself"
 
                 # Test that different states may or may not be equal (depends on randomness)
@@ -583,10 +530,6 @@ class TestPuzzleValidation:
                     f"State equality test failed for {puzzle_class.__name__}: {e}"
                 )
 
-
-# ---------------------------------------------------------------------------
-# CayleyPuzzle integration tests — skipped when cayleypy is not installed.
-# ---------------------------------------------------------------------------
 
 cayleypy = pytest.importorskip("cayleypy")
 
