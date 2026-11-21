@@ -40,8 +40,6 @@ class TopSpin(Puzzle):
     turnstile_size: int
 
     def define_state_class(self) -> type[Xtructurable]:
-        """Defines the state class for TopSpin using xtructure."""
-
         class State(Xtructurable):
             permutation: Annotated[
                 chex.Array, FieldDescriptor.tensor(dtype=TYPE, shape=(self.n_discs,))
@@ -63,7 +61,6 @@ class TopSpin(Puzzle):
         def parser(state: "TopSpin.State", **kwargs):
             # Host copy first; formatting a device array element-wise syncs per item.
             permutation = jax.device_get(state).permutation
-            # Highlight the turnstile
             turnstile_str = " ".join(
                 map(lambda x: f"{x:2d}", permutation[: self.turnstile_size])
             )
@@ -75,7 +72,6 @@ class TopSpin(Puzzle):
         return parser
 
     def get_solve_config(self, key=None, data=None) -> Puzzle.SolveConfig:
-        # The target state is the sorted permutation
         target_state = self.State(
             permutation=jnp.arange(1, self.n_discs + 1, dtype=TYPE)
         )
@@ -86,7 +82,6 @@ class TopSpin(Puzzle):
     def get_initial_state(
         self, solve_config: Puzzle.SolveConfig, key=None, data=None
     ) -> "TopSpin.State":
-        # Start from solved state and apply random moves
         return self._get_shuffled_state(solve_config, solve_config.GoalSpec, key, 18)
 
     def _apply(
@@ -95,7 +90,6 @@ class TopSpin(Puzzle):
         state: "TopSpin.State",
         action: jax.Array,
     ) -> tuple["TopSpin.State", float]:
-        """Pure transition: every TopSpin action is valid with unit cost."""
         # Match the prefix selected by the bulk kernel's Python slice.
         prefix_size = len(range(self.n_discs)[: self.turnstile_size])
         # Identity flips favor direct rotation branches over index gathers.
@@ -181,27 +175,16 @@ class TopSpin(Puzzle):
             font_thickness = 2
             disc_radius = int(imgsize * 0.04)
 
-            # Find the position of the first turnstile element to align it at the top
-            # This ensures the turnstile is always at the top (12 o'clock position)
-            offset = -(
-                self.turnstile_size // 2
-            )  # No offset needed as we'll place the first ts elements at the top
+            # Center the turnstile span at 12 o'clock.
+            offset = -(self.turnstile_size // 2)
 
-            # Draw the ring and discs
             for i, val in enumerate(state.permutation):
-                # Calculate angle to place turnstile at the top (12 o'clock position)
-                # First ts elements will be in the turnstile area
-                angle = (2 * np.pi * ((i + offset + 0.5) / n)) - (
-                    np.pi / 2
-                )  # Start from top (12 o'clock)
+                angle = (2 * np.pi * ((i + offset + 0.5) / n)) - (np.pi / 2)
                 x = int(center_x + radius * np.cos(angle))
                 y = int(center_y + radius * np.sin(angle))
 
-                # Determine if this position is part of the turnstile
                 is_turnstile = i < ts
-                color = (
-                    (0, 0, 200) if is_turnstile else (50, 50, 50)
-                )  # Blue for turnstile, gray otherwise
+                color = (0, 0, 200) if is_turnstile else (50, 50, 50)
                 img = cv2.circle(img, (x, y), disc_radius, color, -1)
 
                 text = str(val)
@@ -220,13 +203,8 @@ class TopSpin(Puzzle):
                     font_thickness,
                 )
 
-            # Draw the turnstile area indicator at the top
-            start_angle_rad = -np.pi / 2 - (
-                np.pi * ts / n
-            )  # Start angle for turnstile area
-            end_angle_rad = -np.pi / 2 + (
-                np.pi * ts / n
-            )  # End angle for turnstile area
+            start_angle_rad = -np.pi / 2 - (np.pi * ts / n)
+            end_angle_rad = -np.pi / 2 + (np.pi * ts / n)
             img = cv2.ellipse(
                 img,
                 (center_x, center_y),

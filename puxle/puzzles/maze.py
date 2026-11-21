@@ -91,7 +91,6 @@ class Maze(Puzzle):
             state: "Maze.State", solve_config: "Maze.SolveConfig" = None, **kwargs
         ):
             if solve_config is None:
-                # Fallback representation when no solve_config is provided
                 return f"Maze State: Player at position {state.pos}"
 
             # Render on the host: `device_get` once, then plain numpy. Reading a
@@ -99,13 +98,10 @@ class Maze(Puzzle):
             state = jax.device_get(state)
             solve_config = jax.device_get(solve_config)
 
-            # 1. Unpack the maze to boolean (True=wall, False=path)
             bool_maze_flat = solve_config.InstanceContext.Maze_unpacked
 
-            # 2. Create an integer representation (0=path, 1=wall)
             int_maze_flat = np.where(bool_maze_flat, 1, 0).astype(np.int8)
 
-            # 3. Get target and player positions and calculate flat indices
             target_pos = solve_config.GoalSpec.pos
             player_pos = state.pos
 
@@ -115,14 +111,12 @@ class Maze(Puzzle):
             target_idx = int(target_pos[0]) * self.size + int(target_pos[1])
             player_idx = int(player_pos[0]) * self.size + int(player_pos[1])
 
-            # 4. Place target (3) and player (4 if on target, else 2) markers.
-            # Walls keep their marker; DFS generation never places either on a wall.
+            # Preserve wall markers if a caller passes a position on a wall.
             if not bool_maze_flat[target_idx]:
                 int_maze_flat[target_idx] = 3
             if not bool_maze_flat[player_idx]:
                 int_maze_flat[player_idx] = 4 if target_idx == player_idx else 2
 
-            # 5. Format the string using the final integer maze
             return form.format(*map(to_char, int_maze_flat))
 
         return parser
@@ -130,7 +124,6 @@ class Maze(Puzzle):
     def get_initial_state(
         self, solve_config: "Maze.SolveConfig", key=jax.random.PRNGKey(0), data=None
     ) -> "Maze.State":
-        # Start state should also be chosen from valid path locations
         bool_maze = solve_config.InstanceContext.Maze_unpacked.reshape(
             (self.size, self.size)
         )
@@ -139,14 +132,10 @@ class Maze(Puzzle):
     def get_solve_config(
         self, key=jax.random.PRNGKey(128), data=None
     ) -> Puzzle.SolveConfig:
-        # Generate maze using DFS
         key, maze_key, target_key = jax.random.split(key, 3)
-        bool_maze = self._generate_maze_dfs(
-            maze_key, self.size
-        )  # Returns bool array (True=wall)
+        bool_maze = self._generate_maze_dfs(maze_key, self.size)
         bool_maze = bool_maze.ravel()
 
-        # Get target state on a valid path cell
         target_state = self._get_random_state(bool_maze, target_key)
 
         return self.SolveConfig(
@@ -155,29 +144,22 @@ class Maze(Puzzle):
         )
 
     def _generate_maze_dfs(self, key, size):
-        """Generates a maze using Randomized Depth-First Search."""
-        maze = jnp.ones((size, size), dtype=jnp.bool_)  # Start with all walls (True)
-        stack = jnp.zeros((size * size, 2), dtype=TYPE)  # Max possible stack depth
+        maze = jnp.ones((size, size), dtype=jnp.bool_)
+        stack = jnp.zeros((size * size, 2), dtype=TYPE)
         stack_ptr = 0
 
-        # Choose starting cell - always start at (0, 0)
         start_pos = jnp.array([0, 0], dtype=TYPE)
-        maze = maze.at[start_pos[0], start_pos[1]].set(
-            False
-        )  # Mark start (0,0) as path
+        maze = maze.at[start_pos[0], start_pos[1]].set(False)
         stack = stack.at[stack_ptr].set(start_pos)
         stack_ptr += 1
 
-        # Directions: N, S, E, W (relative row, col changes)
         # We check cells 2 steps away to ensure walls remain between paths
         dr = jnp.array([-2, 2, 0, 0], dtype=jnp.int8)
         dc = jnp.array([0, 0, 2, -2], dtype=jnp.int8)
-        # Wall between cells
         wall_dr = jnp.array([-1, 1, 0, 0], dtype=jnp.int8)
         wall_dc = jnp.array([0, 0, 1, -1], dtype=jnp.int8)
 
         def _cond_fun(state):
-            # Continue while stack is not empty
             _, _, stack_ptr, _ = state
             return stack_ptr > 0
 
@@ -185,15 +167,12 @@ class Maze(Puzzle):
             maze, stack, stack_ptr, key = state
             key, shuffle_key, loop_key = jax.random.split(key, 3)
 
-            # Current position (top of stack)
             curr_pos = stack[stack_ptr - 1]
             cr, cc = curr_pos[0], curr_pos[1]
 
-            # Find unvisited neighbours (cells that are walls 2 steps away)
             potential_nr = cr + dr
             potential_nc = cc + dc
 
-            # Check bounds
             in_bounds = (
                 (potential_nr >= 0)
                 & (potential_nr < size)
@@ -201,30 +180,23 @@ class Maze(Puzzle):
                 & (potential_nc < size)
             )
 
-            # Check if potential neighbour is a wall (i.e., unvisited)
             # Need to handle OOB indexing safely for maze lookup
             safe_nr = jnp.clip(potential_nr, 0, size - 1)
             safe_nc = jnp.clip(potential_nc, 0, size - 1)
             is_wall = maze[safe_nr, safe_nc]
 
             valid_neighbors_mask = in_bounds & is_wall
-            valid_indices = jnp.where(valid_neighbors_mask, size=4, fill_value=-1)[
-                0
-            ]  # Get indices [0,1,2,3] of valid moves
+            valid_indices = jnp.where(valid_neighbors_mask, size=4, fill_value=-1)[0]
             num_valid_neighbors = jnp.sum(valid_neighbors_mask)
 
-            # --- Jax control flow: choose a branch ---
             def _visit_neighbor(state):
                 maze, stack, stack_ptr, key, valid_indices, num_valid_neighbors = state
                 key, choice_key = jax.random.split(key)
 
-                # Randomly choose one valid neighbor
                 chosen_idx_in_valid = jax.random.randint(
                     choice_key, (), 0, num_valid_neighbors, dtype=jnp.int32
                 )
-                chosen_dir_idx = valid_indices[
-                    chosen_idx_in_valid
-                ]  # Map back to original direction index [0,1,2,3]
+                chosen_dir_idx = valid_indices[chosen_idx_in_valid]
 
                 nr, nc = potential_nr[chosen_dir_idx], potential_nc[chosen_dir_idx]
                 wall_r, wall_c = (
@@ -232,11 +204,9 @@ class Maze(Puzzle):
                     cc + wall_dc[chosen_dir_idx],
                 )
 
-                # Carve path to neighbor and wall between
                 maze = maze.at[nr, nc].set(False)
                 maze = maze.at[wall_r, wall_c].set(False)
 
-                # Push neighbor onto stack
                 new_pos = jnp.array([nr, nc], dtype=TYPE)
                 stack = stack.at[stack_ptr].set(new_pos)
                 stack_ptr += 1
@@ -244,11 +214,9 @@ class Maze(Puzzle):
 
             def _backtrack(state):
                 maze, stack, stack_ptr, key, _, _ = state
-                # Pop from stack
                 stack_ptr -= 1
                 return maze, stack, stack_ptr, key
 
-            # Use jax.lax.cond to either visit a neighbor or backtrack
             maze, stack, stack_ptr, key = jax.lax.cond(
                 num_valid_neighbors > 0,
                 _visit_neighbor,
@@ -260,16 +228,14 @@ class Maze(Puzzle):
                     loop_key,
                     valid_indices,
                     num_valid_neighbors,
-                ),  # Pass necessary state
+                ),
             )
             return maze, stack, stack_ptr, key
 
-        # Initial state for the loop
         init_state = (maze, stack, stack_ptr, key)
-        # Run the DFS loop
         maze, _, _, _ = jax.lax.while_loop(_cond_fun, _body_fun, init_state)
 
-        return maze  # Return the boolean maze grid
+        return maze
 
     def _apply(
         self,
@@ -277,7 +243,6 @@ class Maze(Puzzle):
         state: "Maze.State",
         action: jax.Array,
     ) -> tuple["Maze.State", jax.Array]:
-        """Pure transition: stepping out of bounds or into a wall costs infinity."""
         moves = jnp.array([[0, -1], [0, 1], [-1, 0], [1, 0]])
         # Bounds must be checked before narrowing to the stored coordinate dtype.
         new_pos = state.pos.astype(jnp.int32) + moves[action]
@@ -329,12 +294,6 @@ class Maze(Puzzle):
         return self._grid_visualize_format(self.size)
 
     def _get_random_state(self, bool_maze: chex.Array, key):
-        """
-        This function should return a random state on a path cell (False).
-        Accepts a boolean maze directly.
-        """
-        # bool_maze is now passed directly
-        # Ensure bool_maze is 2D
         if bool_maze.ndim == 1:
             bool_maze = bool_maze.reshape((self.size, self.size))
 
@@ -343,7 +302,6 @@ class Maze(Puzzle):
 
         def is_wall(carry):
             pos, _ = carry
-            # Check if the position is a wall (True)
             return bool_maze[pos[0], pos[1]]
 
         def while_body(carry):
@@ -352,20 +310,15 @@ class Maze(Puzzle):
             new_pos = get_random_pos(split_key)
             return new_pos, key
 
-        # Initial random position
         key, pos_key, loop_key = jax.random.split(key, 3)
         initial_pos = get_random_pos(pos_key)
         initial_carry = (initial_pos, loop_key)
 
-        # Loop until we find a position that is not a wall
         final_pos, _ = jax.lax.while_loop(is_wall, while_body, initial_carry)
 
         return self.State(pos=final_pos.astype(self._position_dtype))
 
     def get_img_parser(self) -> Callable:
-        """
-        This function is a decorator that adds an img_parser to the class.
-        """
         size = self.size
 
         grid_color = (200, 200, 200)

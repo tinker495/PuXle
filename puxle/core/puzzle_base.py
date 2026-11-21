@@ -529,14 +529,12 @@ class Puzzle(ABC):
 
     @staticmethod
     def _directional_action_to_string(action: int) -> str:
-        """Shared helper for puzzles using 4 directional actions (←→↑↓)."""
         if 0 <= action <= 3:
             return Puzzle._DIRECTIONAL_LABELS[action]
         raise ValueError(f"Invalid action: {action}")
 
     @staticmethod
     def _grid_visualize_format(size: int) -> str:
-        """Build a box-drawing grid format string for an ``size × size`` board."""
         form = "┏━"
         for i in range(size):
             form += "━━" if i != size - 1 else "━━┓"
@@ -627,8 +625,7 @@ class Puzzle(ABC):
             )
 
         neighbours, costs = self.get_neighbours(solve_config, state, filled)
-        # The i-th inverse neighbour is the state from which applying action i leads to the current state.
-        # This is found by permuting the forward neighbours using _inverse_action_permutation.
+        # The i-th inverse neighbour is the predecessor from which action i leads to state.
         permuted_neighbours = neighbours[self._inverse_action_permutation]
         permuted_costs = costs[self._inverse_action_permutation]
 

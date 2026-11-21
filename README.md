@@ -9,16 +9,6 @@
 
 **PuXle** is a high-performance library for parallelized planning and puzzle environments built on JAX. It provides a comprehensive collection of classic puzzles and external ecosystem adapters (PDDL and Cayley/Schreier graphs) optimized for AI research, reinforcement learning, and search algorithms. PuXle leverages [Xtructure](https://github.com/tinker495/Xtructure.git) as a backend for JAX-optimized data structures, offering advantages such as efficient batched operations, GPU-accelerated priority queues and hash tables for faster planning and puzzle solving in AI research. PuXle serves as the planning and puzzle implementation backend for [JAxtar](https://github.com/tinker495/JAxtar), enabling JAX-native parallelizable A* and Q* solvers for neural heuristic search research.
 
-## 🚀 Features
-
-- **High Performance**: JAX-powered parallelization for lightning-fast planning and puzzle solving
-- **Optimized Data Structures**: Powered by Xtructure for efficient batched operations, GPU-accelerated priority queues, and hash tables
-- **Diverse Environments**: 11 classic native puzzles plus external adapters for PDDL and [cayleypy](https://github.com/cayleypy/cayleypy)
-- **AI Research Ready**: Built for reinforcement learning, heuristic search algorithms, and world-model research
-- **Batch Processing**: Efficient batch operations for training and evaluation
-- **Extensible**: Easy-to-extend base classes for creating new puzzle and planning environments
-- **GPU Acceleration**: Full GPU support through JAX
-
 ## 📚 Documentation
 
 Full API documentation is automatically built and deployed to **[GitHub Pages](https://tinker495.github.io/PuXle/)** on every push to `main`.
@@ -142,8 +132,8 @@ print(f"Solved states with single config: {jnp.sum(solved_states_single)}")
 
 ### SolveConfig Structure
 
-`get_inits(key)` continues to return `(solve_config, initial_state)`. Every
-`SolveConfig` has exactly two outer fields:
+`get_inits(key)` returns `(solve_config, initial_state)`. Every `SolveConfig` has
+exactly two outer fields:
 
 - `InstanceContext`: data that can change action validity, transitions, or edge costs.
 - `GoalSpec`: data that defines the solved predicate, reward, or utility.
@@ -161,12 +151,14 @@ specification stores data leaves.
 | PDDL | Grounded precondition/effect masks | Goal mask |
 | DotKnot or another goal-free environment | Empty | Empty |
 
-Environment-specific data is available only through these two children; the
-outer `SolveConfig` does not expose compatibility aliases.
+Environment-specific data is available only through these two children.
 
 ### Custom Environment Creation
 
 ```python
+from typing import Annotated
+
+import chex
 import jax
 import jax.numpy as jnp
 from puxle import Puzzle
@@ -174,73 +166,55 @@ from xtructure import FieldDescriptor, Xtructurable
 
 
 class CustomPuzzle(Puzzle):
-    action_size = 4  # Number of possible actions
+    action_size = 4
 
     def define_state_class(self):
         class State(Xtructurable):
-            position: FieldDescriptor.tensor(dtype=jnp.int32, shape=(2,))  # Current position
+            position: Annotated[
+                chex.Array, FieldDescriptor.tensor(dtype=jnp.int32, shape=(2,))
+            ]
 
         return State
 
     def get_solve_config(self, key=None, data=None):
         return self.SolveConfig(
             InstanceContext=self.InstanceContext(),
-            GoalSpec=self.State(position=jnp.array([0, 0])),
+            GoalSpec=self.State(position=jnp.array([0, 0], dtype=jnp.int32)),
         )
 
     def get_initial_state(self, solve_config, key=None, data=None):
-        # Define initial state
-        return self.State(position=jnp.array([5, 5]))
+        return self.State(position=jnp.array([5, 5], dtype=jnp.int32))
 
-    def get_neighbours(self, solve_config, state, filled=True):
-        # Define valid moves: up, down, left, right
-        moves = jnp.array([[0, 1], [0, -1], [-1, 0], [1, 0]])
+    def _apply(self, solve_config, state, action):
+        moves = jnp.array([[0, 1], [0, -1], [-1, 0], [1, 0]], dtype=jnp.int32)
+        new_pos = state.position + moves[action]
+        valid = jnp.all((new_pos >= 0) & (new_pos < 10))
+        cost = jnp.where(valid, 1.0, jnp.inf)
+        return state.replace(position=new_pos), cost
+
+    def _get_neighbours(self, solve_config, state):
+        moves = jnp.array([[0, 1], [0, -1], [-1, 0], [1, 0]], dtype=jnp.int32)
         new_positions = state.position[None, :] + moves
-
-        # Create next states
-        next_states = jax.tree_util.tree_map(lambda x: jnp.repeat(x[None, :], 4, axis=0), state)
-        next_states = next_states.replace(position=new_positions)
-
-        # All moves have cost 1
-        costs = jnp.ones(4)
-
+        valid = jnp.all((new_positions >= 0) & (new_positions < 10), axis=1)
+        next_states = jax.vmap(lambda pos: state.replace(position=pos))(new_positions)
+        costs = jnp.where(valid, 1.0, jnp.inf)
         return next_states, costs
 
     def get_string_parser(self):
-        # Required: Return function to convert state to string
-        def string_parser(state):
-            return f"Position: ({state.position[0]}, {state.position[1]})"
+        def string_parser(state, **kwargs):
+            pos = jax.device_get(state.position)
+            return f"Position: ({int(pos[0])}, {int(pos[1])})"
 
         return string_parser
 
     def get_img_parser(self):
-        # Required: Return function to convert state to image array
-        def img_parser(state):
-            # Create a simple 10x10 grid visualization
-            grid = jnp.zeros((10, 10, 3))
-            x, y = state.position
-            # Place a marker at current position (clamp to grid bounds)
-            x = jnp.clip(x, 0, 9)
-            y = jnp.clip(y, 0, 9)
-            grid = grid.at[y, x].set(jnp.array([1.0, 0.0, 0.0]))  # Red dot
-            return grid
+        def img_parser(state, **kwargs):
+            grid = jnp.zeros((10, 10, 3), dtype=jnp.float32)
+            x, y = jnp.clip(state.position, 0, 9)
+            return grid.at[y, x].set(jnp.array([1.0, 0.0, 0.0]))
 
         return img_parser
 ```
-
-## 🔧 API Reference
-
-### Core Classes
-
-- **`Puzzle`**: Base class for all puzzles and planning environments
-- **`SolveConfig`**: Fixed `InstanceContext` and `GoalSpec` composition
-
-### Key Methods
-
-- **`get_inits(key)`**: Get `(solve_config, initial_state)`
-- **`get_neighbours(solve_config, state)`**: Get valid next states and costs
-- **`is_solved(solve_config, state)`**: Check if puzzle/planning goal is satisfied
-- **`batched_*`**: Batch versions of core methods for parallel processing
 
 ## 🧪 Testing
 
@@ -263,13 +237,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Xtructure](https://github.com/tinker495/Xtructure): JAX-optimized data structures used as a backend for PuXle.
 - [JAxtar](https://github.com/tinker495/JAxtar): JAX-native parallelizable A* and Q* solver that uses PuXle as its planning and puzzle implementation backend.
 - [cayleypy](https://github.com/cayleypy/cayleypy): Library of Cayley/Schreier graph definitions consumed by [`CayleyPuzzle`](docs/tutorials/cayley_bridge.md).
-
-## 🤝 Contributing and Feedback
-
-We welcome contributions, bug reports, and feature requests! Since the author is still learning about this research field, we particularly appreciate feedback and suggestions for improvements from the community. Please feel free to:
-
-- Open issues for bugs or feature requests
-- Submit pull requests with improvements
-- Share your research use cases and requirements
-
-Your input helps make PuXle better for the entire AI research community!

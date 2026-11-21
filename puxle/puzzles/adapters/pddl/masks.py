@@ -36,7 +36,6 @@ def extract_goal_conditions(goal) -> List[str]:
         raise ValueError("Equality goals are not supported in STRIPS mode.")
 
     if hasattr(goal, "name"):
-        # Handle atomic predicate
         args = " ".join([getattr(arg, "name", str(arg)) for arg in goal.terms])
         return [f"({goal.name} {args})" if args else f"({goal.name})"]
 
@@ -66,12 +65,10 @@ def build_masks(
     del_mask = jnp.zeros((num_actions, num_atoms), dtype=bool)
 
     for i, action in enumerate(grounded_actions):
-        # Positive Preconditions
         for precondition in action.get("preconditions", []):
             if precondition in atom_to_idx:
                 pre_mask = pre_mask.at[i, atom_to_idx[precondition]].set(True)
 
-        # Negative Preconditions
         for neg_precondition in action.get("preconditions_neg", []):
             if neg_precondition in atom_to_idx:
                 pre_neg_mask = pre_neg_mask.at[i, atom_to_idx[neg_precondition]].set(

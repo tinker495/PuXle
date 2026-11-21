@@ -15,7 +15,6 @@ from .type_system import select_most_specific_types
 
 
 def _normalize_type_options(type_tags, type_hierarchy) -> List[str]:
-    """Resolve a term's type tags into a deterministic list of candidate types."""
     tags = set(type_tags) if type_tags else {"object"}
     most_specific = select_most_specific_types(tags, type_hierarchy)
     if not most_specific:
@@ -35,7 +34,6 @@ def _objects_for_type_spec(
     if isinstance(type_spec, str):
         return list(objects_by_type.get(type_spec, []))
 
-    # Union of types
     candidates: List[str] = []
     seen: set[str] = set()
     for t in type_spec:
@@ -49,7 +47,6 @@ def _objects_for_type_spec(
 def _get_type_combinations(
     param_types: Iterable[str | Iterable[str]], objects_by_type: Dict[str, List[str]]
 ) -> List[List[str]]:
-    """Get all valid object combinations for given parameter types."""
     object_options = [
         _objects_for_type_spec(type_spec, objects_by_type) for type_spec in param_types
     ]
@@ -97,22 +94,20 @@ def _ground_formula(
     if formula is None:
         return [], [], False
 
-    # Handle Equality (= ?x ?y)
     formula_type = type(formula).__name__
     if formula_type == "EqualTo":
         left = getattr(formula.left, "name", str(formula.left))
         right = getattr(formula.right, "name", str(formula.right))
 
-        # Substitute parameters
         if left in param_names:
             left = param_substitution[param_names.index(left)]
         if right in param_names:
             right = param_substitution[param_names.index(right)]
 
         if left == right:
-            return [], [], False  # Satisfied
+            return [], [], False
         else:
-            return [], [], True  # Impossible
+            return [], [], True
 
     if formula_type == "Or":
         parts = []
@@ -132,7 +127,6 @@ def _ground_formula(
             "Non-deterministic preconditions `(oneof ...)` are not supported in STRIPS mode."
         )
 
-    # Handle Negation (Not)
     if formula_type == "Not":
         pos, neg, impossible = _ground_formula(
             formula.argument, param_substitution, param_names
@@ -145,15 +139,13 @@ def _ground_formula(
         if not pos and not neg:
             return [], [], True
 
-        # Swap pos and neg
         # Note: PDDL usually only allows neg of atomic/equality in preconditions
         if pos:
-            return neg, pos, False  # Move pos to neg
+            return neg, pos, False
         elif neg:
-            return neg, pos, False  # Move neg to pos (double negation)
-        return [], [], False  # Empty
+            return neg, pos, False
+        return [], [], False
 
-    # Handle compound formulas (conjunctive only)
     parts = []
     if hasattr(formula, "parts"):
         parts = formula.parts
@@ -177,7 +169,6 @@ def _ground_formula(
             all_neg.extend(neg)
         return all_pos, all_neg, False
 
-    # Handle Atomic Prediction
     if hasattr(formula, "name") and hasattr(formula, "terms"):
         pred_name = formula.name
         obj_combination = []
@@ -198,11 +189,9 @@ def _ground_formula(
 def _ground_effects(
     effect, param_substitution: List[str], param_names: List[str]
 ) -> Dict[str, List[str]]:
-    """Grounds effects into add/delete lists."""
     add_effects = []
     delete_effects = []
 
-    # Flatten effect structure
     effects_list = []
     if hasattr(effect, "parts"):
         effects_list = effect.parts
@@ -226,18 +215,14 @@ def _ground_effects(
                 f"Unsupported effect node `{eff_type}` in STRIPS grounding."
             )
 
-        # Check for negation
         if eff_type == "Not":
-            # Negative effect (delete)
             # argument is implicitly atomic in STRIPS
             pos, neg, imp = _ground_formula(
                 eff.argument, param_substitution, param_names
             )
             if not imp and pos:
                 delete_effects.extend(pos)
-                # _ground_formula returns list[str], we extend
         else:
-            # Positive effect (add)
             pos, neg, imp = _ground_formula(eff, param_substitution, param_names)
             if not imp and pos:
                 add_effects.extend(pos)
@@ -272,8 +257,6 @@ def ground_actions(
                 param.name for param in getattr(action, "parameters", []) or []
             ]
 
-            # Ground Preconditions
-            # Result: (pos, neg, impossible)
             pre_pos, pre_neg, impossible = _ground_formula(
                 action.precondition, param_combo, param_names
             )

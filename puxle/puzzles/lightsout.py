@@ -16,12 +16,7 @@ _MOVE_MATRIX_CACHE: dict[int, np.ndarray] = {}
 
 
 def action_to_char(action: int) -> str:
-    """
-    This function should return a string representation of the action.
-    0~9 -> 0~9
-    10~35 -> a~z
-    36~61 -> A~Z
-    """
+    """Encode action index as 0-9 (0..9), a-z (10..35), or A-Z (36..61)."""
     if action < 10:
         return colored_str(str(action), "light_yellow")
     elif action < 36:
@@ -48,7 +43,6 @@ class LightsOut(Puzzle):
     size: int
 
     def define_state_class(self) -> type[Xtructurable]:
-        """Defines the state class for LightsOut using xtructure."""
         size = self.size
 
         class State(Xtructurable):
@@ -103,7 +97,6 @@ class LightsOut(Puzzle):
         state: "LightsOut.State",
         action: jax.Array,
     ) -> tuple["LightsOut.State", float]:
-        """Pure transition: every toggle is valid with unit cost."""
         masks = jnp.asarray(
             np.packbits(self._move_matrix(self.size), axis=1, bitorder="little")
         )
@@ -120,9 +113,6 @@ class LightsOut(Puzzle):
         )
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
-        """
         return action_to_char(action)
 
     @property
@@ -214,12 +204,9 @@ class LightsOut(Puzzle):
         return form
 
     def get_img_parser(self) -> Callable:
-        """
-        This function is a decorator that adds an img_parser to the class.
-        """
         size = self.size
 
-        on_color = (255, 255, 0)  # Yellow (BGR)
+        on_color = (255, 255, 0)
         off_color = (0, 0, 0)
         grid_color = (50, 50, 50)
         bg_color = (30, 30, 30)

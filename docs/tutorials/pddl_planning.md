@@ -75,13 +75,6 @@ true_atoms = pddl_env.state_to_atom_set(initial_state)
 print(f"True atoms in state: {true_atoms}")
 ```
 
-## Key Methods
-
-- `PDDL.list_sources()`: Return a dictionary mapping bundled domain names to available problem stems.
-- `action_to_string(action_idx, colored=True)`: Format a grounded action as a colored label or `(name params)`.
-- `state_to_atom_set(state)`: Convert a packed `PDDL.State` into the set of true grounded atom strings.
-- `static_predicate_profile(state, pred_name)`: Return truth values for all grounded atoms of `pred_name`.
-
 ## See Also
 
 - Adapter source: `puxle/puzzles/adapters/pddl/pddl.py`

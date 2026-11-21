@@ -72,10 +72,8 @@ class LightsOutDeepCubeABenchmark(Benchmark):
         Verify that a solution is valid for the given sample.
         For 7x7 Lights Out, any solution without duplicate moves is considered optimal.
         """
-        # If action_sequence is provided, check for duplicates (theorem condition)
         if action_sequence is not None:
             if len(set(action_sequence)) != len(action_sequence):
-                # Duplicate moves found, so it might not be optimal (or is trivially redundant)
                 return False
 
         result = super().verify_solution(sample, states, action_sequence)

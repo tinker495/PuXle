@@ -54,7 +54,6 @@ class RubiksCubeSantaBenchmark(Benchmark):
     ) -> None:
         super().__init__()
 
-        # Use preset if provided, otherwise use puzzle_type string directly
         if puzzle_type is not None:
             self.puzzle_type = puzzle_type
         else:
@@ -68,7 +67,6 @@ class RubiksCubeSantaBenchmark(Benchmark):
             Path(dataset_path).expanduser().resolve() if dataset_path else None
         )
 
-        # Extract size from puzzle_type
         if not self.puzzle_type.startswith("cube_"):
             raise ValueError(
                 f"Invalid puzzle type '{self.puzzle_type}'. Must start with 'cube_'."
@@ -90,10 +88,8 @@ class RubiksCubeSantaBenchmark(Benchmark):
         if self._dataset_path is not None:
             path = self._dataset_path
         else:
-            # Try to find in default location
             path = Path(__file__).resolve().parents[2] / "puxle" / DATA_RELATIVE_PATH
             if not path.exists():
-                # Fallback to package resource or other locations if needed
                 pass
 
         if not path.is_file():
@@ -111,7 +107,6 @@ class RubiksCubeSantaBenchmark(Benchmark):
                 f"No puzzles found for type '{self.puzzle_type}' in {path}"
             )
 
-        # Pre-process samples
         samples = []
         for row in rows:
             parsed = self._parse_row(row)
@@ -129,10 +124,6 @@ class RubiksCubeSantaBenchmark(Benchmark):
         return np.array_equal(solution_mapped, np.sort(solution_mapped))
 
     def _parse_and_map_row(self, row: Mapping[str, str]) -> Dict[str, Any] | None:
-        """
-        Parse and map a row without applying the is_standard filter.
-        Returns a dict with parsed data including is_standard flag, or None if parsing fails.
-        """
         initial_str = row["initial_state"]
         solution_str = row["solution_state"]
 
@@ -142,7 +133,6 @@ class RubiksCubeSantaBenchmark(Benchmark):
 
         wildcards = int(row.get("num_wildcards") or 0)
 
-        # Filter out puzzles with wildcards
         if wildcards > 0:
             return None
 
@@ -166,14 +156,10 @@ class RubiksCubeSantaBenchmark(Benchmark):
         }
 
     def _parse_row(self, row: Mapping[str, str]) -> Dict[str, Any] | None:
-        """
-        Parse a row and return sample data. Filters to only STANDARD solution puzzles.
-        """
         parsed = self._parse_and_map_row(row)
         if parsed is None:
             return None
 
-        # This class (RubiksCubeSantaBenchmark) only returns STANDARD solution puzzles.
         if not parsed["is_standard"]:
             return None
 
@@ -222,14 +208,10 @@ class RubiksCubeSantaRandomBenchmark(RubiksCubeSantaBenchmark):
     """
 
     def _parse_row(self, row: Mapping[str, str]) -> Dict[str, Any] | None:
-        """
-        Parse a row and return sample data. Filters to only NON-STANDARD (random) solution puzzles.
-        """
         parsed = self._parse_and_map_row(row)
         if parsed is None:
             return None
 
-        # This class only returns NON-STANDARD (random) solution puzzles.
         if parsed["is_standard"]:
             return None
 

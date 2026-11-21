@@ -1,12 +1,3 @@
-"""PuXle utility helpers.
-
-For in-memory bitpacked puzzle states, use xtructure's
-``FieldDescriptor.packed_tensor(...)``/``set_unpacked(...)`` and aggregate
-bitpacking via ``bits=...``. The canonical low-level codec is
-``xtructure.core.layout.bitpack.to_uint8`` / ``from_uint8`` — PuXle no longer
-carries duplicate primitives.
-"""
-
 IMG_SIZE = (640, 640)
 
 

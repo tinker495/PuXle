@@ -36,7 +36,6 @@ class TSP(Puzzle):
     size: int
 
     def define_state_class(self) -> type[Xtructurable]:
-        """Defines the state class for TSP using xtructure."""
         size = self.size
 
         class State(Xtructurable):
@@ -194,9 +193,6 @@ class TSP(Puzzle):
         )
 
     def action_to_string(self, action: int) -> str:
-        """
-        This function should return a string representation of the action.
-        """
         return f"{action:02d}"
 
     def _get_visualize_format(self):
@@ -225,20 +221,16 @@ class TSP(Puzzle):
             **kwargs,
         ):
             imgsize = IMG_SIZE[0]
-            # Create a white background image
             img = np.full(
                 (IMG_SIZE[1], IMG_SIZE[0], 3), (255, 255, 255), dtype=np.uint8
             )
             path = kwargs.get("path", [])
             idx = kwargs.get("idx", 0)
 
-            # Get the visited mask as booleans
             visited = state.mask_unpacked
-            # Convert the TSP points (assumed to be an array of shape [number_of_points, 2]) to a numpy array
             context = solve_config.InstanceContext
             points_np = np.array(context.points)
 
-            # Compute scaling parameters to fit all points within the image with a margin
             margin = 20
             if points_np.size > 0:
                 xmin, xmax = points_np[:, 0].min(), points_np[:, 0].max()
@@ -246,7 +238,6 @@ class TSP(Puzzle):
             else:
                 xmin, xmax, ymin, ymax = 0, 1, 0, 1
 
-            # Scale points to image coordinates
             scaled_points = []
             for pt in points_np:
                 if xmax > xmin:
@@ -263,17 +254,13 @@ class TSP(Puzzle):
                     y_coord = imgsize // 2
                 scaled_points.append((x_coord, y_coord))
 
-            # Visualize the given path by drawing lines connecting the successive points from 'paths'
-            # up to the current index 'idx'
             if path and idx > 0 and len(path) > idx:
                 route_points = [scaled_points[path[i].point] for i in range(idx + 1)]
                 img = cv2.polylines(
                     img, [np.array(route_points, dtype=np.int32)], False, (0, 0, 0), 2
                 )
 
-            # Draw each point with different colors based on status
-            for i, (x, y) in enumerate(scaled_points):  # Renamed idx to i for clarity
-                # Color: green for start, blue for visited, red for unvisited
+            for i, (x, y) in enumerate(scaled_points):
                 if i == context.start:
                     color = (0, 255, 0)
                 elif visited[i]:
@@ -283,11 +270,9 @@ class TSP(Puzzle):
 
                 img = cv2.circle(img, (x, y), 5, color, -1)
 
-                # Highlight the current point with an outer black circle
                 if i == state.point:
                     img = cv2.circle(img, (x, y), 8, (0, 0, 0), 2)
 
-                # Optionally, label the point with its index
                 img = cv2.putText(
                     img,
                     str(i),
@@ -298,7 +283,6 @@ class TSP(Puzzle):
                     1,
                 )
 
-            # If all points are visited, draw a line from the current point to the start point to close the tour
             if np.all(visited):
                 img = cv2.line(
                     img,

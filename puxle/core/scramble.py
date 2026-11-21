@@ -1,9 +1,4 @@
-"""Random-walk scramble engine for Puzzle implementations.
-
-The functions in this module consume only the Puzzle public interface. Puzzle
-keeps compatibility methods that delegate here, while the implementation lives
-outside the base interface.
-"""
+"""Random-walk scramble engine built strictly on the public ``Puzzle`` interface."""
 
 from __future__ import annotations
 
@@ -118,7 +113,6 @@ def _get_shuffled_state(
     key,
     num_shuffle,
 ):
-    """Generate a scrambled state by applying random actions."""
     key, subkey = jax.random.split(key)
     num_shuffle += jax.random.randint(subkey, (), 0, 2)
 
