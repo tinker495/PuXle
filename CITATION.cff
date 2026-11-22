@@ -7,6 +7,8 @@ authors:
     given-names: Kyuseok
 abstract: "Parallelized puzzle and planning environments built on JAX."
 version: "0.2.0"
+doi: "10.5281/zenodo.24442933"
+commit: "82b669f7e24cd0825b5d2fc5e15f5cc18c504011"
 date-released: "2026-11-22"
 license: MIT
 repository-code: "https://github.com/tinker495/PuXle"
