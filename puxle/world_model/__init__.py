@@ -49,6 +49,7 @@ __all__ = [
     "round_through_gradient",
     "trajectory_to_eval_trajectory",
     "trajectory_to_transition_dataset",
+    "world_model_data_path",
     "world_model_eval_builder",
     "trained_world_model_registry",
     "world_model_train_builder",
@@ -89,6 +90,7 @@ _EXPORTS = {
     "round_through_gradient": (_UTIL, "round_through_gradient"),
     "trajectory_to_eval_trajectory": (_DATASET, "trajectory_to_eval_trajectory"),
     "trajectory_to_transition_dataset": (_DATASET, "trajectory_to_transition_dataset"),
+    "world_model_data_path": ("._resources", "world_model_data_path"),
     "world_model_eval_builder": (_TRAIN, "world_model_eval_builder"),
     "trained_world_model_registry": (
         ".trained_model_registry",

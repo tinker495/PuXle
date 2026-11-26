@@ -7,6 +7,7 @@ import argparse
 import ast
 import json
 from dataclasses import dataclass
+from importlib.util import resolve_name
 from pathlib import Path
 from typing import Iterable
 
@@ -87,79 +88,71 @@ def _has_private_segment(dotted_name: str) -> bool:
 def check_file_for_leaks(root: Path, path: Path) -> list[SeamViolation]:
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
-    rel_path = path.relative_to(root).as_posix()
+    relative_path = path.relative_to(root)
+    package = ".".join(relative_path.parts[:-1])
+    owner = relative_path.parts[1] if len(relative_path.parts) > 2 else None
     violations: list[SeamViolation] = []
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            raw = (ast.get_source_segment(source, node) or "").strip()
-            for alias in node.names:
-                if alias.name.split(".")[0] != "xtructure":
-                    continue
-                if _has_private_segment(alias.name):
-                    violations.append(
-                        SeamViolation(
-                            path=rel_path,
-                            lineno=node.lineno,
-                            kind="private-cross-repo-import",
-                            raw_import=raw,
-                            reason=(
-                                f"Private cross-repo import `{alias.name}`; "
-                                "deepen or expose the public seam in `Xtructure`."
-                            ),
-                        )
-                    )
-                elif alias.name not in SANCTIONED_XTRUCTURE_SEAMS:
-                    violations.append(
-                        SeamViolation(
-                            path=rel_path,
-                            lineno=node.lineno,
-                            kind="internal-cross-repo-seam",
-                            raw_import=raw,
-                            reason=(
-                                f"Internal cross-repo import `{alias.name}` from `Xtructure`; "
-                                "use a sanctioned seam from CONTEXT.md."
-                            ),
-                        )
-                    )
+            mod = ""
         elif isinstance(node, ast.ImportFrom):
-            if node.level or not node.module:
-                continue
-            mod = node.module
-            if mod.split(".")[0] != "xtructure":
-                continue
-            raw = (ast.get_source_segment(source, node) or "").strip()
-            if _has_private_segment(mod) or any(
-                _is_private_name(alias.name)
-                for alias in node.names
-                if alias.name != "*"
-            ):
-                violations.append(
-                    SeamViolation(
-                        path=rel_path,
-                        lineno=node.lineno,
-                        kind="private-cross-repo-import",
-                        raw_import=raw,
-                        reason="Private symbol or module imported from `Xtructure`.",
-                    )
+            mod = node.module or ""
+            if node.level:
+                try:
+                    mod = resolve_name("." * node.level + mod, package)
+                except ImportError:
+                    continue
+        else:
+            continue
+
+        for alias in node.names:
+            target = f"{mod}.{alias.name}" if mod else alias.name
+            parts = target.split(".")
+            if parts[0] == "puxle" and len(parts) > 1:
+                target_owner = parts[1]
+                if target_owner == owner or not _has_private_segment(target):
+                    continue
+                # Modules directly under puxle provide shared package infrastructure.
+                if (root / "puxle" / f"{target_owner}.py").is_file():
+                    continue
+                kind = "private-cross-package-import"
+                reason = (
+                    f"Private cross-package import `{target}`; "
+                    "expose a public interface in the owning PuXle package."
                 )
+            elif parts[0] == "xtructure":
+                if _has_private_segment(target):
+                    kind = "private-cross-repo-import"
+                    reason = (
+                        f"Private symbol or module imported from Xtructure: `{target}`."
+                    )
+                elif target in SANCTIONED_XTRUCTURE_SEAMS or (
+                    mod in SANCTIONED_XTRUCTURE_SEAMS
+                    and (
+                        mod != "xtructure"
+                        or alias.name not in UNAPPROVED_XTRUCTURE_CHILDREN
+                    )
+                ):
+                    continue
+                else:
+                    kind = "internal-cross-repo-seam"
+                    reason = (
+                        f"Unsanctioned internal seam `{target}` imported from Xtructure; "
+                        "use a sanctioned seam or document the adapter in CONTEXT.md."
+                    )
+            else:
                 continue
-            imports_internal_child = mod == "xtructure" and any(
-                alias.name in UNAPPROVED_XTRUCTURE_CHILDREN for alias in node.names
+
+            violations.append(
+                SeamViolation(
+                    path=relative_path.as_posix(),
+                    lineno=node.lineno,
+                    kind=kind,
+                    raw_import=(ast.get_source_segment(source, node) or "").strip(),
+                    reason=reason,
+                )
             )
-            if mod not in SANCTIONED_XTRUCTURE_SEAMS or imports_internal_child:
-                violations.append(
-                    SeamViolation(
-                        path=rel_path,
-                        lineno=node.lineno,
-                        kind="internal-cross-repo-seam",
-                        raw_import=raw,
-                        reason=(
-                            f"Unsanctioned internal seam `{mod}` imported from `Xtructure`; "
-                            "use a sanctioned seam or document the adapter in CONTEXT.md."
-                        ),
-                    )
-                )
     return violations
 
 

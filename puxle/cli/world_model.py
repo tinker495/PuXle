@@ -11,7 +11,7 @@ import numpy as np
 import tyro
 from tqdm.auto import tqdm
 
-from puxle.world_model._resources import world_model_data_path
+from puxle.world_model import world_model_data_path
 
 from ._puzzles import PuzzleName, create_puzzle, data_name_for_puzzle
 from ._world_model_render import render_states, save_transition_samples
@@ -222,7 +222,7 @@ def train(options: TrainOptionsArg) -> int:
         world_model_train_builder,
     )
     from puxle.world_model.trained_model_registry import (
-        _create_world_model_for_training,
+        create_world_model_for_training,
     )
 
     factory = getattr(trained_world_model_registry, options.model, None)
@@ -255,7 +255,7 @@ def train(options: TrainOptionsArg) -> int:
         total=1, desc="Initializing model", unit="model", dynamic_ncols=True
     ) as progress:
         progress.set_postfix(model=options.model, seed=options.seed)
-        world_model = _create_world_model_for_training(
+        world_model = create_world_model_for_training(
             options.model,
             init_params=options.reset,
         )
