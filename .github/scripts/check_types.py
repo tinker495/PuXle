@@ -7,13 +7,12 @@ import os
 import subprocess
 import sys
 import tarfile
+import tomllib
 from collections import Counter
 from importlib.metadata import version
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TypedDict
-
-import tomllib
 
 
 class Diagnostic(TypedDict):

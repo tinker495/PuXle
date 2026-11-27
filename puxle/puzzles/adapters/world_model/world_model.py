@@ -496,8 +496,8 @@ class WorldModelPuzzle(Puzzle):
 
     def batched_get_neighbours(
         self,
-        solve_configs: Puzzle.SolveConfig,
-        states: Puzzle.State,
+        solve_configs,
+        states,
         filleds: bool | jax.Array = True,
         multi_solve_config: bool = False,
     ) -> tuple[Puzzle.State, jax.Array]:

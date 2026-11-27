@@ -289,6 +289,8 @@ def create_hindsight_target_triangular_shuffled_path(
     tiled_solve_configs = xnp.repeat(
         original_solve_configs[jnp.newaxis, ...], k_max, axis=0
     )
+    if not isinstance(tiled_solve_configs, Xtructurable):
+        raise TypeError("Expected Xtructurable solve_configs from xnp.repeat.")
     flat_tiled_sc = tiled_solve_configs.flatten()
     flat_target_states = target_states.flatten()
     final_solve_configs = puzzle.batched_hindsight_transform(
