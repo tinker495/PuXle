@@ -28,6 +28,7 @@ dependencies = [
     "flax>=0.11.2",
     "huggingface-hub>=0.20.0",
     "jax>=0.11.2",
+    "jax[cuda]>=0.11.2; sys_platform == 'linux'",
     "numpy>=2.2.0",
     "opencv-python-headless>=4.10.0",
     "optax>=0.2.0",
@@ -48,9 +49,6 @@ Issues = "https://github.com/tinker495/PuXle/issues"
 puxle = "puxle.cli:main"
 
 [project.optional-dependencies]
-cuda = [
-    "jax[cuda]>=0.11.2",
-]
 docs = [
     "sphinx>=7.0",
     "furo",

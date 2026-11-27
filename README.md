@@ -31,18 +31,17 @@ Full API documentation is automatically built and deployed to **[GitHub Pages](h
 ## 📦 Installation
 
 Add the latest GitHub revision to a uv project (all runtime features — classic
-puzzles, PDDL, Cayley, world models, and visualization — are included by
-default):
+puzzles, PDDL, Cayley, world models, visualization, and Linux `jax[cuda]` — are
+included by default):
 
 ```bash
-uv add "puxle @ git+https://github.com/tinker495/PuXle.git"
+uv add "puxle @ git+https://github.com/tinker495/PuXle.git@main"
 ```
 
-Optional hardware/docs extras:
+Optional documentation extra:
 
 ```bash
-uv add "puxle[cuda] @ git+https://github.com/tinker495/PuXle.git"
-uv add "puxle[docs] @ git+https://github.com/tinker495/PuXle.git"
+uv add "puxle[docs] @ git+https://github.com/tinker495/PuXle.git@main"
 ```
 
 For development from a checkout:

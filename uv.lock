@@ -2,9 +2,12 @@ version = 1
 revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
-    "python_full_version >= '3.14'",
-    "python_full_version == '3.13.*'",
-    "python_full_version < '3.13'",
+    "python_full_version >= '3.14' and sys_platform == 'linux'",
+    "python_full_version >= '3.14' and sys_platform != 'linux'",
+    "python_full_version == '3.13.*' and sys_platform == 'linux'",
+    "python_full_version == '3.13.*' and sys_platform != 'linux'",
+    "python_full_version < '3.13' and sys_platform == 'linux'",
+    "python_full_version < '3.13' and sys_platform != 'linux'",
 ]
 
 [[package]]
@@ -731,18 +734,18 @@ wheels = [
 
 [package.optional-dependencies]
 with-cuda = [
-    { name = "nvidia-cublas-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-cuda-cupti-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-cuda-nvcc-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-cuda-nvrtc-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-cuda-runtime-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-cudnn-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-cufft-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-cusolver-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-cusparse-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-nccl-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-nvjitlink-cu12", marker = "sys_platform == 'linux'" },
-    { name = "nvidia-nvshmem-cu12", marker = "sys_platform == 'linux'" },
+    { name = "nvidia-cublas-cu12" },
+    { name = "nvidia-cuda-cupti-cu12" },
+    { name = "nvidia-cuda-nvcc-cu12" },
+    { name = "nvidia-cuda-nvrtc-cu12" },
+    { name = "nvidia-cuda-runtime-cu12" },
+    { name = "nvidia-cudnn-cu12" },
+    { name = "nvidia-cufft-cu12" },
+    { name = "nvidia-cusolver-cu12" },
+    { name = "nvidia-cusparse-cu12" },
+    { name = "nvidia-nccl-cu12" },
+    { name = "nvidia-nvjitlink-cu12" },
+    { name = "nvidia-nvshmem-cu12" },
 ]
 
 [[package]]
@@ -1685,6 +1688,7 @@ dependencies = [
     { name = "flax" },
     { name = "huggingface-hub" },
     { name = "jax" },
+    { name = "jax", extra = ["cuda"], marker = "sys_platform == 'linux'" },
     { name = "numpy" },
     { name = "opencv-python-headless" },
     { name = "optax" },
@@ -1696,9 +1700,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-cuda = [
-    { name = "jax", extra = ["cuda"] },
-]
 docs = [
     { name = "furo" },
     { name = "myst-parser" },
@@ -1724,7 +1725,7 @@ requires-dist = [
     { name = "furo", marker = "extra == 'docs'" },
     { name = "huggingface-hub", specifier = ">=0.20.0" },
     { name = "jax", specifier = ">=0.11.2" },
-    { name = "jax", extras = ["cuda"], marker = "extra == 'cuda'", specifier = ">=0.11.2" },
+    { name = "jax", extras = ["cuda"], marker = "sys_platform == 'linux'", specifier = ">=0.11.2" },
     { name = "myst-parser", marker = "extra == 'docs'" },
     { name = "numpy", specifier = ">=2.2.0" },
     { name = "opencv-python-headless", specifier = ">=4.10.0" },
@@ -1737,7 +1738,7 @@ requires-dist = [
     { name = "tyro", specifier = ">=1.0.16,<2" },
     { name = "xtructure", git = "https://github.com/tinker495/xtructure.git?rev=main" },
 ]
-provides-extras = ["cuda", "docs"]
+provides-extras = ["docs"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2401,7 +2402,7 @@ wheels = [
 [[package]]
 name = "xtructure"
 version = "0.1.4"
-source = { git = "https://github.com/tinker495/xtructure.git?rev=main#73cb3937999281ad2bd88719e6e710d5a4e3fc82" }
+source = { git = "https://github.com/tinker495/xtructure.git?rev=main#5f41e38342cefe34dda11550a88106a948f9bed2" }
 dependencies = [
     { name = "absl-py" },
     { name = "chex" },
