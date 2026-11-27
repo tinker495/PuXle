@@ -11,7 +11,6 @@ states, and optionally saves image renders in ``images/visualizations/``.
 from __future__ import annotations
 
 import ast
-import inspect
 import re
 import sys
 from dataclasses import dataclass, field
@@ -24,30 +23,11 @@ import tyro
 from jax import tree_util
 from PIL import Image
 
-import puxle.puzzles as puzzles_module
 from puxle import Puzzle
+from puxle.puzzles import resolve_puzzle_class
 
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 _ARROW_NAMES = {"←": "left", "→": "right", "↑": "up", "↓": "down"}
-
-
-def _normalized(name: str) -> str:
-    return "".join(ch for ch in name.lower() if ch.isalnum())
-
-
-def _discover_puzzles() -> dict[str, type[Puzzle]]:
-    classes = {
-        value.__name__: value
-        for name in puzzles_module.__all__
-        if inspect.isclass(value := getattr(puzzles_module, name))
-        and issubclass(value, Puzzle)
-        and value is not Puzzle
-        and not inspect.isabstract(value)
-    }
-    aliases = {_normalized(name): value for name, value in classes.items()}
-    if "SlidePuzzle" in classes:
-        aliases["npuzzle"] = classes["SlidePuzzle"]
-    return classes | aliases
 
 
 def _sanitize_filename(label: str) -> str:
@@ -80,13 +60,7 @@ def visualize_puzzle(
     output_dir: Path,
     puzzle_kwargs: list[str],
 ) -> None:
-    puzzles = _discover_puzzles()
-    puzzle_class = puzzles.get(puzzle_name) or puzzles.get(_normalized(puzzle_name))
-    if puzzle_class is None:
-        available = ", ".join(sorted(key for key in puzzles if not key.islower()))
-        raise ValueError(
-            f"Unknown puzzle '{puzzle_name}'. Available puzzles: {available}"
-        )
+    puzzle_class = resolve_puzzle_class(puzzle_name)
 
     parsed_kwargs: dict[str, object] = {}
     for item in puzzle_kwargs:
@@ -110,7 +84,7 @@ def visualize_puzzle(
     neighbours, costs = puzzle.get_neighbours(solve_config, init_state, filled=True)
 
     print("\nInitial State:")
-    print(init_state.str(solve_config=solve_config))
+    print(puzzle.render_str(init_state, solve_config=solve_config))
     print("\nAction overview:")
 
     action_labels = [puzzle.action_to_string(i) for i in range(puzzle.action_size)]
@@ -121,14 +95,15 @@ def visualize_puzzle(
         cost_repr = "∞" if not finite_mask[idx] else f"{np_costs[idx]:.3f}"
         print(f"[{idx:02d}] {label:20s} cost={cost_repr}")
         neighbour_state = _select_state(puzzle, neighbours, idx)
-        print(neighbour_state.str(solve_config=solve_config))
+        print(puzzle.render_str(neighbour_state, solve_config=solve_config))
         print("-")
 
     if img:
-        img_root = output_dir / puzzle_name
+        img_root = output_dir / puzzle_class.__name__
 
         init_path = _save_image(
-            init_state.img(solve_config=solve_config), img_root / "initial.png"
+            puzzle.render_img(init_state, solve_config=solve_config),
+            img_root / "initial.png",
         )
         print(f"Saved initial state image -> {init_path}")
 
@@ -137,7 +112,7 @@ def visualize_puzzle(
             neighbour_state = _select_state(puzzle, neighbours, idx)
             filename = f"{idx:02d}_{_sanitize_filename(action_label)}.png"
             neighbour_path = _save_image(
-                neighbour_state.img(solve_config=solve_config),
+                puzzle.render_img(neighbour_state, solve_config=solve_config),
                 img_root / filename,
             )
             print(f"Saved neighbour {action_label} image -> {neighbour_path}")

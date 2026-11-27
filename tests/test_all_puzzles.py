@@ -230,6 +230,10 @@ class TestPuzzleValidation:
                     f"Action transition test failed for {puzzle_class.__name__}: {e}"
                 )
 
+    # Author: tinker495 — Compiles and steps every action across all discovered
+    # native puzzles; marked `slow` for fast local `-m "not slow"` iteration
+    # while running unconditionally in merge CI (`pytest tests -ra`).
+    @pytest.mark.slow
     def test_get_neighbours_matches_get_actions(self, puzzle_configs, rng_key):
         """Cross-check get_neighbours outputs against per-action get_actions calls"""
         for puzzle_class in puzzle_configs:
@@ -475,6 +479,10 @@ class TestPuzzleValidation:
             except Exception as e:
                 pytest.fail(f"Property test failed for {puzzle_class.__name__}: {e}")
 
+    # Author: tinker495 — Compiles and checks full inverse round-trips across
+    # every action of every discovered puzzle; marked `slow` for fast local
+    # `-m "not slow"` iteration while running unconditionally in merge CI.
+    @pytest.mark.slow
     def test_inverse_actions(self, puzzle_configs, rng_key):
         """Test inverse action functionality"""
         for puzzle_class in puzzle_configs:

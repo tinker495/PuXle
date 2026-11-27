@@ -621,7 +621,13 @@ def load_params_with_metadata(path: str):
             RuntimeWarning,
             stacklevel=2,
         )
-    except (FileNotFoundError, pickle.PickleError, OSError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        EOFError,
+        pickle.PickleError,
+        OSError,
+        ValueError,
+    ) as exc:
         warnings.warn(
             f"Failed to load parameters from {path}. Error: {exc}",
             RuntimeWarning,
@@ -664,7 +670,15 @@ def download_model(filename: str | os.PathLike[str]) -> str:
                 filename=f"world_models/{name}",
             )
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(downloaded, destination)
+            tmp_destination = destination.with_name(
+                f".{destination.name}.{os.getpid()}.tmp"
+            )
+            try:
+                shutil.copy2(downloaded, tmp_destination)
+                os.replace(tmp_destination, destination)
+            except BaseException:
+                tmp_destination.unlink(missing_ok=True)
+                raise
             return str(destination)
         except EntryNotFoundError as exc:
             last_error = exc

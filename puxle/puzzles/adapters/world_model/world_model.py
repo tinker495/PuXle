@@ -21,7 +21,6 @@ from puxle.render import img_to_colored_str
 from puxle.utils import IMG_SIZE
 from puxle.world_model import (
     download_world_model_dataset,
-    is_world_model_dataset_downloaded,
     round_through_gradient,
     world_model_data_path,
 )
@@ -333,6 +332,7 @@ class WorldModelPuzzle(Puzzle):
             return params
         except (
             FileNotFoundError,
+            EOFError,
             pickle.PickleError,
             ValueError,
             RuntimeError,
@@ -361,8 +361,12 @@ class WorldModelPuzzle(Puzzle):
                 raise FileNotFoundError(
                     f"Missing world-model dataset files in custom data_path: {data_dir}"
                 )
-            if not is_world_model_dataset_downloaded():
-                download_world_model_dataset()
+            download_world_model_dataset()
+            if not (inits_path.exists() and targets_path.exists()):
+                raise FileNotFoundError(
+                    f"World-model dataset '{self.data_name}' not found in {data_dir} "
+                    "after download."
+                )
         inits = jax.device_put(jnp.load(inits_path))
         targets = jax.device_put(jnp.load(targets_path))
         if self.reverse_data:

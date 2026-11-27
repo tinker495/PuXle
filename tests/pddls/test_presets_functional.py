@@ -105,6 +105,10 @@ def _bfs_reaches_goal(env: PDDL, solve_config, initial_state, max_depth: int) ->
     return False
 
 
+# Author: tinker495 — Exhaustive BFS across 20 grounded PDDL presets dominates
+# local pytest wall time; marked `slow` so local `-m "not slow"` stays fast
+# while merge CI (`pytest tests -ra`) runs every preset unconditionally.
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "domain, problem, max_depth",
     [

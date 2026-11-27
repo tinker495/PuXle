@@ -58,27 +58,12 @@ def img_to_colored_str(image: Any) -> str:
     )
 
 
-def attach_state_renderer(
-    cls: Type[T],
+def make_state_img_renderer(
     imgfunc: Callable[..., Any],
-    strfunc: Callable[..., str] | None = None,
     *,
     host_inputs: bool = True,
-) -> Type[T]:
-    """Attach host-side ``img`` (and optional ``str`` / ``__str__``) to ``cls``.
-
-    ``img`` dispatches on ``self.structured_type``:
-    ``StructuredType.SINGLE`` invokes ``imgfunc(self, **kwargs)`` once;
-    ``StructuredType.BATCHED`` invokes it once per element and stacks results.
-    When ``host_inputs`` is ``True``, ``self`` and ``kwargs`` are copied to the
-    host via ``jax.device_get`` once before invoking ``imgfunc``.
-    Every rendered frame is normalized via :func:`normalize_rgb_image`, and an
-    optional ``size=(width, height)`` keyword resizes each frame cleanly.
-
-    When ``strfunc`` is provided, ``str`` and ``__str__`` are bound with
-    ``StructuredType.SINGLE`` delegating to ``strfunc`` and batched inputs
-    formatted via Xtructure's :class:`BatchedRenderer`.
-    """
+) -> Callable[..., np.ndarray]:
+    """Build a single/batched RGB image renderer function for an ``Xtructurable``."""
 
     def get_img(
         self: Any,
@@ -116,22 +101,52 @@ def attach_state_renderer(
             f"State is not structured: {self.layout.shape_tuple} != {self.default_shape}"
         )
 
-    setattr(cls, "img", get_img)
+    return get_img
+
+
+def make_state_str_renderer(strfunc: Callable[..., str]) -> Callable[..., str]:
+    """Build a single/batched string renderer function for an ``Xtructurable``."""
+    batched_renderer = BatchedRenderer(strfunc)
+
+    def render_str(self: Any, **kwargs: Any) -> str:
+        if self.structured_type == StructuredType.SINGLE:
+            return strfunc(self, **kwargs)
+        return batched_renderer.render(
+            self,
+            max_size=kwargs.pop("max_size", MAX_PRINT_BATCH_SIZE),
+            show_size=kwargs.pop("show_size", SHOW_BATCH_SIZE),
+            title=f"Batched {type(self).__name__}",
+            **kwargs,
+        )
+
+    return render_str
+
+
+def attach_state_renderer(
+    cls: Type[T],
+    imgfunc: Callable[..., Any],
+    strfunc: Callable[..., str] | None = None,
+    *,
+    host_inputs: bool = True,
+) -> Type[T]:
+    """Attach host-side ``img`` (and optional ``str`` / ``__str__``) to ``cls``.
+
+    ``img`` dispatches on ``self.structured_type``:
+    ``StructuredType.SINGLE`` invokes ``imgfunc(self, **kwargs)`` once;
+    ``StructuredType.BATCHED`` invokes it once per element and stacks results.
+    When ``host_inputs`` is ``True``, ``self`` and ``kwargs`` are copied to the
+    host via ``jax.device_get`` once before invoking ``imgfunc``.
+    Every rendered frame is normalized via :func:`normalize_rgb_image`, and an
+    optional ``size=(width, height)`` keyword resizes each frame cleanly.
+
+    When ``strfunc`` is provided, ``str`` and ``__str__`` are bound with
+    ``StructuredType.SINGLE`` delegating to ``strfunc`` and batched inputs
+    formatted via Xtructure's :class:`BatchedRenderer`.
+    """
+    setattr(cls, "img", make_state_img_renderer(imgfunc, host_inputs=host_inputs))
 
     if strfunc is not None:
-        batched_renderer = BatchedRenderer(strfunc)
-
-        def render_str(self: Any, **kwargs: Any) -> str:
-            if self.structured_type == StructuredType.SINGLE:
-                return strfunc(self, **kwargs)
-            return batched_renderer.render(
-                self,
-                max_size=kwargs.pop("max_size", MAX_PRINT_BATCH_SIZE),
-                show_size=kwargs.pop("show_size", SHOW_BATCH_SIZE),
-                title=f"Batched {type(self).__name__}",
-                **kwargs,
-            )
-
+        render_str = make_state_str_renderer(strfunc)
         setattr(cls, "str", render_str)
         setattr(cls, "__str__", render_str)
 

@@ -11,9 +11,10 @@ import numpy as np
 import tyro
 from tqdm.auto import tqdm
 
+from puxle.puzzles import normalize_puzzle_name
 from puxle.world_model import world_model_data_path
 
-from ._puzzles import PuzzleName, _normalized, create_puzzle, data_name_for_puzzle
+from ._puzzles import PuzzleName, create_puzzle, data_name_for_puzzle
 from ._world_model_render import render_states, save_transition_samples
 
 
@@ -206,9 +207,9 @@ def _resolve_world_model_preset(name: str):
     from puxle import WorldModelPresets
 
     presets = WorldModelPresets.all()
-    normalized = _normalized(name)
+    normalized = normalize_puzzle_name(name)
     for key, preset in presets.items():
-        if _normalized(key) == normalized:
+        if normalize_puzzle_name(key) == normalized:
             return preset
     available = ", ".join(sorted(presets))
     raise ValueError(f"Unknown model '{name}'. Available: {available}")
