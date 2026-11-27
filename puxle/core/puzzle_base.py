@@ -5,10 +5,15 @@ from typing import Annotated, Any, Optional
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 from xtructure import FieldDescriptor, Xtructurable
 from xtructure.core.layout import get_type_layout
 
 from puxle.render import attach_state_renderer
+from puxle.render.state_renderer import (
+    make_state_img_renderer,
+    make_state_str_renderer,
+)
 
 
 class Puzzle(ABC):
@@ -38,6 +43,7 @@ class Puzzle(ABC):
     """
 
     action_size: int = None
+    renderer_host_inputs: bool = True
 
     @property
     def inverse_action_map(self) -> Optional[jnp.ndarray]:
@@ -149,13 +155,23 @@ class Puzzle(ABC):
             ]
 
         self.SolveConfig = SolveConfig
+        img_parser = self.get_img_parser()
+        str_parser = self.get_string_parser()
+        self._render_state_img = make_state_img_renderer(
+            img_parser, host_inputs=self.renderer_host_inputs
+        )
+        self._render_state_str = make_state_str_renderer(str_parser)
         self.State = attach_state_renderer(
-            self.State, self.get_img_parser(), self.get_string_parser()
+            self.State,
+            img_parser,
+            str_parser,
+            host_inputs=self.renderer_host_inputs,
         )
         self.SolveConfig = attach_state_renderer(
             self.SolveConfig,
             self.get_solve_config_img_parser(),
             self.get_solve_config_string_parser(),
+            host_inputs=self.renderer_host_inputs,
         )
 
         self.get_initial_state = jax.jit(self.get_initial_state)
@@ -194,6 +210,20 @@ class Puzzle(ABC):
         require external data (e.g., Sokoban level files).
         """
         pass
+
+    def render_img(
+        self,
+        state: Xtructurable,
+        *,
+        size: tuple[int, int] | None = None,
+        **kwargs: Any,
+    ) -> np.ndarray:
+        """Render ``state`` as a normalized host ``uint8`` ``(H, W, 3)`` RGB image."""
+        return self._render_state_img(state, size=size, **kwargs)
+
+    def render_str(self, state: Xtructurable, **kwargs: Any) -> str:
+        """Render ``state`` as a human-readable string."""
+        return self._render_state_str(state, **kwargs)
 
     def get_solve_config_string_parser(self) -> Callable:
         """Return a callable that renders a ``SolveConfig`` as a string.
@@ -255,7 +285,7 @@ class Puzzle(ABC):
         """Return a callable that renders a ``State`` as an image (NumPy/JAX array).
 
         Returns:
-            A function ``(state: State, **kwargs) -> jnp.ndarray``
+            A function ``(state: State, **kwargs) -> np.ndarray``
             producing an ``(H, W, 3)`` RGB image.
         """
         pass

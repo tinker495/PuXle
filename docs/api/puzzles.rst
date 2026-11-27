@@ -126,13 +126,19 @@ Room
    :show-inheritance:
    :special-members: __init__
 
-External Adapters (``puxle.puzzles.adapters``)
-----------------------------------------------
+Puzzle Adapters (``puxle.puzzles.adapters``)
+--------------------------------------------
 
 For the PDDL adapter (:class:`~puxle.puzzles.adapters.pddl.pddl.PDDL`), see
-:doc:`pddls`.
+:doc:`pddls`. For the world-model adapter (:class:`~puxle.puzzles.adapters.world_model.WorldModelPuzzle`), see
+:doc:`world_model`.
 
 .. autoclass:: puxle.puzzles.adapters.cayley.CayleyPuzzle
+   :members:
+   :show-inheritance:
+   :special-members: __init__
+
+.. autoclass:: puxle.puzzles.adapters.world_model.WorldModelPuzzle
    :members:
    :show-inheritance:
    :special-members: __init__

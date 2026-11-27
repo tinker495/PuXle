@@ -162,22 +162,33 @@ def main() -> int:
         "--root", default=".", help="Repository root (default: current directory)"
     )
     parser.add_argument(
+        "--check-file",
+        type=Path,
+        default=None,
+        help="Check a single file path inside the PuXle repository",
+    )
+    parser.add_argument(
         "--json", action="store_true", help="Emit machine-readable JSON"
     )
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
-    files = iter_source_files(root)
     violations: list[SeamViolation] = []
-    for path in files:
-        violations.extend(check_file_for_leaks(root, path))
+    if args.check_file is not None:
+        files_checked = 1
+        violations.extend(check_file_for_leaks(root, args.check_file.resolve()))
+    else:
+        files = iter_source_files(root)
+        files_checked = len(files)
+        for path in files:
+            violations.extend(check_file_for_leaks(root, path))
 
     if args.json:
         print(
             json.dumps(
                 {
                     "failed": bool(violations),
-                    "files_checked": len(files),
+                    "files_checked": files_checked,
                     "violation_count": len(violations),
                     "violations": [v.to_dict() for v in violations],
                 },
@@ -185,7 +196,7 @@ def main() -> int:
             )
         )
     else:
-        print(f"Files checked: {len(files)}, Seam violations: {len(violations)}")
+        print(f"Files checked: {files_checked}, Seam violations: {len(violations)}")
         for v in violations:
             print(f"  {v.path}:{v.lineno} [{v.kind}] {v.raw_import}\n    -> {v.reason}")
     return 1 if violations else 0

@@ -7,13 +7,15 @@ import os
 import subprocess
 import sys
 import tarfile
+import tomllib
 from collections import Counter
 from importlib.metadata import version
+from importlib.util import find_spec
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TypedDict
 
-import tomllib
+EDITABLE_DEPENDENCY_PACKAGES: tuple[str, ...] = ("xtructure",)
 
 
 class Diagnostic(TypedDict):
@@ -26,7 +28,25 @@ class Diagnostic(TypedDict):
     baselined: bool
 
 
+def _editable_search_paths(interpreter: Path) -> list[Path]:
+    if interpreter.parent.parent.resolve() != Path(sys.prefix).resolve():
+        return []
+    paths: list[Path] = []
+    for package in EDITABLE_DEPENDENCY_PACKAGES:
+        spec = find_spec(package)
+        if spec is None or not spec.submodule_search_locations:
+            continue
+        pkg_dir = Path(next(iter(spec.submodule_search_locations))).resolve()
+        if "site-packages" in pkg_dir.parts or "dist-packages" in pkg_dir.parts:
+            continue
+        parent = pkg_dir.parent
+        if parent not in paths:
+            paths.append(parent)
+    return paths
+
+
 def check(root: Path, interpreter: Path) -> list[Diagnostic]:
+    search_paths = _editable_search_paths(interpreter)
     command = [
         sys.executable,
         "-m",
@@ -38,6 +58,8 @@ def check(root: Path, interpreter: Path) -> list[Diagnostic]:
         str(interpreter),
         "--output-format=json",
     ]
+    for search_path in search_paths:
+        command.extend(["--search-path", str(search_path)])
     result = subprocess.run(
         command, cwd=root, capture_output=True, text=True, check=False
     )
@@ -57,15 +79,20 @@ def check(root: Path, interpreter: Path) -> list[Diagnostic]:
                 raise ValueError(f"Invalid diagnostic field: {field}")
         if not isinstance(error["line"], int) or not isinstance(error["column"], int):
             raise ValueError("Invalid diagnostic location")
+        description = (
+            error["description"]
+            .replace(str(interpreter.parent.parent), "<python-environment>")
+            .replace(str(root), "<repository>")
+        )
+        for search_path in search_paths:
+            description = description.replace(str(search_path), "<python-environment>")
         diagnostics.append(
             Diagnostic(
                 path=error["path"],
                 line=error["line"],
                 column=error["column"],
                 name=error["name"],
-                description=error["description"]
-                .replace(str(interpreter.parent.parent), "<python-environment>")
-                .replace(str(root), "<repository>"),
+                description=description,
                 severity=error["severity"],
                 baselined=False,
             )

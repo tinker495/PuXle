@@ -1,4 +1,4 @@
-"""External-ecosystem puzzle adapters for PuXle."""
+"""External-ecosystem and learned-checkpoint puzzle adapters for PuXle."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ __all__ = [
     "CayleyPresets",
     "PDDL",
     "PDDLPresets",
+    "WorldModelPuzzle",
+    "WorldModelPresets",
 ]
 
 _EXPORTS = {
@@ -16,6 +18,8 @@ _EXPORTS = {
     "CayleyPresets": (".cayley", "CayleyPresets"),
     "PDDL": (".pddl", "PDDL"),
     "PDDLPresets": (".pddl", "PDDLPresets"),
+    "WorldModelPuzzle": (".world_model", "WorldModelPuzzle"),
+    "WorldModelPresets": (".world_model", "WorldModelPresets"),
 }
 
 

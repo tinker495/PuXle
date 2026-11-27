@@ -135,3 +135,36 @@ def test_cli_creates_public_puzzle_by_class_name():
 
     assert isinstance(puzzle, SlidePuzzle)
     assert puzzle.size == 2
+
+
+def test_visualize_puzzle_uses_bound_img_and_sanitizes_filenames(tmp_path):
+    """Author: tinker495.
+
+    Why: Regression test for ``scripts.visualize_puzzle`` verifying that
+    ``solve_config``-dependent puzzles (``Maze``) render via bound
+    ``state.img(solve_config=...)`` and ANSI-colored actions (``PDDL``) produce
+    sanitized output filenames.
+    """
+    from scripts.visualize_puzzle import visualize_puzzle
+
+    visualize_puzzle(
+        puzzle_name="Maze",
+        seed=0,
+        img=True,
+        output_dir=tmp_path,
+        puzzle_kwargs=["size=7"],
+    )
+    maze_files = sorted(p.name for p in (tmp_path / "Maze").iterdir())
+    assert "initial.png" in maze_files
+    assert len(maze_files) == 5
+
+    visualize_puzzle(
+        puzzle_name="PDDL",
+        seed=0,
+        img=True,
+        output_dir=tmp_path,
+        puzzle_kwargs=["domain='blocksworld'", "problem='bw-S-01'"],
+    )
+    pddl_files = sorted(p.name for p in (tmp_path / "PDDL").iterdir())
+    assert "initial.png" in pddl_files
+    assert all("\x1b" not in name for name in pddl_files)

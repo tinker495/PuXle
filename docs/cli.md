@@ -29,9 +29,9 @@ Use `--output-dir` to override a dataset command's destination.
 
 ```bash
 puxle world-model-train train \
-  --model RubiksCubeWorldModel \
+  --model RUBIKSCUBE \
   --reset
 ```
 
-Available model names are the attributes exposed by
-`puxle.world_model.trained_world_model_registry`.
+Available model names are the preset keys exposed by
+`puxle.WorldModelPresets.all()`.

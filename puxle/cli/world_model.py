@@ -11,6 +11,7 @@ import numpy as np
 import tyro
 from tqdm.auto import tqdm
 
+from puxle.puzzles import normalize_puzzle_name
 from puxle.world_model import world_model_data_path
 
 from ._puzzles import PuzzleName, create_puzzle, data_name_for_puzzle
@@ -202,35 +203,31 @@ def make_eval_trajectory(options: DatasetOptionsArg) -> int:
     return 0
 
 
-def _data_name_for_model(name: str) -> str:
-    normalized = name.lower()
-    if "rubikscube" in normalized:
-        return "rubikscube"
-    if "sokoban" in normalized:
-        return "sokoban"
-    raise ValueError("--data-name is required for an unrecognized model name")
+def _resolve_world_model_preset(name: str):
+    from puxle import WorldModelPresets
+
+    presets = WorldModelPresets.all()
+    normalized = normalize_puzzle_name(name)
+    for key, preset in presets.items():
+        if normalize_puzzle_name(key) == normalized:
+            return preset
+    available = ", ".join(sorted(presets))
+    raise ValueError(f"Unknown model '{name}'. Available: {available}")
 
 
 def train(options: TrainOptionsArg) -> int:
     """Train a registered world model."""
     import optax
 
+    from puxle import WorldModelPuzzle
     from puxle.world_model import (
         apply_with_conditional_batch_stats,
-        trained_world_model_registry,
         world_model_eval_builder,
         world_model_train_builder,
     )
-    from puxle.world_model.trained_model_registry import (
-        create_world_model_for_training,
-    )
 
-    factory = getattr(trained_world_model_registry, options.model, None)
-    if factory is None:
-        available = ", ".join(sorted(vars(trained_world_model_registry)))
-        raise ValueError(f"Unknown model '{options.model}'. Available: {available}")
-
-    data_name = options.data_name or _data_name_for_model(options.model)
+    preset = _resolve_world_model_preset(options.model)
+    data_name = options.data_name or str(preset["data_name"])
     data_dir = options.data_dir or world_model_data_path(data_name) / "transition"
     with tqdm(
         (
@@ -255,10 +252,18 @@ def train(options: TrainOptionsArg) -> int:
         total=1, desc="Initializing model", unit="model", dynamic_ncols=True
     ) as progress:
         progress.set_postfix(model=options.model, seed=options.seed)
-        world_model = create_world_model_for_training(
-            options.model,
-            init_params=options.reset,
-        )
+        model_overrides: dict[str, object] = {
+            "data_name": data_name,
+            "init_params": options.reset,
+            "aqt_cfg": None,
+        }
+        if (
+            options.data_dir is not None
+            and (options.data_dir.parent / "inits.npy").exists()
+            and (options.data_dir.parent / "targets.npy").exists()
+        ):
+            model_overrides["data_path"] = str(options.data_dir.parent)
+        world_model = WorldModelPuzzle(**(dict(preset) | model_overrides))
         if options.reset:
             world_model.params = world_model.get_new_params(options.seed)
         jax.block_until_ready(world_model.params)
