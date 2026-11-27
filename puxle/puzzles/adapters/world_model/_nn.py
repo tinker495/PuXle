@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import pickle
 import shutil
+import tempfile
 import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -621,13 +622,7 @@ def load_params_with_metadata(path: str):
             RuntimeWarning,
             stacklevel=2,
         )
-    except (
-        FileNotFoundError,
-        EOFError,
-        pickle.PickleError,
-        OSError,
-        ValueError,
-    ) as exc:
+    except (FileNotFoundError, pickle.PickleError, OSError, ValueError) as exc:
         warnings.warn(
             f"Failed to load parameters from {path}. Error: {exc}",
             RuntimeWarning,
@@ -670,9 +665,13 @@ def download_model(filename: str | os.PathLike[str]) -> str:
                 filename=f"world_models/{name}",
             )
             destination.parent.mkdir(parents=True, exist_ok=True)
-            tmp_destination = destination.with_name(
-                f".{destination.name}.{os.getpid()}.tmp"
+            fd, tmp_name = tempfile.mkstemp(
+                dir=destination.parent,
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
             )
+            os.close(fd)
+            tmp_destination = Path(tmp_name)
             try:
                 shutil.copy2(downloaded, tmp_destination)
                 os.replace(tmp_destination, destination)
