@@ -35,7 +35,7 @@ dependencies = [
     "Pillow>=9.0.0",
     "tqdm>=4.66",
     "tyro>=1.0.16,<2",
-    "xtructure @ git+https://github.com/tinker495/xtructure.git",
+    "xtructure @ git+https://github.com/tinker495/xtructure.git@main",
 ]
 
 [project.urls]
@@ -90,7 +90,7 @@ pythonpath = ["."]
 addopts = "-v --tb=short --maxfail=1"
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

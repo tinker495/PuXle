@@ -9,7 +9,9 @@ from xtructure.core.layout import get_type_layout
 
 from puxle.core.puzzle_base import Puzzle
 
-_NO_DEFAULT_CTOR: frozenset[str] = frozenset({"CayleyPuzzle", "PDDL"})
+_NO_DEFAULT_CTOR: frozenset[str] = frozenset(
+    {"CayleyPuzzle", "PDDL", "WorldModelPuzzle"}
+)
 
 
 def discover_puzzle_classes() -> List[Type[Puzzle]]:

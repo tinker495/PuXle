@@ -38,6 +38,7 @@ class Puzzle(ABC):
     """
 
     action_size: int = None
+    renderer_host_inputs: bool = True
 
     @property
     def inverse_action_map(self) -> Optional[jnp.ndarray]:
@@ -150,12 +151,16 @@ class Puzzle(ABC):
 
         self.SolveConfig = SolveConfig
         self.State = attach_state_renderer(
-            self.State, self.get_img_parser(), self.get_string_parser()
+            self.State,
+            self.get_img_parser(),
+            self.get_string_parser(),
+            host_inputs=self.renderer_host_inputs,
         )
         self.SolveConfig = attach_state_renderer(
             self.SolveConfig,
             self.get_solve_config_img_parser(),
             self.get_solve_config_string_parser(),
+            host_inputs=self.renderer_host_inputs,
         )
 
         self.get_initial_state = jax.jit(self.get_initial_state)
@@ -255,7 +260,7 @@ class Puzzle(ABC):
         """Return a callable that renders a ``State`` as an image (NumPy/JAX array).
 
         Returns:
-            A function ``(state: State, **kwargs) -> jnp.ndarray``
+            A function ``(state: State, **kwargs) -> np.ndarray``
             producing an ``(H, W, 3)`` RGB image.
         """
         pass

@@ -11,6 +11,8 @@ states, and optionally saves image renders in ``images/visualizations/``.
 from __future__ import annotations
 
 import ast
+import inspect
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,9 +24,38 @@ import tyro
 from jax import tree_util
 from PIL import Image
 
-from puxle.cli._puzzles import puzzle_classes as discover_puzzles
-from puxle.core.puzzle_base import Puzzle
-from puxle.render import normalize_rgb_image
+import puxle.puzzles as puzzles_module
+from puxle import Puzzle
+
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+_ARROW_NAMES = {"←": "left", "→": "right", "↑": "up", "↓": "down"}
+
+
+def _normalized(name: str) -> str:
+    return "".join(ch for ch in name.lower() if ch.isalnum())
+
+
+def _discover_puzzles() -> dict[str, type[Puzzle]]:
+    classes = {
+        value.__name__: value
+        for name in puzzles_module.__all__
+        if inspect.isclass(value := getattr(puzzles_module, name))
+        and issubclass(value, Puzzle)
+        and value is not Puzzle
+        and not inspect.isabstract(value)
+    }
+    aliases = {_normalized(name): value for name, value in classes.items()}
+    if "SlidePuzzle" in classes:
+        aliases["npuzzle"] = classes["SlidePuzzle"]
+    return classes | aliases
+
+
+def _sanitize_filename(label: str) -> str:
+    cleaned = _ANSI_ESCAPE_RE.sub("", label).strip()
+    for arrow, name in _ARROW_NAMES.items():
+        cleaned = cleaned.replace(arrow, name)
+    sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", cleaned).strip("_")
+    return sanitized or "action"
 
 
 def _save_image(array: np.ndarray, path: Path) -> Path:
@@ -49,14 +80,14 @@ def visualize_puzzle(
     output_dir: Path,
     puzzle_kwargs: list[str],
 ) -> None:
-    puzzles = discover_puzzles()
-    if puzzle_name not in puzzles:
+    puzzles = _discover_puzzles()
+    puzzle_class = puzzles.get(puzzle_name) or puzzles.get(_normalized(puzzle_name))
+    if puzzle_class is None:
         available = ", ".join(sorted(key for key in puzzles if not key.islower()))
         raise ValueError(
             f"Unknown puzzle '{puzzle_name}'. Available puzzles: {available}"
         )
 
-    puzzle_class = puzzles[puzzle_name]
     parsed_kwargs: dict[str, object] = {}
     for item in puzzle_kwargs:
         if "=" not in item:
@@ -75,9 +106,7 @@ def visualize_puzzle(
     print(f"Loaded puzzle: {puzzle!r}")
 
     key = jax.random.PRNGKey(seed)
-    key, solve_key, state_key = jax.random.split(key, 3)
-    solve_config = puzzle.get_solve_config(key=solve_key)
-    init_state = puzzle.get_initial_state(solve_config, key=state_key)
+    solve_config, init_state = puzzle.get_inits(key)
     neighbours, costs = puzzle.get_neighbours(solve_config, init_state, filled=True)
 
     print("\nInitial State:")
@@ -96,20 +125,20 @@ def visualize_puzzle(
         print("-")
 
     if img:
-        img_parser = puzzle.get_img_parser()
         img_root = output_dir / puzzle_name
 
         init_path = _save_image(
-            normalize_rgb_image(img_parser(init_state)), img_root / "initial.png"
+            init_state.img(solve_config=solve_config), img_root / "initial.png"
         )
         print(f"Saved initial state image -> {init_path}")
 
         for idx in range(puzzle.action_size):
             action_label = action_labels[idx]
             neighbour_state = _select_state(puzzle, neighbours, idx)
+            filename = f"{idx:02d}_{_sanitize_filename(action_label)}.png"
             neighbour_path = _save_image(
-                normalize_rgb_image(img_parser(neighbour_state)),
-                img_root / f"{action_label}.png",
+                neighbour_state.img(solve_config=solve_config),
+                img_root / filename,
             )
             print(f"Saved neighbour {action_label} image -> {neighbour_path}")
 

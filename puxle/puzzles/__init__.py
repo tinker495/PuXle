@@ -22,7 +22,11 @@ __all__ = [
     "TSP",
     "TopSpin",
     "CayleyPuzzle",
+    "CayleyPresets",
     "PDDL",
+    "PDDLPresets",
+    "WorldModelPuzzle",
+    "WorldModelPresets",
 ]
 
 _EXPORTS = {
@@ -43,7 +47,11 @@ _EXPORTS = {
     "TSP": (".tsp", "TSP"),
     "TopSpin": (".topspin", "TopSpin"),
     "CayleyPuzzle": (".adapters.cayley", "CayleyPuzzle"),
+    "CayleyPresets": (".adapters.cayley", "CayleyPresets"),
     "PDDL": (".adapters.pddl", "PDDL"),
+    "PDDLPresets": (".adapters.pddl", "PDDLPresets"),
+    "WorldModelPuzzle": (".adapters.world_model", "WorldModelPuzzle"),
+    "WorldModelPresets": (".adapters.world_model", "WorldModelPresets"),
 }
 
 

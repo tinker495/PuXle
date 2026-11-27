@@ -6,21 +6,18 @@ is unset, PuXle follows ``XDG_CACHE_HOME`` and then ``~/.cache/puxle``.
 
 .. currentmodule:: puxle.world_model
 
-World-Model Puzzle
-------------------
+World-Model Puzzle Adapter
+--------------------------
 
-.. autoclass:: puxle.world_model.WorldModelPuzzleBase
+The serving puzzle class and presets live under ``puxle.puzzles.adapters.world_model``
+and are re-exported at top-level ``puxle``.
+
+.. autoclass:: puxle.puzzles.adapters.world_model.WorldModelPuzzle
    :members:
    :show-inheritance:
 
-Registry
---------
-
-.. autoclass:: puxle.world_model.WorldModelPuzzleConfig
-
-.. py:data:: trained_world_model_registry
-
-   Namespace of zero-argument factories that return checkpoint-backed, int8 serving models.
+.. autoclass:: puxle.puzzles.adapters.world_model.WorldModelPresets
+   :members:
 
 Training progress and dataset performance
 -----------------------------------------
@@ -64,7 +61,7 @@ Evaluation log lines report the epoch's ``wm_weight``.
 
 ``--lr-schedule cosine`` (default) decays ``--learning-rate`` (default: 3e-3) to
 zero over all training steps; ``constant`` keeps it fixed. The defaults
-(200 epochs, onset 20, cosine from 3e-3) train ``RubiksCubeWorldModelOptimized``
+(200 epochs, onset 20, cosine from 3e-3) train ``RUBIKSCUBE_OPTIMIZED``
 on 300,000 transitions to zero one-step and 30-step errors on a 20,000-transition
 hold-out, in both float and int8 serving.
 

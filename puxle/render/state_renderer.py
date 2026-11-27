@@ -62,12 +62,16 @@ def attach_state_renderer(
     cls: Type[T],
     imgfunc: Callable[..., Any],
     strfunc: Callable[..., str] | None = None,
+    *,
+    host_inputs: bool = True,
 ) -> Type[T]:
     """Attach host-side ``img`` (and optional ``str`` / ``__str__``) to ``cls``.
 
     ``img`` dispatches on ``self.structured_type``:
     ``StructuredType.SINGLE`` invokes ``imgfunc(self, **kwargs)`` once;
     ``StructuredType.BATCHED`` invokes it once per element and stacks results.
+    When ``host_inputs`` is ``True``, ``self`` and ``kwargs`` are copied to the
+    host via ``jax.device_get`` once before invoking ``imgfunc``.
     Every rendered frame is normalized via :func:`normalize_rgb_image`, and an
     optional ``size=(width, height)`` keyword resizes each frame cleanly.
 
@@ -84,21 +88,25 @@ def attach_state_renderer(
         **kwargs: Any,
     ) -> np.ndarray:
         structured_type = self.structured_type
+        target = jax.device_get(self) if host_inputs else self
+        render_kwargs = jax.device_get(kwargs) if host_inputs else kwargs
 
         if structured_type == StructuredType.SINGLE:
             return normalize_rgb_image(
-                imgfunc(self, **kwargs), size=size, interpolation=interpolation
+                imgfunc(target, **render_kwargs),
+                size=size,
+                interpolation=interpolation,
             )
         if structured_type == StructuredType.BATCHED:
-            batch_shape = self.shape
+            batch_shape = target.shape
             batch_len = prod(batch_shape)
             results = []
             for i in range(batch_len):
                 index = np.unravel_index(i, batch_shape)
-                current_state = jax.tree_util.tree_map(lambda x: x[index], self)
+                current_state = jax.tree_util.tree_map(lambda x: x[index], target)
                 results.append(
                     normalize_rgb_image(
-                        imgfunc(current_state, **kwargs),
+                        imgfunc(current_state, **render_kwargs),
                         size=size,
                         interpolation=interpolation,
                     )

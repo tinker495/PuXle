@@ -6,9 +6,9 @@ Write documentation in this directory in English, including this file. Follow
 the repository's [documentation and communication policy](../../AGENTS.md#documentation-language).
 
 This directory owns the state representations of native puzzles, their Random
-and Hard variants, Room, and external puzzle adapters under `adapters/`
-(`adapters/cayley/` and `adapters/pddl/`). World-model
-representations have a separate owner. Optimize storage while preserving logical
+and Hard variants, Room, and puzzle adapters under `adapters/`
+(`adapters/cayley/`, `adapters/pddl/`, and `adapters/world_model/`). World-model
+training kernels, trajectory datasets, and artifact cache paths live in `puxle/world_model/`. Optimize storage while preserving logical
 puzzle values, action numbering, costs, and inverse-transition semantics. Preserve
 existing logical inputs and DeepCubeA/Santa data. Historical packed bytes and
 serialized PyTrees of internal State types are not stable external formats.

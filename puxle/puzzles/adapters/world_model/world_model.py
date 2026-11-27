@@ -1,6 +1,10 @@
+"""Learned checkpoint-backed world-model puzzle adapter for PuXle."""
+
+import os
 import pickle
-from collections.abc import Callable
-from math import prod
+import warnings
+from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Annotated
 
 import chex
@@ -15,140 +19,35 @@ from xtructure import numpy as xnp
 from puxle.core.puzzle_base import Puzzle
 from puxle.render import img_to_colored_str
 from puxle.utils import IMG_SIZE
+from puxle.world_model import (
+    download_world_model_dataset,
+    is_world_model_dataset_downloaded,
+    round_through_gradient,
+    world_model_data_path,
+)
 
-from ._utils import (
-    DEFAULT_NORM_FN,
-    DTYPE,
-    PARAM_DTYPE,
+from ._nn import (
+    WORLD_MODEL_ARCHITECTURES,
+    AutoEncoder,
+    WorldModel,
     align_params_dtype,
-    apply_norm,
-    build_aqt_dot_general,
     download_model,
     get_norm_fn,
     is_model_downloaded,
     load_params_with_metadata,
     resolve_model_path,
-    round_through_gradient,
     save_params_with_metadata,
 )
-from .util import download_world_model_dataset, is_world_model_dataset_downloaded
+from .presets import WorldModelPresets
 
 
-class Encoder(nn.Module):
-    latent_shape: tuple[int, ...]
-    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
-    aqt_cfg: object = None
-    quant_mode: object = None
+class WorldModelPuzzle(Puzzle):
+    """Unified ``Puzzle`` adapter for learned autoencoder + transition checkpoints."""
 
-    @nn.compact
-    def __call__(self, data, training=False):
-        aqt_dg = build_aqt_dot_general(self.aqt_cfg, self.quant_mode)
-        shape = data.shape
-        data = ((data / 255.0) * 2.0 - 1.0).astype(DTYPE)
-        flatten = jnp.reshape(data, shape=(shape[0], -1))
-        latent_size = prod(self.latent_shape)
-        x = nn.Dense(
-            1000,
-            dtype=DTYPE,
-            param_dtype=PARAM_DTYPE,
-            dot_general_cls=aqt_dg,
-        )(flatten)
-        x = nn.relu(apply_norm(self.norm_fn, x, training))
-        x = nn.Dense(
-            latent_size,
-            dtype=DTYPE,
-            param_dtype=PARAM_DTYPE,
-            dot_general_cls=aqt_dg,
-        )(x)
-        return jnp.reshape(x, shape=(-1, *self.latent_shape))
-
-
-class Decoder(nn.Module):
-    data_shape: tuple[int, ...]
-    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
-    aqt_cfg: object = None
-    quant_mode: object = None
-
-    @nn.compact
-    def __call__(self, latent, training=False):
-        aqt_dg = build_aqt_dot_general(self.aqt_cfg, self.quant_mode)
-        x = ((latent - 0.5) * 2.0).astype(DTYPE)
-        x = nn.Dense(
-            1000,
-            dtype=DTYPE,
-            param_dtype=PARAM_DTYPE,
-            dot_general_cls=aqt_dg,
-        )(x)
-        x = nn.relu(apply_norm(self.norm_fn, x, training))
-        x = nn.Dense(
-            prod(self.data_shape),
-            dtype=DTYPE,
-            param_dtype=PARAM_DTYPE,
-            dot_general_cls=aqt_dg,
-        )(x)
-        return jnp.reshape(x, (-1, *self.data_shape)).astype(DTYPE)
-
-
-class AutoEncoder(nn.Module):
-    data_shape: tuple[int, ...]
-    latent_shape: tuple[int, ...]
-    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
-    aqt_cfg: object = None
-    quant_mode: object = None
-
-    def setup(self):
-        self.encoder = Encoder(
-            self.latent_shape,
-            norm_fn=self.norm_fn,
-            aqt_cfg=self.aqt_cfg,
-            quant_mode=self.quant_mode,
-        )
-        self.decoder = Decoder(
-            self.data_shape,
-            norm_fn=self.norm_fn,
-            aqt_cfg=self.aqt_cfg,
-            quant_mode=self.quant_mode,
-        )
-
-    def __call__(self, x0, training=False):
-        latent = self.encoder(x0, training)
-        return latent, self.decoder(latent, training)
-
-
-class WorldModel(nn.Module):
-    latent_shape: tuple[int, ...]
-    action_size: int
-    norm_fn: Callable[[], nn.Module] | None = DEFAULT_NORM_FN
-    aqt_cfg: object = None
-    quant_mode: object = None
-
-    @nn.compact
-    def __call__(self, latent, training=False):
-        aqt_dg = build_aqt_dot_general(self.aqt_cfg, self.quant_mode)
-        x = ((latent - 0.5) * 2.0).astype(DTYPE)
-        for _ in range(3):
-            x = nn.Dense(
-                500,
-                dtype=DTYPE,
-                param_dtype=PARAM_DTYPE,
-                dot_general_cls=aqt_dg,
-            )(x)
-            x = nn.relu(apply_norm(self.norm_fn, x, training))
-        x = nn.Dense(
-            prod(self.latent_shape) * self.action_size,
-            dtype=DTYPE,
-            param_dtype=PARAM_DTYPE,
-            dot_general_cls=aqt_dg,
-        )(x)
-        return jnp.reshape(x, (x.shape[0], self.action_size) + self.latent_shape)
-
-
-class WorldModelPuzzleBase(Puzzle):
     inits: jnp.ndarray
     targets: jnp.ndarray
     init_state_size: int = 0
-    str_parse_img_size: int = 16
-    str_parse_img: bool = True
+    renderer_host_inputs: bool = False
 
     @property
     def fixed_target(self) -> bool:
@@ -167,30 +66,129 @@ class WorldModelPuzzleBase(Puzzle):
 
     def __init__(
         self,
-        data_path,
-        data_shape,
-        latent_shape,
-        action_size,
-        AE=AutoEncoder,
-        WM=WorldModel,
+        *,
+        architecture: str | None = None,
+        data_name: str | None = None,
+        data_path: str | os.PathLike[str] | None = None,
+        data_shape: tuple[int, ...] | None = None,
+        latent_shape: tuple[int, ...] | None = None,
+        action_size: int | None = None,
+        AE: Callable[..., nn.Module] | None = None,
+        WM: Callable[..., nn.Module] | None = None,
         init_params: bool = False,
-        path: str | None = None,
-        **kwargs,
+        path: str | os.PathLike[str] | None = None,
+        aqt_cfg: str | None = None,
+        norm_fn: str | Callable[[], nn.Module] | None = "batch",
+        reverse_data: bool = False,
+        inverse_action_map: Sequence[int] | None = None,
+        action_strings: Sequence[str] | None = None,
+        str_parse_img_size: int | None = None,
+        str_parse_img: bool = True,
     ):
-        self.data_path = data_path
-        self.data_shape = data_shape
-        self.latent_shape = latent_shape
-        self.latent_size = int(np.prod(latent_shape))
-        self.pad_size = int(np.ceil(self.latent_size / 8) * 8 - self.latent_size)
-        self.action_size = action_size
-        self.path = path
-        self.metadata = {}
-        self.aqt_cfg = kwargs.pop("aqt_cfg", None)
-        kwargs["norm_fn"] = get_norm_fn(kwargs.get("norm_fn", "batch"))
+        spec = None
+        if architecture is not None:
+            if architecture not in WORLD_MODEL_ARCHITECTURES:
+                available = ", ".join(sorted(WORLD_MODEL_ARCHITECTURES))
+                raise ValueError(
+                    f"Unknown world-model architecture '{architecture}'. "
+                    f"Available: {available}"
+                )
+            spec = WORLD_MODEL_ARCHITECTURES[architecture]
+
+        resolved_data_name = (
+            data_name
+            if data_name is not None
+            else (spec.data_name if spec is not None else None)
+        )
+        if data_path is not None:
+            resolved_data_path = str(data_path)
+        elif resolved_data_name is not None:
+            resolved_data_path = str(world_model_data_path(resolved_data_name))
+        else:
+            raise ValueError(
+                "WorldModelPuzzle requires either `architecture`, `data_name`, or `data_path`."
+            )
+
+        resolved_data_shape = (
+            data_shape
+            if data_shape is not None
+            else (spec.data_shape if spec is not None else None)
+        )
+        resolved_latent_shape = (
+            latent_shape
+            if latent_shape is not None
+            else (spec.latent_shape if spec is not None else None)
+        )
+        resolved_action_size = (
+            action_size
+            if action_size is not None
+            else (spec.action_size if spec is not None else None)
+        )
+        if (
+            resolved_data_shape is None
+            or resolved_latent_shape is None
+            or resolved_action_size is None
+        ):
+            raise ValueError(
+                "WorldModelPuzzle requires `data_shape`, `latent_shape`, and `action_size` "
+                "(or a known `architecture`)."
+            )
+
+        ae_cls = (
+            AE if AE is not None else (spec.ae_cls if spec is not None else AutoEncoder)
+        )
+        wm_cls = (
+            WM if WM is not None else (spec.wm_cls if spec is not None else WorldModel)
+        )
+        resolved_inverse_map = (
+            inverse_action_map
+            if inverse_action_map is not None
+            else (spec.inverse_action_map if spec is not None else None)
+        )
+        resolved_action_strings = (
+            action_strings
+            if action_strings is not None
+            else (spec.action_strings if spec is not None else None)
+        )
+        resolved_str_parse_img_size = (
+            str_parse_img_size
+            if str_parse_img_size is not None
+            else (spec.str_parse_img_size if spec is not None else 16)
+        )
+
+        self.architecture = architecture
+        self.data_name = resolved_data_name
+        self.data_path = resolved_data_path
+        self._uses_custom_data_path = data_path is not None
+        self.data_shape = tuple(resolved_data_shape)
+        self.latent_shape = tuple(resolved_latent_shape)
+        self.latent_size = int(np.prod(self.latent_shape))
+        self.action_size = int(resolved_action_size)
+        self.path = None if path is None else resolve_model_path(path)
+        self.metadata: dict[str, object] = {}
+        self.aqt_cfg = aqt_cfg
+        self.reverse_data = reverse_data
+        self.str_parse_img = str_parse_img
+        self.str_parse_img_size = resolved_str_parse_img_size
+        self._inverse_action_map_tuple = (
+            tuple(int(i) for i in resolved_inverse_map)
+            if resolved_inverse_map is not None
+            else None
+        )
+        self._action_strings = (
+            tuple(resolved_action_strings)
+            if resolved_action_strings is not None
+            else None
+        )
+        self._inverse_error_message = (
+            spec.inverse_error_message if spec is not None else None
+        )
+
+        resolved_norm_fn = get_norm_fn(norm_fn)
 
         class total_model(nn.Module):
-            autoencoder: AutoEncoder
-            world_model: WorldModel
+            autoencoder: nn.Module
+            world_model: nn.Module
 
             @nn.compact
             def __call__(self, x, training=False):
@@ -237,19 +235,20 @@ class WorldModelPuzzleBase(Puzzle):
                 )
 
         def build_model(quant_mode):
-            model_kwargs = kwargs | {
+            model_kwargs = {
+                "norm_fn": resolved_norm_fn,
                 "aqt_cfg": self.aqt_cfg,
                 "quant_mode": quant_mode,
             }
             return total_model(
-                autoencoder=AE(
-                    data_shape=data_shape,
-                    latent_shape=latent_shape,
+                autoencoder=ae_cls(
+                    data_shape=self.data_shape,
+                    latent_shape=self.latent_shape,
                     **model_kwargs,
                 ),
-                world_model=WM(
-                    latent_shape=latent_shape,
-                    action_size=action_size,
+                world_model=wm_cls(
+                    latent_shape=self.latent_shape,
+                    action_size=self.action_size,
                     **model_kwargs,
                 ),
             )
@@ -257,11 +256,36 @@ class WorldModelPuzzleBase(Puzzle):
         self._build_model = build_model
         self.model = build_model(aqt_flax.QuantMode.TRAIN)
         self.params = (
-            self.get_new_params() if path is None or init_params else self.load_model()
+            self.get_new_params()
+            if self.path is None or init_params
+            else self.load_model()
         )
         if self.aqt_cfg is not None:
             self.model, self.params = self._convert_to_serving(self.params)
-        super().__init__(**kwargs)
+        super().__init__()
+
+    @classmethod
+    def list_sources(cls) -> dict[str, list[str]]:
+        """List built-in world-model architectures and curated presets."""
+        return {
+            "architectures": sorted(WORLD_MODEL_ARCHITECTURES),
+            "presets": sorted(WorldModelPresets.all()),
+        }
+
+    @property
+    def inverse_action_map(self) -> jnp.ndarray | None:
+        if self._inverse_action_map_tuple is None:
+            return None
+        return jnp.asarray(self._inverse_action_map_tuple, dtype=jnp.int32)
+
+    def action_to_string(self, action: int) -> str:
+        if self._action_strings is None:
+            return super().action_to_string(action)
+        if action < 0 or action >= len(self._action_strings):
+            raise ValueError(
+                f"Action {action} is out of bounds for action space size {len(self._action_strings)}."
+            )
+        return self._action_strings[action]
 
     def _convert_to_serving(self, params):
         dummy_data = jnp.zeros((1, *self.data_shape))
@@ -279,7 +303,7 @@ class WorldModelPuzzleBase(Puzzle):
 
     def get_new_params(self, seed: int | None = None):
         if seed is None:
-            seed = np.random.randint(0, 2**32 - 1)
+            seed = int(np.random.randint(0, 2**32 - 1))
         return self.model.init(
             jax.random.PRNGKey(seed), jnp.zeros((1, *self.data_shape))
         )
@@ -292,14 +316,19 @@ class WorldModelPuzzleBase(Puzzle):
                 download_model(self.path)
             params, metadata = load_params_with_metadata(resolve_model_path(self.path))
             if params is None:
-                print(
-                    f"Warning: Loaded parameters from {self.path} are invalid or old. "
-                    "Initializing new parameters."
+                warnings.warn(
+                    f"Loaded parameters from {self.path} are invalid or old. "
+                    "Initializing new parameters.",
+                    RuntimeWarning,
+                    stacklevel=2,
                 )
                 return self.get_new_params()
             self.metadata = metadata
             params = align_params_dtype(params)
-            assert params is not None
+            if params is None:
+                raise ValueError(
+                    f"Failed to align parameter dtypes loaded from {self.path}."
+                )
             self.model.apply(params, jnp.zeros((1, *self.data_shape)))
             return params
         except (
@@ -314,7 +343,7 @@ class WorldModelPuzzleBase(Puzzle):
     def save_model(self, metadata: dict | None = None):
         if self.path is None:
             raise ValueError("A model path is required to save parameters.")
-        metadata = {} if metadata is None else metadata
+        metadata = {} if metadata is None else dict(metadata)
         metadata.update(
             data_path=self.data_path,
             data_shape=self.data_shape,
@@ -324,10 +353,22 @@ class WorldModelPuzzleBase(Puzzle):
         save_params_with_metadata(self.path, self.params, metadata)
 
     def data_init(self):
-        if not is_world_model_dataset_downloaded():
-            download_world_model_dataset()
-        self.inits = jax.device_put(jnp.load(f"{self.data_path}/inits.npy"))
-        self.targets = jax.device_put(jnp.load(f"{self.data_path}/targets.npy"))
+        data_dir = Path(self.data_path)
+        inits_path = data_dir / "inits.npy"
+        targets_path = data_dir / "targets.npy"
+        if not (inits_path.exists() and targets_path.exists()):
+            if self._uses_custom_data_path:
+                raise FileNotFoundError(
+                    f"Missing world-model dataset files in custom data_path: {data_dir}"
+                )
+            if not is_world_model_dataset_downloaded():
+                download_world_model_dataset()
+        inits = jax.device_put(jnp.load(inits_path))
+        targets = jax.device_put(jnp.load(targets_path))
+        if self.reverse_data:
+            inits, targets = targets, inits
+        self.inits = inits
+        self.targets = targets
         self.init_state_size = self.inits.shape[0]
 
     def get_string_parser(self):
@@ -340,7 +381,9 @@ class WorldModelPuzzleBase(Puzzle):
                     target_height=self.str_parse_img_size,
                 )
                 output = img_to_colored_str(state_img) + "\n"
-            latent = np.reshape(np.array(state.latent), (-1,)).tobytes().hex()
+            latent = (
+                np.asarray(jax.device_get(state.latent)).reshape(-1).tobytes().hex()
+            )
             latent_len = len(latent)
             if latent_len >= 25:
                 latent = f"{latent[:10]}...{latent[-10:]}"
@@ -360,10 +403,8 @@ class WorldModelPuzzleBase(Puzzle):
             )
             if not isinstance(data, (jax.Array, np.ndarray)):
                 raise TypeError("The world model decoder must return an array.")
-            data = data.squeeze(0)
-            return np.clip(np.array(data * 255.0) / 2.0 + 127.5, 0, 255).astype(
-                np.uint8
-            )
+            host_data = np.asarray(jax.device_get(data.squeeze(0)), dtype=np.float32)
+            return np.clip(host_data * 255.0 / 2.0 + 127.5, 0, 255).astype(np.uint8)
 
         def img_parser(
             state,
@@ -428,14 +469,24 @@ class WorldModelPuzzleBase(Puzzle):
         return self.State.from_unpacked(latent=jnp.round(latent).astype(jnp.bool_))
 
     def batched_get_actions(
-        self, solve_configs, states, actions, filleds=True, multi_solve_config=False
-    ):
+        self,
+        solve_configs: Puzzle.SolveConfig,
+        states: Puzzle.State,
+        actions: jax.Array,
+        filleds: bool | jax.Array = True,
+        multi_solve_config: bool = False,
+    ) -> tuple[Puzzle.State, jax.Array]:
         neighbours, costs = self.batched_get_neighbours(
             solve_configs, states, filleds, multi_solve_config
         )
         indices = jnp.expand_dims(actions, axis=0)
+        next_states = xnp.squeeze(
+            xnp.take_along_axis(neighbours, indices, axis=0), axis=0
+        )
+        if not isinstance(next_states, Xtructurable):
+            raise TypeError("Expected Xtructurable next states.")
         return (
-            xnp.squeeze(xnp.take_along_axis(neighbours, indices, axis=0), axis=0),
+            next_states,
             jnp.squeeze(jnp.take_along_axis(costs, indices, axis=0), axis=0),
         )
 
@@ -444,8 +495,12 @@ class WorldModelPuzzleBase(Puzzle):
         return xnp.take(neighbours, action, axis=0), jnp.take(costs, action, axis=0)
 
     def batched_get_neighbours(
-        self, solve_configs, states, filleds=True, multi_solve_config=False
-    ):
+        self,
+        solve_configs: Puzzle.SolveConfig,
+        states: Puzzle.State,
+        filleds: bool | jax.Array = True,
+        multi_solve_config: bool = False,
+    ) -> tuple[Puzzle.State, jax.Array]:
         next_latent = self.model.apply(
             self.params,
             states.latent_unpacked,
@@ -455,11 +510,23 @@ class WorldModelPuzzleBase(Puzzle):
         if not isinstance(next_latent, (jax.Array, np.ndarray)):
             raise TypeError("The world model transition must return an array.")
         next_latent = jnp.swapaxes(jnp.round(next_latent).astype(jnp.bool_), 0, 1)
-        next_states = jax.vmap(jax.vmap(self.State.from_unpacked))(latent=next_latent)
+        candidate_states = jax.vmap(jax.vmap(self.State.from_unpacked))(
+            latent=next_latent
+        )
+        batch_size = states.shape[0]
+        filled_batch = jnp.broadcast_to(
+            jnp.asarray(filleds, dtype=jnp.bool_),
+            (batch_size,),
+        )
+        next_states = jax.vmap(
+            lambda f, cand, cur: xnp.where(f, cand, cur),
+            in_axes=(0, 1, 0),
+            out_axes=1,
+        )(filled_batch, candidate_states, states)
         costs = jnp.where(
-            filleds,
-            jnp.ones((self.action_size, states.latent.shape[0]), dtype=jnp.float16),
-            jnp.inf,
+            filled_batch[jnp.newaxis, :],
+            jnp.ones((self.action_size, batch_size), dtype=jnp.float32),
+            jnp.asarray(jnp.inf, dtype=jnp.float32),
         )
         return next_states, costs
 
@@ -469,10 +536,6 @@ class WorldModelPuzzleBase(Puzzle):
         )
         return next_states[:, 0], costs[:, 0]
 
-    def batched_is_solved(self, solve_configs, states, multi_solve_config=False):
-        in_axes = (0, 0) if multi_solve_config else (None, 0)
-        return jax.vmap(self.is_solved, in_axes=in_axes)(solve_configs, states)
-
     def get_inverse_neighbours(self, solve_config, state, filled=True):
         next_states, costs = self.batched_get_inverse_neighbours(
             solve_config, state[jnp.newaxis, ...], filled
@@ -480,8 +543,25 @@ class WorldModelPuzzleBase(Puzzle):
         return next_states[:, 0], costs[:, 0]
 
     def batched_get_inverse_neighbours(
-        self, solve_configs, states, filleds=True, multi_solve_config=False
-    ):
-        return self.batched_get_neighbours(
+        self,
+        solve_configs: Puzzle.SolveConfig,
+        states: Puzzle.State,
+        filleds: bool | jax.Array = True,
+        multi_solve_config: bool = False,
+    ) -> tuple[Puzzle.State, jax.Array]:
+        perm = self.inverse_action_permutation
+        if perm is None:
+            raise NotImplementedError(
+                self._inverse_error_message
+                or f"{type(self).__name__} does not define an `inverse_action_map`."
+            )
+        neighbours, costs = self.batched_get_neighbours(
             solve_configs, states, filleds, multi_solve_config
         )
+        return (
+            jax.tree_util.tree_map(lambda x: x[perm], neighbours),
+            costs[perm],
+        )
+
+
+__all__ = ["WorldModelPuzzle"]

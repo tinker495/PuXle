@@ -238,3 +238,53 @@ def test_migrated_puzzle_imgfuncs_produce_valid_images():
     rc_sc, rc_state = rc.get_inits(key)
     rc_img = rc.get_img_parser()(rc_state)
     assert rc_img.ndim == 3 and rc_img.shape[-1] == 3 and rc_img.dtype == np.uint8
+
+
+def test_dotknot_solve_config_img_raises_not_implemented():
+    """Author: tinker495.
+
+    Why: Regression test ensuring ``DotKnot.SolveConfig.img()`` inherits
+    ``Puzzle.get_solve_config_img_parser`` and raises ``NotImplementedError``
+    instead of returning ``None``.
+    """
+    from puxle.puzzles.dotknot import DotKnot
+
+    dk = DotKnot()
+    sc, _ = dk.get_inits(jax.random.PRNGKey(0))
+    with pytest.raises(NotImplementedError):
+        sc.img()
+
+
+def test_sokoban_hindsight_transform_and_unexpected_cell_render():
+    """Author: tinker495.
+
+    Why: Regression test verifying ``Sokoban.hindsight_transform`` accepts the
+    base ``states=`` keyword parameter and ``Sokoban.get_img_parser()`` handles
+    wall/unexpected cell values overlapping a player-goal slot without ``UnboundLocalError``.
+    """
+    from puxle.puzzles.sokoban import Sokoban
+
+    puzzle = Sokoban()
+    sc, state = puzzle.get_inits(jax.random.PRNGKey(0))
+    updated_sc = puzzle.hindsight_transform(solve_config=sc, states=state)
+    assert bool(puzzle.is_solved(updated_sc, state))
+    assert not jnp.any(
+        updated_sc.GoalSpec.board_unpacked == Sokoban.Object.PLAYER.value
+    )
+
+    # Construct a synthetic state containing a WALL tile at a player goal slot
+    # so the ``case _: pass`` fallback executes without UnboundLocalError.
+    player_val = Sokoban.Object.PLAYER.value
+    goal_board = jnp.full(
+        (puzzle.size * puzzle.size,), Sokoban.Object.EMPTY.value, dtype=jnp.uint8
+    )
+    goal_board = goal_board.at[0].set(player_val)
+    synth_board = jnp.full(
+        (puzzle.size * puzzle.size,), Sokoban.Object.EMPTY.value, dtype=jnp.uint8
+    )
+    synth_board = synth_board.at[0].set(Sokoban.Object.WALL.value)
+    synth_sc = sc.replace(GoalSpec=puzzle.State.from_unpacked(board=goal_board))
+    synth_state = puzzle.State.from_unpacked(board=synth_board)
+
+    rendered = synth_state.img(solve_config=synth_sc)
+    assert rendered.ndim == 3 and rendered.shape[2] == 3

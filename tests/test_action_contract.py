@@ -22,7 +22,7 @@ def _seam_puzzles():
     """Default-constructible puzzles that route through the base get_actions seam."""
     out = []
     for name in dir(puzzles_module):
-        if name == "CayleyPuzzle":  # abstract base, needs ctor args
+        if name in {"CayleyPuzzle", "WorldModelPuzzle"}:  # require constructor args
             continue
         cls = getattr(puzzles_module, name)
         if (

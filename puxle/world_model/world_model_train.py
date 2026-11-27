@@ -7,7 +7,37 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from ._utils import build_new_params_from_updates
+
+def round_through_gradient(x):
+    rounded = jnp.where(x > 0.5, 1.0, 0.0).astype(jnp.float32)
+    return x + jax.lax.stop_gradient(rounded - x)
+
+
+def apply_with_conditional_batch_stats(
+    apply_fn,
+    params,
+    *apply_args,
+    training: bool,
+    n_devices: int = 1,
+    collection: str = "batch_stats",
+    axis_name: str = "devices",
+    **apply_kwargs,
+):
+    if training and collection in params:
+        outputs, updates = apply_fn(
+            params, *apply_args, training=True, mutable=[collection], **apply_kwargs
+        )
+        if n_devices > 1:
+            updates = jax.lax.pmean(updates, axis_name=axis_name)
+        return outputs, updates
+    return apply_fn(params, *apply_args, training=training, **apply_kwargs), {}
+
+
+def _build_new_params_from_updates(params, updates, collection="batch_stats"):
+    new_params = {"params": params["params"]}
+    if collection in updates:
+        new_params[collection] = updates[collection]
+    return new_params
 
 
 def accuracy_fn(preds: chex.Array, labels: chex.Array) -> chex.Array:
@@ -43,7 +73,7 @@ def world_model_train_builder(
             ),
             variable_updates,
         ) = train_info_fn(params, data, next_data, action, training=True)
-        new_params = build_new_params_from_updates(params, variable_updates)
+        new_params = _build_new_params_from_updates(params, variable_updates)
         data_scaled = (data / 255.0) * 2 - 1
         next_data_scaled = (next_data / 255.0) * 2 - 1
         ae_loss = jnp.mean(
